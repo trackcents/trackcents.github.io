@@ -68,7 +68,7 @@
   }
 </script>
 
-<svelte:head><title>Review categories · Money Tracker</title></svelte:head>
+<svelte:head><title>Review categories · trackcents</title></svelte:head>
 
 <main class="mx-auto max-w-2xl px-6 py-8">
   <TopNav />

@@ -93,7 +93,7 @@
   }
 </script>
 
-<svelte:head><title>Trends · Money Tracker</title></svelte:head>
+<svelte:head><title>Trends · trackcents</title></svelte:head>
 
 <main class="mx-auto max-w-5xl px-6 py-8">
   <TopNav />

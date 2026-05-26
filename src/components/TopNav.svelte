@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/stores';
+  import BrandMark from '$components/BrandMark.svelte';
 
   const links: Array<{ href: string; label: string }> = [
     { href: '/today', label: 'Home' },
@@ -20,32 +21,39 @@
   }
 </script>
 
-<nav class="mb-7 flex items-center justify-between gap-4">
-  <a href="/" class="flex items-center gap-2" aria-label="Money Tracker home">
-    <span
-      class="flex h-8 w-8 items-center justify-center rounded-xl text-sm font-bold"
-      style="background-image: var(--grad-primary); color: var(--color-accent-fg); box-shadow: var(--shadow-primary);"
-    >
-      ₥
-    </span>
-    <span class="text-[15px] font-semibold tracking-tight">Money Tracker</span>
+<nav class="mb-7 flex items-center gap-3">
+  <a href="/" class="flex-none" aria-label="trackcents home">
+    <BrandMark size={30} />
   </a>
 
-  <div
-    class="flex items-center gap-0.5 rounded-full border p-1"
-    style="border-color: var(--color-border); background-color: var(--color-surface); box-shadow: var(--shadow-sm);"
-  >
-    {#each links as link (link.href)}
-      {@const active = isActive(link.href, $page.url.pathname)}
-      <a
-        href={link.href}
-        class="rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors"
-        style:color={active ? 'var(--color-accent-fg)' : 'var(--color-muted)'}
-        style:background-image={active ? 'var(--grad-primary)' : 'none'}
-        aria-current={active ? 'page' : undefined}
-      >
-        {link.label}
-      </a>
-    {/each}
+  <!-- On a phone the 10 links can't fit, so the pill scrolls horizontally
+       (scrollbar hidden) rather than wrapping or pushing the page sideways.
+       On desktop it right-aligns and fits without scrolling. -->
+  <div class="no-scrollbar -my-1 min-w-0 flex-1 overflow-x-auto py-1 md:flex md:justify-end">
+    <div
+      class="flex w-max items-center gap-0.5 rounded-full border p-1"
+      style="border-color: var(--color-border); background-color: var(--color-surface); box-shadow: var(--shadow-sm);"
+    >
+      {#each links as link (link.href)}
+        {@const active = isActive(link.href, $page.url.pathname)}
+        <a
+          href={link.href}
+          class="nav-link flex-none rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors"
+          class:active
+          style:color={active ? 'var(--color-accent-fg)' : 'var(--color-muted)'}
+          style:background-image={active ? 'var(--grad-primary)' : 'none'}
+          aria-current={active ? 'page' : undefined}
+        >
+          {link.label}
+        </a>
+      {/each}
+    </div>
   </div>
 </nav>
+
+<style>
+  .nav-link:not(.active):hover {
+    color: var(--color-text);
+    background-color: var(--color-elevated);
+  }
+</style>

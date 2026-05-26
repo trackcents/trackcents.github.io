@@ -68,7 +68,7 @@
   };
 </script>
 
-<svelte:head><title>Recurring · Money Tracker</title></svelte:head>
+<svelte:head><title>Recurring · trackcents</title></svelte:head>
 
 <main class="mx-auto max-w-3xl px-6 py-8">
   <TopNav />

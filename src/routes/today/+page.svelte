@@ -91,7 +91,7 @@
   const toN = (m: bigint): number => Number(m) / 100;
 </script>
 
-<svelte:head><title>Home · Money Tracker</title></svelte:head>
+<svelte:head><title>Home · trackcents</title></svelte:head>
 
 <main class="mx-auto max-w-5xl px-6 py-8">
   <TopNav />

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import BrandMark from '$components/BrandMark.svelte';
   import PassphraseSetup from '$components/PassphraseSetup.svelte';
   import IosInstallNudge from '$components/IosInstallNudge.svelte';
   import { needsIosInstall } from '$lib/app/platform';
@@ -50,15 +51,10 @@
 
 <main class="mx-auto flex min-h-dvh max-w-md flex-col justify-center px-6 py-10">
   <div class="rise mb-6 flex flex-col items-center text-center">
-    <span
-      class="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl text-xl font-bold"
-      style="background-image: var(--grad-primary); color: var(--color-accent-fg); box-shadow: var(--shadow-primary);"
-    >
-      ₥
-    </span>
-    <h1 class="text-2xl font-semibold tracking-tight">Welcome to Money Tracker</h1>
+    <div class="mb-3"><BrandMark size={46} wordmark={false} /></div>
+    <h1 class="text-2xl font-semibold tracking-tight">Welcome to trackcents</h1>
     <p class="mt-1 text-sm" style:color="var(--color-muted)">
-      Private by design — everything stays in your browser.
+      See where every cent goes — privately, on your device.
     </p>
   </div>
 
@@ -75,33 +71,40 @@
     <IosInstallNudge oncomplete={recheckInstall} />
   {:else if step === 'signin'}
     <div class="card rise p-6">
-      <h2 class="text-lg font-semibold">Sign in with Google</h2>
-      <p class="mt-2 text-sm" style:color="var(--color-muted)">
-        Sign in so your <em>encrypted</em> backup can sync to your own Google Drive. The app only ever
-        touches files it creates — it can't read your data.
-      </p>
-      <button
-        type="button"
-        class="btn btn-primary mt-4 w-full"
-        disabled={!syncAvailable}
-        onclick={handleSignIn}
-      >
-        Sign in with Google
-      </button>
-      {#if !syncAvailable}
-        <p class="mt-2 text-xs" style:color="var(--color-muted)">
-          Sync isn't configured (no client ID set). You can still continue — the app works
-          local-only.
+      {#if syncAvailable}
+        <h2 class="text-lg font-semibold">Sign in with Google</h2>
+        <p class="mt-2 text-sm" style:color="var(--color-muted)">
+          Sign in so your <em>encrypted</em> backup can sync to your own Google Drive. The app only ever
+          touches files it creates — it can't read your data.
+        </p>
+        <button type="button" class="btn btn-primary mt-4 w-full" onclick={handleSignIn}>
+          Sign in with Google
+        </button>
+        <button
+          type="button"
+          class="mt-3 block w-full text-center text-xs"
+          style:color="var(--color-muted)"
+          onclick={() => (step = 'passphrase')}
+        >
+          Continue without sync
+        </button>
+      {:else}
+        <h2 class="text-lg font-semibold">Set up on this device</h2>
+        <p class="mt-2 text-sm" style:color="var(--color-muted)">
+          trackcents runs entirely on your device — your statements never leave the browser. Next,
+          pick a passphrase to encrypt everything you import.
+        </p>
+        <button
+          type="button"
+          class="btn btn-primary mt-4 w-full"
+          onclick={() => (step = 'passphrase')}
+        >
+          Get started
+        </button>
+        <p class="mt-3 text-center text-xs" style:color="var(--color-muted)">
+          This build is local-only — Google Drive sync isn't enabled.
         </p>
       {/if}
-      <button
-        type="button"
-        class="mt-3 block w-full text-center text-xs"
-        style:color="var(--color-muted)"
-        onclick={() => (step = 'passphrase')}
-      >
-        Continue without sync
-      </button>
     </div>
   {:else if step === 'passphrase'}
     <div class="card rise p-6">
@@ -113,7 +116,7 @@
     </div>
   {:else}
     <div class="card rise p-6 text-center">
-      <h2 class="text-lg font-semibold">You're ready 🎉</h2>
+      <h2 class="text-lg font-semibold">You're all set</h2>
       <p class="mt-2 text-sm" style:color="var(--color-muted)">
         Your passphrase is set and your data will be encrypted on this device.
       </p>

@@ -94,7 +94,7 @@
   }
 </script>
 
-<svelte:head><title>Goals · Money Tracker</title></svelte:head>
+<svelte:head><title>Goals · trackcents</title></svelte:head>
 
 <main class="mx-auto max-w-3xl px-6 py-8">
   <TopNav />

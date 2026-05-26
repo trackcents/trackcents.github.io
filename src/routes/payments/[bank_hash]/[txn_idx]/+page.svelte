@@ -122,7 +122,7 @@
 </script>
 
 <svelte:head>
-  <title>Payment drill · Money Tracker</title>
+  <title>Payment drill · trackcents</title>
 </svelte:head>
 
 <main class="mx-auto max-w-5xl px-6 py-8">

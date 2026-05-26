@@ -116,10 +116,8 @@
     toasts = toasts.filter((x) => x.id !== id);
   }
 
-  // Diagnostic: how many statements we hydrated, which backend is in use,
-  // and any persist-error message.  All shown in the header banner so a
-  // failure isn't silent.
-  let hydratedCount = $state<number | null>(null);
+  // Diagnostic: which storage backend is in use + any persist-error message.
+  // The backend name is logged to the console; the header shows plain status.
   let storageBackend = $state<StorageBackend | null>(null);
   let persistError = $state<string | null>(null);
 
@@ -128,7 +126,6 @@
     try {
       const loaded = await loadImports();
       imports = loaded.imports;
-      hydratedCount = loaded.imports.length;
       storageBackend = getLastUsedBackend();
       console.info(
         `[money-tracker] hydrated ${loaded.imports.length} statement(s) from ${storageBackend}`
@@ -305,7 +302,6 @@
     // Re-hydrate from the stores we just populated.
     const loaded = await loadImports();
     imports = loaded.imports;
-    hydratedCount = loaded.imports.length;
     storageBackend = getLastUsedBackend();
     loadingDemo = false;
   }
@@ -360,33 +356,27 @@
   }
 </script>
 
-<svelte:head><title>Money Tracker</title></svelte:head>
+<svelte:head><title>Import statements · trackcents</title></svelte:head>
 
 <main class="mx-auto max-w-5xl px-6 py-12">
   <TopNav />
   <header class="mb-6 flex flex-wrap items-baseline justify-between gap-4">
     <div>
-      <h1 class="text-3xl font-semibold tracking-tight text-[var(--color-text)]">Money Tracker</h1>
+      <h1 class="text-3xl font-semibold tracking-tight text-[var(--color-text)]">
+        Import statements
+      </h1>
       <p class="mt-1 text-sm text-[var(--color-muted)]">
-        Phase 1A — drop bank or credit-card PDFs. Everything runs in your browser; imports survive
-        reload.
+        Drop a bank or credit-card PDF below. Everything is parsed on your device — nothing is
+        uploaded.
       </p>
       <p class="mt-1 text-xs">
         {#if hydrating}
-          <span class="text-[var(--color-muted)]">Loading saved statements…</span>
+          <span class="text-[var(--color-muted)]">Loading your statements…</span>
         {:else if imports.length === 0}
-          <span class="text-[var(--color-muted)]">
-            Storage ready ({storageBackend ?? 'unknown'}). No statements yet — drop a PDF to start.
-          </span>
+          <span class="text-[var(--color-muted)]">No statements yet — drop a PDF to start.</span>
         {:else}
           <span class="text-[var(--color-success)]">
-            ✓ {imports.length} statement{imports.length === 1 ? '' : 's'} saved to {storageBackend ??
-              'storage'}.
-            {#if hydratedCount !== null && hydratedCount > 0}
-              <span class="text-[var(--color-muted)]"
-                >({hydratedCount} restored from prior session)</span
-              >
-            {/if}
+            {imports.length} statement{imports.length === 1 ? '' : 's'} saved on this device.
           </span>
         {/if}
       </p>
@@ -395,7 +385,7 @@
           class="mt-2 rounded-md border px-3 py-1 text-xs"
           style="border-color: var(--color-danger); color: var(--color-danger); background-color: color-mix(in oklab, var(--color-danger) 12%, transparent);"
         >
-          ⚠ Save failed: {persistError}
+          ⚠ Couldn't save to this device's storage. {persistError}
         </p>
       {/if}
     </div>
@@ -465,7 +455,7 @@
 
   {#if imports.length === 0}
     <div class="mt-8 text-center text-sm text-[var(--color-muted)]">
-      <p>No statements imported yet. Drop one or more PDFs above to get started.</p>
+      <p>New here? Load sample data to see how trackcents links your bank and card statements.</p>
       <div class="mt-4">
         <button
           type="button"

@@ -37,7 +37,7 @@ test('app boots and the top nav links between Statements and Transactions', asyn
     .getByRole('link', { name: 'Statements', exact: true })
     .click();
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('heading', { name: /Money Tracker/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Import statements/i })).toBeVisible();
 });
 
 test('/transactions empty state shows "no statements yet" message when no imports', async ({

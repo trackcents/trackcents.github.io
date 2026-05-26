@@ -28,7 +28,7 @@
   const steps = [
     { n: 1, text: 'Tap the Share button in Safari’s toolbar' },
     { n: 2, text: 'Scroll down and choose “Add to Home Screen”' },
-    { n: 3, text: 'Open Money Tracker from your home screen' }
+    { n: 3, text: 'Open trackcents from your home screen' }
   ];
 </script>
 

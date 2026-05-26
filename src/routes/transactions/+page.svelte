@@ -8,6 +8,7 @@
   // can be re-implemented over SQL without changing this route.
 
   import { onMount } from 'svelte';
+  import { slide } from 'svelte/transition';
   import TopNav from '$components/TopNav.svelte';
   import FilterBar from '$components/FilterBar.svelte';
   import UnifiedTransactionTable from '$components/UnifiedTransactionTable.svelte';
@@ -196,11 +197,31 @@
     )
   );
 
-  async function excludeTransfer(outKey: string, inKey: string): Promise<void> {
+  // A confirmation + Undo after excluding, so the row doesn't just silently
+  // vanish (the pair drops out of `transferPairs` once both legs are ignored).
+  let excludedNotice = $state<{ outKey: string; inKey: string; amount: bigint } | null>(null);
+  let noticeTimer: ReturnType<typeof setTimeout> | undefined;
+
+  async function excludeTransfer(outKey: string, inKey: string, amount: bigint): Promise<void> {
     let next = setAnnotation(new Map(Object.entries(annotations)), outKey, { ignored: true });
     next = setAnnotation(next, inKey, { ignored: true });
     annotations = Object.fromEntries(next);
     await saveCategorization({ categories, rules, annotations });
+    excludedNotice = { outKey, inKey, amount };
+    clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => (excludedNotice = null), 6000);
+  }
+
+  async function undoExclude(): Promise<void> {
+    if (excludedNotice === null) return;
+    let next = setAnnotation(new Map(Object.entries(annotations)), excludedNotice.outKey, {
+      ignored: false
+    });
+    next = setAnnotation(next, excludedNotice.inKey, { ignored: false });
+    annotations = Object.fromEntries(next);
+    await saveCategorization({ categories, rules, annotations });
+    clearTimeout(noticeTimer);
+    excludedNotice = null;
   }
 
   function clearFilter() {
@@ -209,7 +230,7 @@
   }
 </script>
 
-<svelte:head><title>Transactions · Money Tracker</title></svelte:head>
+<svelte:head><title>Transactions · trackcents</title></svelte:head>
 
 <main class="mx-auto max-w-6xl px-6 py-8">
   <TopNav />
@@ -360,7 +381,10 @@
         </p>
         <ul class="space-y-1.5">
           {#each transferPairs.slice(0, 8) as p (p.outflow_key + p.inflow_key)}
-            <li class="flex flex-wrap items-center justify-between gap-2 text-sm">
+            <li
+              class="flex flex-wrap items-center justify-between gap-2 text-sm"
+              transition:slide={{ duration: 200 }}
+            >
               <span class="min-w-0">
                 <span class="num font-medium">{formatMoney(p.amount_minor)}</span>
                 <span class="text-[var(--color-muted)]">
@@ -370,15 +394,39 @@
               </span>
               <button
                 type="button"
-                class="rounded-md border px-2 py-1 text-xs transition-colors hover:border-[var(--color-accent)]"
-                style="border-color: var(--color-border); background-color: var(--color-bg);"
-                onclick={() => excludeTransfer(p.outflow_key, p.inflow_key)}
+                class="exclude-btn"
+                onclick={() => excludeTransfer(p.outflow_key, p.inflow_key, p.amount_minor)}
               >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+                </svg>
                 Exclude from spending
               </button>
             </li>
           {/each}
         </ul>
+
+        {#if excludedNotice}
+          <div
+            class="mt-3 flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-xs"
+            style="background-color: var(--color-success-soft); color: var(--color-success);"
+            transition:slide={{ duration: 200 }}
+          >
+            <span>Excluded {formatMoney(excludedNotice.amount)} transfer from spending.</span>
+            <button type="button" class="font-semibold underline" onclick={undoExclude}>Undo</button
+            >
+          </div>
+        {/if}
       </section>
     {/if}
 
@@ -423,3 +471,32 @@
     />
   {/if}
 </main>
+
+<style>
+  /* A clear, tappable secondary button for the transfer-exclude action — the
+     faint bordered chip didn't read as clickable and gave no press feedback. */
+  .exclude-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 8px;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-surface);
+    color: var(--color-text);
+    padding: 0.35rem 0.7rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    box-shadow: var(--shadow-sm);
+    transition:
+      background-color 0.16s ease,
+      border-color 0.16s ease,
+      transform 0.12s ease;
+  }
+  .exclude-btn:hover {
+    border-color: var(--color-accent);
+    background-color: var(--color-elevated);
+  }
+  .exclude-btn:active {
+    transform: scale(0.97);
+  }
+</style>

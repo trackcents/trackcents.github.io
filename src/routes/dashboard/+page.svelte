@@ -163,7 +163,7 @@
   });
 </script>
 
-<svelte:head><title>Dashboard · Money Tracker</title></svelte:head>
+<svelte:head><title>Dashboard · trackcents</title></svelte:head>
 
 <main class="mx-auto max-w-5xl px-6 py-8">
   <TopNav />

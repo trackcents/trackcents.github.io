@@ -77,6 +77,12 @@ body {
   height: 100%;
 }
 
+/* Reserve the scrollbar track on every page so navigating between a page that
+   scrolls and one that doesn't no longer shifts the centered layout sideways. */
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   font-family:
     'Inter Variable',
@@ -136,6 +142,11 @@ body {
   .btn-primary:not(:disabled):hover {
     filter: brightness(1.07);
     transform: translateY(-1px);
+  }
+  /* Physical press feedback on every button (skill: active/pressed state). */
+  .btn:not(:disabled):active {
+    transform: translateY(0) scale(0.97);
+    filter: brightness(0.98);
   }
   .btn-ghost {
     background-color: var(--color-surface);

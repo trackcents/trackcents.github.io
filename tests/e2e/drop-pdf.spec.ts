@@ -38,8 +38,8 @@ const THIS_FILE = fileURLToPath(import.meta.url);
 
 test('app boots to the empty state', async ({ page }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: /Money Tracker/i })).toBeVisible();
-  await expect(page.getByText(/No statements imported yet/i)).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Import statements/i })).toBeVisible();
+  await expect(page.getByText(/No statements yet/i)).toBeVisible();
 });
 
 test('Chase marketing sample PDF is REFUSED by the checksum gate (known quirk)', async ({
