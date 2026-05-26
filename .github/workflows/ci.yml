@@ -17,14 +17,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
+      # Node BEFORE pnpm (pnpm 11 needs Node 22); pnpm pinned to 11 to match the
+      # lockfile (pnpm 9 can't read a pnpm-11 lockfile). Cache dropped (needs pnpm first).
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'pnpm'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

@@ -20,14 +20,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11
-
+      # Node BEFORE pnpm: pnpm 11 requires Node 22, so Node must be active before
+      # pnpm self-installs (otherwise it installs against the runner's default
+      # Node 20 → ERR_PNPM_UNSUPPORTED_ENGINE). Cache dropped (it needs pnpm first).
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'pnpm'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
 
       - run: pnpm install --frozen-lockfile
 
