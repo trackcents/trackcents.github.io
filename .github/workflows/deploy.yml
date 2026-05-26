@@ -27,9 +27,10 @@ jobs:
         with:
           node-version: '22'
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11
+      - name: Enable pnpm 11 via Corepack (built into Node 22 — reliable engine match)
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.2.2 --activate
 
       - run: pnpm install --frozen-lockfile
 
