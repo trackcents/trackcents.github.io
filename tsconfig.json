@@ -1,0 +1,32 @@
+{
+  "extends": "./.svelte-kit/tsconfig.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "moduleResolution": "bundler",
+    "module": "ESNext",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"]
+  },
+  "exclude": [
+    "tests/ivv/**",
+    "src/service-worker.js",
+    "src/service-worker/**/*.js",
+    "src/service-worker.ts",
+    "src/service-worker/**/*.ts",
+    "src/service-worker.d.ts",
+    "src/service-worker/**/*.d.ts"
+  ]
+}

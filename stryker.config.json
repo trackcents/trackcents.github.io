@@ -1,0 +1,41 @@
+{
+  "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
+  "packageManager": "pnpm",
+  "testRunner": "vitest",
+  "plugins": ["@stryker-mutator/vitest-runner"],
+  "vitest": {
+    "configFile": "vitest.config.ts"
+  },
+  "reporters": ["html", "clear-text", "progress"],
+  "coverageAnalysis": "perTest",
+  "mutate": [
+    "src/lib/util/**/*.ts",
+    "src/lib/app/**/*.ts",
+    "!src/lib/util/**/*.test.ts",
+    "!src/lib/app/**/*.test.ts"
+  ],
+  "ignorePatterns": [
+    "dist",
+    "build",
+    "node_modules",
+    "tests/fixtures",
+    "reports",
+    "!.svelte-kit/tsconfig.json",
+    "!.svelte-kit/types",
+    "!.svelte-kit/ambient.d.ts",
+    "!.svelte-kit/non-ambient.d.ts"
+  ],
+  "thresholds": {
+    "high": 85,
+    "low": 70,
+    "break": 70
+  },
+  "timeoutMS": 60000,
+  "concurrency": 4,
+  "tempDirName": ".stryker-tmp",
+  "htmlReporter": {
+    "fileName": "reports/mutation/index.html"
+  },
+  "_comment_thresholds": "high=green / low=yellow / break=null means never fail CI on score. Once we have 1 month of data, set break ~= 70 to enforce.",
+  "_comment_mutate": "Only util/ and app/ - adapter code is mostly layout-specific regex where mutation testing produces low-signal noise (every regex char becomes a mutant)."
+}

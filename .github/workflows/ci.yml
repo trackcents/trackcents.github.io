@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: Lint, type-check, unit tests, e2e tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium webkit
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Type check
+        run: pnpm check
+
+      - name: Lockfile integrity
+        run: pnpm lint:lockfile
+
+      - name: Dependency audit (high+ severity)
+        run: pnpm audit:deps
+        continue-on-error: true # advisories surface as warnings; fix in a follow-up PR
+
+      - name: Secret scan (Gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Unit tests + coverage (with risk-tiered thresholds enforced)
+        run: pnpm test:cov
+
+      - name: Integration battery (regression suite + cross-adapter exclusivity)
+        run: pnpm validate:integration
+
+      - name: Build
+        run: pnpm build
+
+      - name: End-to-end tests
+        run: pnpm test:e2e
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

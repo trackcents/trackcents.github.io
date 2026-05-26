@@ -1,0 +1,21 @@
+.svelte-kit/
+build/
+dist/
+node_modules/
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+*.pdf
+specs/
+.specify/
+.claude/
+experiments/
+verif-kit/
+.verif-kit/
+verif-kit.config.json
+reports/
+# IV&V fuzz seed corpora are machine-generated data (raw JSON.stringify), not source to format
+tests/**/corpus/
+# tests/ivv/ is the verification-engineer's STAGING area (raw, pre-promotion). The
+# promoted copies under tests/unit/independent/ are formatted + checked normally.
+tests/ivv/

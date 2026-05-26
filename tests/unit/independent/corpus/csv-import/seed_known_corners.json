@@ -1,0 +1,37 @@
+{
+  "_comment": "Persisted fuzz seed corpus for csv-import IV&V (SQLite/syzkaller regression-by-corpus). Each entry is an input that probes a known corner or a historically-interesting boundary for parseAmountToCents / parseCsvRows. Reran forever once promoted. New failing inputs append here.",
+  "amounts_valid": [
+    { "raw": "12.34", "expect": "1234" },
+    { "raw": "-12.34", "expect": "-1234" },
+    { "raw": "(12.34)", "expect": "-1234" },
+    { "raw": "$1,234.50", "expect": "123450" },
+    { "raw": "1.005", "expect": "101" },
+    { "raw": "1.004", "expect": "100" },
+    { "raw": "1000000", "expect": "100000000" },
+    { "raw": "+5", "expect": "500" },
+    { "raw": "-0.01", "expect": "-1" },
+    { "raw": "0.00", "expect": "0" },
+    { "raw": "  $1,234.56  ", "expect": "123456" },
+    { "raw": "£99.99", "expect": "9999" },
+    { "raw": "€0.05", "expect": "5" },
+    { "raw": "¥1,000", "expect": "100000" },
+    { "raw": "₹1,234.567", "expect": "123457" },
+    { "raw": "2.675", "expect": "268" },
+    { "raw": "2.665", "expect": "267" },
+    { "raw": "0.005", "expect": "1" },
+    { "raw": "-0.005", "expect": "-1" },
+    { "raw": "1000000000000.00", "expect": "100000000000000" }
+  ],
+  "csv_corners": [
+    "",
+    "   \r\n  \r\n",
+    "a,b,c",
+    "a,b,c\r\n",
+    "\"x,y\",z",
+    "\"line1\nline2\",z",
+    "\"he said \"\"hi\"\"\",z",
+    "a,b\r\n\r\nc,d",
+    "a,b\nc,d",
+    "trailing,no,newline"
+  ]
+}

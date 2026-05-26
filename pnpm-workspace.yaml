@@ -1,0 +1,7 @@
+# pnpm 10+ config for build-script approval. esbuild is a transitive dep
+# of Vite and needs its postinstall to fetch the platform-specific native
+# binary. Without this, pnpm install exits non-zero with ERR_PNPM_IGNORED_BUILDS.
+onlyBuiltDependencies:
+  - esbuild
+allowBuilds:
+  esbuild: true

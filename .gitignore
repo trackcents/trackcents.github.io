@@ -1,0 +1,86 @@
+# --- Credentials / secrets (NEVER commit these) ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+credentials.json
+service-account*.json
+
+# Claude Code project files (may contain tokens / sensitive context)
+.claude/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.code-workspace
+
+# Node / pnpm / npm
+node_modules/
+.pnpm-store/
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build output
+dist/
+build/
+out/
+.svelte-kit/
+.vite/
+*.tsbuildinfo
+
+# Test / coverage
+coverage/
+.nyc_output/
+*.lcov
+test-results/
+playwright-report/
+
+# Mutation testing
+.stryker-tmp/
+reports/mutation/
+
+# Python (spec-kit CLI toolchain)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# --- USER DATA — these contain real bank statements ---
+# Never commit raw or anonymized real PDFs. The only PDFs allowed in the repo
+# are anonymized golden fixtures under tests/fixtures/<bank>/
+*.pdf
+!tests/fixtures/**/*.pdf
+samples/
+user-data/
+
+# Anonymization script outputs — these may contain partial PII or
+# personally-identifiable layout details from a real statement.
+# Never commit them.  Each user runs the anonymize script locally.
+*.anonymized.txt
+*.anonymized.json
+
+# Logs
+*.log
+logs/
+
+# verif-kit (its own published repo lives in verif-kit/; install artifacts are local-only)
+verif-kit/
+.verif-kit/
+verif-kit.config.json
+
+# Privacy: anonymized real statement PDFs stay local, never published (constitution I)
+tests/fixtures/**/*.pdf
+
+# verif-kit is its own published repo (github.com/chitti-learns-ai/verif-kit) — not embedded here
+/verif-kit/

@@ -1,0 +1,62 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: 'pages'
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+        env:
+          # Auto base path: a USER/ORG SITE repo (named exactly "<owner>.github.io")
+          # serves at the domain root → "". Any other (PROJECT) repo serves under
+          # "/<repo>". Override with repo Variable BASE_PATH (e.g. for a custom domain
+          # on a project repo, set it to ""... note: an empty Variable reads as unset,
+          # so for that edge set it to "/" — see DEPLOY.md). We test name != "<owner>.github.io"
+          # (NOT name != owner) because a user-site repo's name also differs from the owner.
+          BASE_PATH: ${{ vars.BASE_PATH != '' && vars.BASE_PATH || (github.event.repository.name != format('{0}.github.io', github.repository_owner) && format('/{0}', github.event.repository.name) || '') }}
+          # Optional: set repo Variable so Google Drive sync works on the deployed
+          # static site ($env/dynamic/public is baked at build time). Omit = local-only.
+          PUBLIC_GOOGLE_OAUTH_CLIENT_ID: ${{ vars.PUBLIC_GOOGLE_OAUTH_CLIENT_ID }}
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
