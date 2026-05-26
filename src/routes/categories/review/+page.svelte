@@ -13,7 +13,6 @@
   import { setManualCategory, setAnnotation } from '$lib/app/categorization';
   import { categoryColor } from '$lib/app/category-visuals';
   import { formatMoney } from '$lib/util/money';
-  import TopNav from '$components/TopNav.svelte';
 
   let loading = $state(true);
   let cat = $state<CategorizationState>({ categories: [], rules: [], annotations: {} });
@@ -71,8 +70,6 @@
 <svelte:head><title>Review categories · trackcents</title></svelte:head>
 
 <main class="mx-auto max-w-2xl px-6 py-8">
-  <TopNav />
-
   <header class="mb-5">
     <h1 class="text-2xl font-semibold text-[var(--color-text)]">Review categories</h1>
     <p class="mt-1 text-sm text-[var(--color-muted)]">

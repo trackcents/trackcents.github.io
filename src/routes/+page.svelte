@@ -1,7 +1,6 @@
 <script lang="ts">
   import PdfDropZone from '$components/PdfDropZone.svelte';
   import StatementCard from '$components/StatementCard.svelte';
-  import TopNav from '$components/TopNav.svelte';
   import {
     importStatement,
     type ImportResult,
@@ -359,7 +358,6 @@
 <svelte:head><title>Import statements · trackcents</title></svelte:head>
 
 <main class="mx-auto max-w-5xl px-6 py-12">
-  <TopNav />
   <header class="mb-6 flex flex-wrap items-baseline justify-between gap-4">
     <div>
       <h1 class="text-3xl font-semibold tracking-tight text-[var(--color-text)]">

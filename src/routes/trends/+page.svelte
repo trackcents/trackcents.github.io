@@ -16,7 +16,6 @@
     type MerchantTxn
   } from '$lib/app/merchant-trends';
   import { formatMoney } from '$lib/util/money';
-  import TopNav from '$components/TopNav.svelte';
 
   let loading = $state(true);
   let txns = $state<MerchantTxn[]>([]);
@@ -96,8 +95,6 @@
 <svelte:head><title>Trends · trackcents</title></svelte:head>
 
 <main class="mx-auto max-w-5xl px-6 py-8">
-  <TopNav />
-
   <header class="mb-5 flex flex-wrap items-end justify-between gap-3">
     <div>
       <h1 class="text-2xl font-semibold text-[var(--color-text)]">Spending trends</h1>

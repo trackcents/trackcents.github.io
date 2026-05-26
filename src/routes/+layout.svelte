@@ -8,13 +8,16 @@
   import { attemptUnlock, hasStoredSalt } from '$lib/app/unlock';
   import { initSyncIfReady } from '$lib/sync/sync-controller';
   import { initTheme } from '$lib/app/theme.svelte';
+  import { page } from '$app/stores';
   import PassphraseUnlock from '$components/PassphraseUnlock.svelte';
-  import SyncStatusIndicator from '$components/SyncStatusIndicator.svelte';
-  import ThemeToggle from '$components/ThemeToggle.svelte';
+  import Nav from '$components/Nav.svelte';
 
   let { children } = $props();
   let locked = $state(false);
   let checking = $state(true);
+
+  // Onboarding is a full-screen setup flow — no rail / tab-bar chrome there.
+  const onOnboarding = $derived($page.url.pathname.startsWith('/onboarding'));
 
   onMount(async () => {
     initTheme(); // apply persisted light/dark choice ASAP
@@ -78,11 +81,14 @@
     <div class="p-6 text-sm" style:color="var(--color-muted)">Loading…</div>
   {:else if locked}
     <PassphraseUnlock onUnlock={handleUnlock} />
-  {:else}
-    <header class="flex items-center justify-end gap-3 px-4 py-2">
-      <SyncStatusIndicator />
-      <ThemeToggle />
-    </header>
+  {:else if onOnboarding}
     {@render children?.()}
+  {:else}
+    <Nav />
+    <div class="md:pl-20">
+      <div class="pb-24 md:pb-2">
+        {@render children?.()}
+      </div>
+    </div>
   {/if}
 </div>

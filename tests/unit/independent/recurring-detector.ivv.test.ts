@@ -161,11 +161,17 @@ function refDetectRecurring(txns: readonly RecurringTxn[]): RecurringStream[] {
     // R1: <2 occurrences → excluded.
     if (members.length < 2) continue;
 
-    // Sort by posted_date ascending; ties broken stably (insertion order preserved
-    // by a stable sort key on date only).
-    const sorted = [...members].sort((a, b) =>
-      a.posted_date < b.posted_date ? -1 : a.posted_date > b.posted_date ? 1 : 0
-    );
+    // Sort by posted_date ascending with a DETERMINISTIC tiebreak (description,
+    // then amount). R6's "latest occurrence" is ambiguous when several charges
+    // share the latest date, so the representative (display_name) must not depend
+    // on input order — otherwise both this oracle and the permutation-invariance
+    // property are flaky. The tiebreak orders only; it never infers meaning from
+    // amount. The DUT pins the identical rule.
+    const sorted = [...members].sort((a, b) => {
+      if (a.posted_date !== b.posted_date) return a.posted_date < b.posted_date ? -1 : 1;
+      if (a.description !== b.description) return a.description < b.description ? -1 : 1;
+      return a.amount_minor < b.amount_minor ? -1 : a.amount_minor > b.amount_minor ? 1 : 0;
+    });
 
     // Consecutive gaps in days.
     const gaps: number[] = [];

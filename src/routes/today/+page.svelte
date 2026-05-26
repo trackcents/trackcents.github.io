@@ -13,7 +13,6 @@
   import { goalProgress, type SavingsGoal } from '$lib/app/savings-goal';
   import { loadGoals } from '$lib/db/goals-store';
   import { formatMoney } from '$lib/util/money';
-  import TopNav from '$components/TopNav.svelte';
   import ProgressRing from '$components/ProgressRing.svelte';
   import CategoryIcon from '$components/CategoryIcon.svelte';
 
@@ -94,8 +93,6 @@
 <svelte:head><title>Home · trackcents</title></svelte:head>
 
 <main class="mx-auto max-w-5xl px-6 py-8">
-  <TopNav />
-
   {#if loading}
     <p class="text-sm" style:color="var(--color-muted)">Loading…</p>
   {:else if !hasData || !month || !flow}

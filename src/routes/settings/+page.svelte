@@ -16,7 +16,6 @@
   import { importCsv, CsvImportError } from '$lib/app/csv-import';
   import { newManualId } from '$lib/app/manual-entry';
   import { detailedRowsFromImports } from '$lib/app/categorization-glue';
-  import TopNav from '$components/TopNav.svelte';
 
   let backend = $state<string>('');
   let txnCount = $state(0);
@@ -163,8 +162,6 @@
 <svelte:head><title>Settings · trackcents</title></svelte:head>
 
 <main class="mx-auto max-w-3xl px-6 py-8">
-  <TopNav />
-
   <header class="mb-5">
     <h1 class="text-2xl font-semibold text-[var(--color-text)]">Settings</h1>
     <p class="mt-1 text-sm text-[var(--color-muted)]">

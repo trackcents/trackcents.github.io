@@ -44,6 +44,7 @@ coverage/
 *.lcov
 test-results/
 playwright-report/
+reports/shots/
 
 # Mutation testing
 .stryker-tmp/

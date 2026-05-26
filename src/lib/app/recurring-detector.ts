@@ -78,7 +78,16 @@ export function detectRecurring(txns: readonly RecurringTxn[]): RecurringStream[
   const streams: RecurringStream[] = [];
   for (const [key, group] of groups) {
     if (group.length < 2) continue;
-    const sorted = [...group].sort((a, b) => (a.posted_date < b.posted_date ? -1 : 1));
+    // Total order with a deterministic tiebreak: same-date ties used to leave the
+    // "last" pick (and thus display_name) to input order, so rotating the input
+    // could change the output — the IV&V permutation-invariance property caught it.
+    // Tiebreak is for ORDERING only (date → description → amount), never to infer
+    // a transaction's meaning from its amount.
+    const sorted = [...group].sort((a, b) => {
+      if (a.posted_date !== b.posted_date) return a.posted_date < b.posted_date ? -1 : 1;
+      if (a.description !== b.description) return a.description < b.description ? -1 : 1;
+      return a.amount_minor < b.amount_minor ? -1 : a.amount_minor > b.amount_minor ? 1 : 0;
+    });
     const gaps: number[] = [];
     for (let i = 1; i < sorted.length; i++) {
       gaps.push(daysBetween(sorted[i - 1]!.posted_date, sorted[i]!.posted_date));

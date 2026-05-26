@@ -4,7 +4,6 @@
   // vs what's left. The anchor (which budget month the FIRST paycheck funds) is a
   // one-time, user-adjustable setting persisted locally.
   import { onMount } from 'svelte';
-  import TopNav from '$components/TopNav.svelte';
   import { loadImports } from '$lib/app/load-store';
   import { loadState } from '$lib/db/store';
   import { detectPaychecks, type Paycheck } from '$lib/app/paycheck-detector';
@@ -147,7 +146,6 @@
 </script>
 
 <main class="mx-auto max-w-3xl px-6 py-8">
-  <TopNav />
   <h1 class="mb-1 text-2xl font-semibold">Budget</h1>
   <p class="mb-6 text-sm" style:color="var(--color-muted)">
     Two paychecks fund each budget month. Here's what's left in each.

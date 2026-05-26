@@ -12,7 +12,6 @@
   } from '$lib/app/recurring-detector';
   import { categoryColor, categoryIconName } from '$lib/app/category-visuals';
   import { formatMoney } from '$lib/util/money';
-  import TopNav from '$components/TopNav.svelte';
   import CategoryIcon from '$components/CategoryIcon.svelte';
 
   let loading = $state(true);
@@ -71,7 +70,6 @@
 <svelte:head><title>Recurring · trackcents</title></svelte:head>
 
 <main class="mx-auto max-w-3xl px-6 py-8">
-  <TopNav />
   <h1 class="mb-1 text-2xl font-semibold">Recurring</h1>
   <p class="mb-6 text-sm" style:color="var(--color-muted)">
     Subscriptions and bills we spotted repeating in your statements.

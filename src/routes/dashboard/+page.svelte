@@ -21,7 +21,6 @@
   import { categoryColor } from '$lib/app/category-visuals';
   import { themeMode } from '$lib/app/theme.svelte';
   import EChart from '$components/EChart.svelte';
-  import TopNav from '$components/TopNav.svelte';
 
   // Concrete colours (ECharts renders to canvas — CSS vars don't resolve there).
   // Axis/grid flip with the theme so text stays readable in light AND dark.
@@ -166,7 +165,6 @@
 <svelte:head><title>Dashboard · trackcents</title></svelte:head>
 
 <main class="mx-auto max-w-5xl px-6 py-8">
-  <TopNav />
   <h1 class="mb-1 text-2xl font-semibold">Dashboard</h1>
   <p class="mb-6 text-sm" style:color="var(--color-muted)">
     Where your money went, and what's left.
