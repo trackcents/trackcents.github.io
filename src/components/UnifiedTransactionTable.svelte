@@ -541,54 +541,8 @@
   {/if}
 </div>
 
-<!-- ── Phone: tap-to-expand card list (<768px) ── -->
-<div class="space-y-2 md:hidden">
-  {#each rows as r (rowKey(r))}
-    {@const expandedNow = isExpanded(r)}
-    <div
-      class="rounded-xl border"
-      style="border-color: var(--color-border); background-color: var(--color-surface);"
-    >
-      <button
-        type="button"
-        onclick={() => toggleExpanded(r)}
-        class="flex w-full items-center gap-3 p-3 text-left"
-        aria-expanded={expandedNow}
-      >
-        <CategoryIcon
-          icon={categoryIconName(currentCatName(r))}
-          color={categoryColor(categoryFor?.(r) ?? null)}
-          tint
-        />
-        <div class="min-w-0 flex-1">
-          <div
-            class="truncate text-sm font-medium text-[var(--color-text)]"
-            class:line-through={isIgnored(r)}
-            style:opacity={isIgnored(r) ? '0.5' : '1'}
-          >
-            {displayName(r)}
-            {#if isRecurring(r)}<span class="ml-1 text-[10px]" style="color: var(--color-accent);"
-                >↻</span
-              >{/if}
-          </div>
-          <div class="truncate text-xs text-[var(--color-muted)]">
-            {r.posted_date} · {r.bank_name}{#if r.account_last_4}&nbsp;••••{r.account_last_4}{/if}
-          </div>
-        </div>
-        <div class="num text-sm font-semibold whitespace-nowrap" style:color={amountColor(r)}>
-          {formatMoney(r.amount_minor, { currency: r.currency })}
-        </div>
-      </button>
-      {#if showCategory}
-        <div class="px-3 pb-3">{@render categoryPicker(r)}</div>
-      {/if}
-      {#if expandedNow}
-        <div class="border-t px-3 py-3 text-xs" style="border-color: var(--color-border);">
-          {@render details(r)}
-        </div>
-      {/if}
-    </div>
-  {/each}
+<!-- ── Phone: clean hairline-divided list, tap a row to expand (<768px) ── -->
+<div class="md:hidden">
   {#if rows.length === 0}
     <p
       class="rounded-xl border p-6 text-center text-sm text-[var(--color-muted)]"
@@ -596,5 +550,66 @@
     >
       No transactions match the current filters.
     </p>
+  {:else}
+    <div
+      class="overflow-hidden rounded-2xl border"
+      style="border-color: var(--color-border); background-color: var(--color-surface);"
+    >
+      {#each rows as r (rowKey(r))}
+        {@const expandedNow = isExpanded(r)}
+        <div class="row" style="border-color: var(--color-border);">
+          <button
+            type="button"
+            onclick={() => toggleExpanded(r)}
+            class="flex w-full items-center gap-3 px-3.5 py-3 text-left"
+            aria-expanded={expandedNow}
+          >
+            <CategoryIcon
+              icon={categoryIconName(currentCatName(r))}
+              color={categoryColor(categoryFor?.(r) ?? null)}
+              tint
+            />
+            <div class="min-w-0 flex-1">
+              <div
+                class="truncate text-[15px] font-medium text-[var(--color-text)]"
+                class:line-through={isIgnored(r)}
+                style:opacity={isIgnored(r) ? '0.5' : '1'}
+              >
+                {displayName(r)}
+                {#if isRecurring(r)}<span
+                    class="ml-1 text-[10px]"
+                    style="color: var(--color-accent);">↻</span
+                  >{/if}
+              </div>
+              <div class="mt-0.5 truncate text-xs text-[var(--color-muted)]">
+                {r.posted_date} · {currentCatName(r)}
+              </div>
+            </div>
+            <div
+              class="num text-[15px] font-semibold whitespace-nowrap"
+              style:color={amountColor(r)}
+            >
+              {formatMoney(r.amount_minor, { currency: r.currency })}
+            </div>
+          </button>
+          {#if expandedNow}
+            <div class="px-3.5 pb-3.5">
+              {#if showCategory}
+                <div class="mb-3">{@render categoryPicker(r)}</div>
+              {/if}
+              <div class="border-t pt-3 text-xs" style="border-color: var(--color-border);">
+                {@render details(r)}
+              </div>
+            </div>
+          {/if}
+        </div>
+      {/each}
+    </div>
   {/if}
 </div>
+
+<style>
+  .row + .row {
+    border-top: 1px solid var(--color-border);
+  }
+</style>

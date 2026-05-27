@@ -1,12 +1,12 @@
-// Dev-only visual check: screenshot key screens at phone + desktop sizes.
-// Usage: node scripts/_shot.mjs   (dev server must be running on :5173)
-import { chromium } from '@playwright/test';
+// Dev-only visual check using REAL phone emulation (honors <meta viewport>).
+// Usage: SHOT_BASE=http://localhost:4173 node scripts/_shot.mjs
+import { chromium, devices } from '@playwright/test';
 
-const BASE = process.env.SHOT_BASE || 'http://localhost:5173';
+const BASE = process.env.SHOT_BASE || 'http://localhost:4173';
 const browser = await chromium.launch();
 
-async function shot(name, w, h, path = '/today', { demo = false } = {}) {
-  const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 2 });
+async function shot(name, path, { demo = false } = {}) {
+  const ctx = await browser.newContext({ ...devices['iPhone 13'] });
   const page = await ctx.newPage();
   await page.addInitScript(() => {
     try {
@@ -30,7 +30,8 @@ async function shot(name, w, h, path = '/today', { demo = false } = {}) {
   console.log('shot ->', name);
 }
 
-await shot('m-today', 390, 844, '/today', { demo: true });
-await shot('m-transactions', 390, 844, '/transactions', { demo: true });
-await shot('d-transactions', 1440, 900, '/transactions', { demo: true });
+await shot('p-today', '/today', { demo: true });
+await shot('p-transactions', '/transactions', { demo: true });
+await shot('p-trends', '/trends', { demo: true });
+await shot('p-statements', '/', { demo: true });
 await browser.close();

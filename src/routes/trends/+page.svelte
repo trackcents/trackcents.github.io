@@ -166,8 +166,8 @@
           <ul class="space-y-2">
             {#each jumps.slice(0, 8) as m (m.merchant_key)}
               <li class="flex items-center justify-between gap-3">
-                <span class="truncate text-sm">{m.display_name}</span>
-                <span class="flex items-center gap-2 whitespace-nowrap">
+                <span class="min-w-0 flex-1 truncate text-sm">{m.display_name}</span>
+                <span class="flex flex-none items-center gap-2 whitespace-nowrap">
                   <span class="num text-xs text-[var(--color-muted)]">
                     {formatMoney(m.previous_amount_minor ?? 0n)} → {formatMoney(
                       m.last_amount_minor

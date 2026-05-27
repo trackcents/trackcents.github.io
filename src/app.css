@@ -11,17 +11,17 @@
  */
 @theme {
   /* Layered neutrals — canvas is a soft cool off-white, cards are white on top. */
-  --color-bg: oklch(0.975 0.006 265); /* #f4f5fa — soft canvas, not stark white */
+  --color-bg: oklch(0.965 0.013 78); /* warm cream canvas */
   --color-surface: oklch(1 0 0); /* white cards */
-  --color-elevated: oklch(0.985 0.004 265); /* nested / hover fills */
-  --color-surface-hover: oklch(0.965 0.008 265);
-  --color-border: oklch(0.915 0.006 265); /* hairline */
-  --color-text: oklch(0.27 0.03 265); /* near-slate-900, soft (not pure black) */
-  --color-muted: oklch(0.53 0.025 265); /* secondary text */
+  --color-elevated: oklch(0.975 0.01 78); /* nested / hover fills */
+  --color-surface-hover: oklch(0.955 0.012 78);
+  --color-border: oklch(0.9 0.011 72); /* warm hairline */
+  --color-text: oklch(0.28 0.014 55); /* warm charcoal */
+  --color-muted: oklch(0.53 0.018 58); /* warm secondary text */
 
-  --color-accent: oklch(0.52 0.2 277); /* indigo — brand (trust + modern premium) */
-  --color-accent-2: oklch(0.58 0.18 266); /* blue-indigo — gradient partner */
-  --color-accent-soft: oklch(0.95 0.045 277); /* tinted chip background */
+  --color-accent: oklch(0.62 0.125 45); /* terracotta — warm brand */
+  --color-accent-2: oklch(0.68 0.11 58); /* clay/peach — gradient partner */
+  --color-accent-soft: oklch(0.93 0.04 55); /* tinted chip background */
   --color-accent-fg: oklch(1 0 0); /* text on accent */
 
   --color-success: oklch(0.58 0.15 158); /* emerald — money in */
@@ -34,30 +34,30 @@
 :root {
   --radius: 16px;
   --radius-sm: 10px;
-  --grad-primary: linear-gradient(135deg, oklch(0.54 0.2 278), oklch(0.59 0.18 264));
-  --grad-hero: linear-gradient(135deg, oklch(0.55 0.2 280) 0%, oklch(0.6 0.17 262) 100%);
+  --grad-primary: linear-gradient(135deg, oklch(0.62 0.13 44), oklch(0.69 0.11 60));
+  --grad-hero: linear-gradient(135deg, oklch(0.63 0.13 42) 0%, oklch(0.7 0.1 62) 100%);
   /* Soft, layered shadows (Stripe/Mercury depth). */
   --shadow-sm: 0 1px 2px rgba(20, 30, 40, 0.05);
   --shadow: 0 1px 3px rgba(20, 30, 40, 0.06), 0 6px 16px rgba(20, 30, 40, 0.05);
   --shadow-md: 0 4px 14px rgba(20, 30, 40, 0.08), 0 12px 32px rgba(20, 30, 40, 0.06);
-  --shadow-primary: 0 6px 18px rgba(79, 70, 229, 0.3);
+  --shadow-primary: 0 6px 18px rgba(190, 110, 75, 0.32);
 }
 
 /* Rocket-Money-style DARK theme — activated by `.dark` on <html>. Overrides the
  * light tokens above (higher specificity than @theme's :root). Deep cool navy,
  * brighter green accent, shadows replaced by elevation + borders. */
 html.dark {
-  --color-bg: oklch(0.19 0.018 264);
-  --color-surface: oklch(0.235 0.02 264);
-  --color-elevated: oklch(0.275 0.022 264);
-  --color-surface-hover: oklch(0.3 0.024 264);
-  --color-border: oklch(0.33 0.02 264);
-  --color-text: oklch(0.96 0.008 264);
-  --color-muted: oklch(0.71 0.02 264);
+  --color-bg: oklch(0.2 0.012 50);
+  --color-surface: oklch(0.245 0.014 50);
+  --color-elevated: oklch(0.29 0.016 50);
+  --color-surface-hover: oklch(0.32 0.018 50);
+  --color-border: oklch(0.35 0.016 52);
+  --color-text: oklch(0.95 0.01 75);
+  --color-muted: oklch(0.7 0.016 68);
 
-  --color-accent: oklch(0.72 0.16 280); /* brighter indigo for dark contrast */
-  --color-accent-2: oklch(0.74 0.15 266);
-  --color-accent-soft: oklch(0.34 0.09 280);
+  --color-accent: oklch(0.72 0.13 50); /* warm terracotta for dark contrast */
+  --color-accent-2: oklch(0.76 0.11 62);
+  --color-accent-soft: oklch(0.35 0.07 50);
   --color-accent-fg: oklch(1 0 0);
 
   --color-success: oklch(0.76 0.15 158);
@@ -69,7 +69,7 @@ html.dark {
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.4), 0 6px 16px rgba(0, 0, 0, 0.32);
   --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.45), 0 14px 36px rgba(0, 0, 0, 0.38);
-  --shadow-primary: 0 6px 18px rgba(99, 102, 241, 0.3);
+  --shadow-primary: 0 6px 18px rgba(200, 120, 85, 0.3);
 }
 
 html,

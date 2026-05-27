@@ -28,9 +28,11 @@
     { href: '/settings', label: 'Settings', icon: 'gear' }
   ];
 
-  // The phone bottom bar shows these four; everything else lives in "More".
-  const primaryHrefs = ['/today', '/transactions', '/dashboard', '/recurring'];
-  const bottomItems = items.filter((i) => primaryHrefs.includes(i.href));
+  // The phone bottom bar shows these four (in this order); the rest live in
+  // "More". Statements is here so importing/re-uploading is always one tap away.
+  const primaryHrefs = ['/today', '/transactions', '/', '/recurring'];
+  const byHref = new Map(items.map((i) => [i.href, i]));
+  const bottomItems = primaryHrefs.map((h) => byHref.get(h)).filter((i) => i !== undefined);
   const moreItems = items.filter((i) => !primaryHrefs.includes(i.href));
 
   let moreOpen = $state(false);
