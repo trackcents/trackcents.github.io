@@ -7,7 +7,8 @@
   import type { ImportRecord } from '$lib/db/store';
   import { loadCategorization, type CategorizationState } from '$lib/db/categorization-store';
   import { summaryFromImports, detailedRowsFromImports } from '$lib/app/categorization-glue';
-  import { netByMonth, spendingByCategoryByMonth, sortedMonths } from '$lib/app/spending-summary';
+  import { netByMonth, spendingByCategoryByMonth } from '$lib/app/spending-summary';
+  import { today } from '$lib/util/date';
   import { monthOverMonthInsight, topMovers } from '$lib/app/spending-insights';
   import { monthBudget } from '$lib/app/month-budget';
   import { makeManualImport, newManualId, ManualEntryError } from '$lib/app/manual-entry';
@@ -30,7 +31,8 @@
     loading = false;
   });
 
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = today(); // device-local date — follows the phone's timezone
+  const currentMonth = todayIso.slice(0, 7);
 
   // Quick "add income" from the budget hero — logs a manual income entry dated
   // today, so a manual-first user can record salary/bonus and see their budget.
@@ -101,17 +103,17 @@
   const txns = $derived(summaryFromImports(imports, cat.annotations));
   const hasData = $derived(txns.length > 0);
   const nbm = $derived(netByMonth(txns));
-  const month = $derived(sortedMonths(nbm).at(-1) ?? null);
-  const flow = $derived(month ? nbm.get(month) : undefined);
-  const budget = $derived(monthBudget(flow, month ?? todayIso.slice(0, 7), todayIso));
+  // Home is anchored to the CURRENT calendar month (from the device clock), so
+  // days-left and daily pace come from today's date — not the latest statement's
+  // month (statements arrive for the prior month, which made days-left always 0).
+  const curFlow = $derived(nbm.get(currentMonth));
+  const budget = $derived(monthBudget(curFlow, currentMonth, todayIso));
 
   // Top categories this month, sorted by spend desc.
   const topCats = $derived(
-    month
-      ? [...(spendingByCategoryByMonth(txns).get(month)?.entries() ?? [])].sort((a, b) =>
-          b[1] > a[1] ? 1 : -1
-        )
-      : []
+    [...(spendingByCategoryByMonth(txns).get(currentMonth)?.entries() ?? [])].sort((a, b) =>
+      b[1] > a[1] ? 1 : -1
+    )
   );
   const topSpend = $derived(topCats[0]?.[1] ?? 1n);
 
@@ -140,7 +142,7 @@
 <main class="mx-auto max-w-5xl px-6 py-8">
   {#if loading}
     <p class="text-sm" style:color="var(--color-muted)">Loading…</p>
-  {:else if !hasData || !month || !flow}
+  {:else if !hasData}
     <div class="card rise p-10 text-center">
       <p class="text-sm" style:color="var(--color-muted)">
         Nothing to show yet. <a href="/" style:color="var(--color-accent)">Import a statement</a> or load
@@ -148,7 +150,7 @@
       </p>
     </div>
   {:else}
-    <h1 class="mb-1 text-2xl font-semibold">{monthName(month)}</h1>
+    <h1 class="mb-1 text-2xl font-semibold">{monthName(currentMonth)}</h1>
     <p class="mb-6 text-sm" style:color="var(--color-muted)">Your month at a glance.</p>
 
     {#if needsReview > 0}
@@ -237,7 +239,7 @@
           </div>
           <div>
             <p class="num text-base font-semibold">{formatMoney(budget.daily_pace_minor)}</p>
-            <p class="text-xs" style:color="var(--color-muted)">Safe / day</p>
+            <p class="text-xs" style:color="var(--color-muted)">Daily pace</p>
           </div>
           <div>
             <p class="num text-base font-semibold">{budget.days_left}</p>
