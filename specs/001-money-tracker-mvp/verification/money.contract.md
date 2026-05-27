@@ -48,7 +48,7 @@ export function absMoney(cents: bigint): bigint;
 
 `formatMoney`:
 - **R8 —** `123456n`→`"$1,234.56"`; `-123456n`→`"-$1,234.56"`; `5n`→`"$0.05"`; `0n`→`"$0.00"`. Always exactly 2 fractional digits; comma-grouped whole part; leading `-` for negatives.
-- **R9 — currency:** `currency:'USD'` or omitted ⇒ `$` prefix; any other/empty currency ⇒ **no** symbol.
+- **R9 — currency:** `currency:'USD'` or omitted (uses the app display currency, default USD) ⇒ `$` prefix, Western grouping; `currency:'INR'` ⇒ `₹` prefix with **Indian** digit grouping (last 3 digits, then groups of 2 — e.g. `₹1,23,456.78`); any other/empty currency ⇒ **no** symbol, Western grouping. The no-arg display currency is set via `setDisplayCurrency` at app start from the user's saved preference.
 
 `sumMoney` / `absMoney`:
 - **R10 —** `sumMoney` returns the bigint total of the iterable (`0n` for empty). `absMoney(x)` = `|x|`.

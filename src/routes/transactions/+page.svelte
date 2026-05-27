@@ -16,7 +16,7 @@
   import { makeManualImport, newManualId, ManualEntryError } from '$lib/app/manual-entry';
   import { parseAmountToCents, CsvImportError } from '$lib/app/csv-import';
   import { detectTransfers, type TransferTxn } from '$lib/app/transfer-detector';
-  import { formatMoney } from '$lib/util/money';
+  import { formatMoney, getDisplayCurrency } from '$lib/util/money';
   import {
     toUnifiedRows,
     listAccounts,
@@ -110,7 +110,8 @@
           posted_date: mDate,
           description: mDesc,
           amount_minor: signed,
-          account_nickname: mAccount
+          account_nickname: mAccount,
+          currency: getDisplayCurrency()
         },
         newManualId(),
         new Date().toISOString()

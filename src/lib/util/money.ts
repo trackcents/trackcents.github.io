@@ -61,21 +61,60 @@ export function parseMoney(text: string): bigint {
   return negative || explicitNeg ? -cents : cents;
 }
 
+// Currency symbols we render. A code with no entry here (e.g. 'EUR', '') renders
+// with NO symbol — the amount still formats correctly, just without a glyph.
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  USD: '$',
+  INR: '₹'
+};
+
 /**
- * Format signed integer cents as a money string.
+ * App-wide display currency for amounts shown WITHOUT an explicit `currency`
+ * (totals, budgets, this-month figures). Per-transaction amounts pass their own
+ * currency. Defaults to USD so pure callers and tests are unaffected; the app
+ * sets it once at startup from the user's saved preference.
+ */
+let displayCurrency = 'USD';
+export function setDisplayCurrency(code: string): void {
+  displayCurrency = code;
+}
+export function getDisplayCurrency(): string {
+  return displayCurrency;
+}
+
+/**
+ * Group the integer part. Indian numbering (1,23,456) for INR — last three
+ * digits, then groups of two — Western (1,234,567) for everything else.
+ */
+function groupWhole(whole: string, indian: boolean): string {
+  if (!indian || whole.length <= 3) {
+    return whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+  const last3 = whole.slice(-3);
+  const head = whole.slice(0, -3);
+  return `${head.replace(/\B(?=(\d{2})+(?!\d))/g, ',')},${last3}`;
+}
+
+/**
+ * Format signed integer cents (or paise) as a money string.
  *
- *   123456n  → "$1,234.56"
- *   -123456n → "-$1,234.56"
- *   5n       → "$0.05"
- *   0n       → "$0.00"
+ *   123456n                       → "$1,234.56"      (USD default)
+ *   -123456n                      → "-$1,234.56"
+ *   5n                            → "$0.05"
+ *   12345678n, { currency:'INR' } → "₹1,23,456.78"   (Indian grouping)
+ *   123456n,   { currency:'EUR' } → "1,234.56"       (no symbol for unknown codes)
+ *
+ * With no `currency` option it uses the app display currency
+ * (see setDisplayCurrency), which defaults to USD.
  */
 export function formatMoney(cents: bigint, opts: { currency?: string } = {}): string {
-  const symbol = opts.currency === 'USD' || opts.currency === undefined ? '$' : '';
+  const code = opts.currency ?? displayCurrency;
+  const symbol = CURRENCY_SYMBOLS[code] ?? '';
   const negative = cents < 0n;
   const abs = negative ? -cents : cents;
   const whole = abs / 100n;
   const frac = abs % 100n;
-  const wholeStr = whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const wholeStr = groupWhole(whole.toString(), code === 'INR');
   const fracStr = frac.toString().padStart(2, '0');
   return `${negative ? '-' : ''}${symbol}${wholeStr}.${fracStr}`;
 }

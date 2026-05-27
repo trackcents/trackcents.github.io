@@ -8,7 +8,14 @@
 // silently substituted 0n — masking $1.84 of real transactions.
 
 import { describe, expect, test } from 'vitest';
-import { absMoney, formatMoney, parseMoney, sumMoney } from '../../../src/lib/util/money';
+import {
+  absMoney,
+  formatMoney,
+  getDisplayCurrency,
+  parseMoney,
+  setDisplayCurrency,
+  sumMoney
+} from '../../../src/lib/util/money';
 
 describe('parseMoney', () => {
   test('parses standard dollar amounts', () => {
@@ -194,6 +201,34 @@ describe('formatMoney', () => {
   test('formats negative amounts with leading dash', () => {
     expect(formatMoney(-123456n)).toBe('-$1,234.56');
     expect(formatMoney(-50n)).toBe('-$0.50');
+  });
+
+  test('formats INR with ₹ and Indian digit grouping', () => {
+    expect(formatMoney(12345678n, { currency: 'INR' })).toBe('₹1,23,456.78');
+    expect(formatMoney(100000n, { currency: 'INR' })).toBe('₹1,000.00');
+    expect(formatMoney(100000000n, { currency: 'INR' })).toBe('₹10,00,000.00');
+    expect(formatMoney(-500n, { currency: 'INR' })).toBe('-₹5.00');
+    expect(formatMoney(0n, { currency: 'INR' })).toBe('₹0.00');
+  });
+
+  test('unknown currency code renders no symbol, Western grouping', () => {
+    expect(formatMoney(123456n, { currency: 'EUR' })).toBe('1,234.56');
+  });
+});
+
+describe('display currency (module default)', () => {
+  test('setDisplayCurrency changes no-arg formatMoney; default is USD; reset works', () => {
+    expect(getDisplayCurrency()).toBe('USD');
+    expect(formatMoney(123456n)).toBe('$1,234.56');
+    try {
+      setDisplayCurrency('INR');
+      expect(getDisplayCurrency()).toBe('INR');
+      expect(formatMoney(12345678n)).toBe('₹1,23,456.78');
+    } finally {
+      setDisplayCurrency('USD'); // reset so the rest of the suite sees the USD default
+    }
+    expect(getDisplayCurrency()).toBe('USD');
+    expect(formatMoney(123456n)).toBe('$1,234.56');
   });
 });
 

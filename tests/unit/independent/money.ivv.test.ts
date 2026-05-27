@@ -70,6 +70,7 @@ const cov = new CoverageModel([
   'format:comma-boundary',
   'format:currency-usd-symbol',
   'format:currency-other-no-symbol',
+  'format:currency-inr',
   'format:large-magnitude',
   // helpers
   'sum:empty',
@@ -242,13 +243,19 @@ describe('IV&V money.ts — Stage 1 (lean staged gate)', () => {
     expect(formatMoney(123456n, { currency: 'USD' })).toBe('$1,234.56');
     expect(formatMoney(123456n)).toBe('$1,234.56'); // omitted => $
     cov.cover('format:currency-other-no-symbol');
-    // any other / empty currency => NO symbol (R9 is the whole spec here).
+    // any UNKNOWN / empty currency => NO symbol, Western grouping.
     const eur = formatMoney(123456n, { currency: 'EUR' });
     expect(eur.startsWith('$')).toBe(false);
     expect(eur).toBe('1,234.56');
     const empty = formatMoney(123456n, { currency: '' });
     expect(empty.startsWith('$')).toBe(false);
     expect(empty).toBe('1,234.56');
+    // R9 extension: INR => ₹ symbol + Indian digit grouping (last 3, then 2s).
+    cov.cover('format:currency-inr');
+    expect(formatMoney(12345678n, { currency: 'INR' })).toBe('₹1,23,456.78');
+    expect(formatMoney(100000n, { currency: 'INR' })).toBe('₹1,000.00');
+    expect(formatMoney(100000000n, { currency: 'INR' })).toBe('₹10,00,000.00');
+    expect(formatMoney(-500n, { currency: 'INR' })).toBe('-₹5.00');
   });
 
   // ───────────────────────────────────────────────────────────────────────

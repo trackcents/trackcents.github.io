@@ -16,17 +16,29 @@
   import { importCsv, CsvImportError } from '$lib/app/csv-import';
   import { newManualId } from '$lib/app/manual-entry';
   import { detailedRowsFromImports } from '$lib/app/categorization-glue';
+  import { CURRENCIES, loadPrefs, setCurrencyPref, type CurrencyCode } from '$lib/app/prefs';
 
   let backend = $state<string>('');
   let txnCount = $state(0);
   let busy = $state(false);
   let message = $state<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  let currency = $state<CurrencyCode>('USD');
 
   onMount(async () => {
     const state = await loadState();
     backend = getLastUsedBackend();
     txnCount = state.imports.reduce((n, i) => n + i.transactions.length, 0);
+    currency = loadPrefs().currency;
   });
+
+  function changeCurrency(code: CurrencyCode): void {
+    if (code === currency) return;
+    setCurrencyPref(code);
+    currency = code;
+    // formatMoney reads a module-level default; reload to re-render every page
+    // in the new currency.
+    location.reload();
+  }
 
   function nowIso(): string {
     return new Date().toISOString();
@@ -183,6 +195,25 @@
   {/if}
 
   <div class="space-y-5">
+    <section class="card p-5">
+      <h2 class="text-base font-semibold">Currency</h2>
+      <p class="mt-1 text-sm text-[var(--color-muted)]">Amounts are shown in this currency.</p>
+      <div class="mt-3 flex gap-2">
+        {#each CURRENCIES as c (c.code)}
+          {@const active = currency === c.code}
+          <button
+            type="button"
+            class="btn flex-1 justify-center"
+            class:btn-primary={active}
+            class:btn-ghost={!active}
+            onclick={() => changeCurrency(c.code)}
+          >
+            {c.symbol}&nbsp;{c.label}
+          </button>
+        {/each}
+      </div>
+    </section>
+
     <section class="card p-5">
       <h2 class="text-base font-semibold">Backup &amp; restore</h2>
       <p class="mt-1 text-sm text-[var(--color-muted)]">

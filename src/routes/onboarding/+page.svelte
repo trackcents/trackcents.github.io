@@ -9,8 +9,9 @@
   import { generateSalt, saltToBase64 } from '$lib/crypto/salt';
   import { setSessionKey } from '$lib/crypto/session';
   import { SALT_STORAGE_KEY } from '$lib/app/unlock';
+  import { CURRENCIES, setCurrencyPref, type CurrencyCode } from '$lib/app/prefs';
 
-  type Step = 'install' | 'signin' | 'passphrase' | 'securing' | 'ready';
+  type Step = 'install' | 'signin' | 'currency' | 'passphrase' | 'securing' | 'ready';
   let step = $state<Step>('signin');
   let error = $state('');
   const syncAvailable = isSyncConfigured();
@@ -23,7 +24,7 @@
     error = '';
     try {
       await signIn();
-      step = 'passphrase';
+      step = 'currency';
     } catch (e) {
       error = e instanceof Error ? e.message : String(e);
     }
@@ -46,6 +47,11 @@
 
   function recheckInstall() {
     if (!needsIosInstall()) step = 'signin';
+  }
+
+  function chooseCurrency(code: CurrencyCode) {
+    setCurrencyPref(code);
+    step = 'passphrase';
   }
 </script>
 
@@ -84,7 +90,7 @@
           type="button"
           class="mt-3 block w-full text-center text-xs"
           style:color="var(--color-muted)"
-          onclick={() => (step = 'passphrase')}
+          onclick={() => (step = 'currency')}
         >
           Continue without sync
         </button>
@@ -97,7 +103,7 @@
         <button
           type="button"
           class="btn btn-primary mt-4 w-full"
-          onclick={() => (step = 'passphrase')}
+          onclick={() => (step = 'currency')}
         >
           Get started
         </button>
@@ -105,6 +111,27 @@
           This build is local-only — Google Drive sync isn't enabled.
         </p>
       {/if}
+    </div>
+  {:else if step === 'currency'}
+    <div class="card rise p-6">
+      <h2 class="text-lg font-semibold">Choose your currency</h2>
+      <p class="mt-2 text-sm" style:color="var(--color-muted)">
+        Amounts will show in this currency. You can change it anytime in Settings.
+      </p>
+      <div class="mt-4 grid gap-2">
+        {#each CURRENCIES as c (c.code)}
+          <button
+            type="button"
+            class="btn btn-ghost w-full justify-between"
+            onclick={() => chooseCurrency(c.code)}
+          >
+            <span>{c.label}</span>
+            <span class="num text-base font-semibold" style:color="var(--color-accent)"
+              >{c.symbol}</span
+            >
+          </button>
+        {/each}
+      </div>
     </div>
   {:else if step === 'passphrase'}
     <div class="card rise p-6">

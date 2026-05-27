@@ -8,11 +8,16 @@
   import { attemptUnlock, hasStoredSalt } from '$lib/app/unlock';
   import { initSyncIfReady } from '$lib/sync/sync-controller';
   import { initTheme } from '$lib/app/theme.svelte';
+  import { applyPrefs } from '$lib/app/prefs';
   import { page } from '$app/stores';
   import PassphraseUnlock from '$components/PassphraseUnlock.svelte';
   import Nav from '$components/Nav.svelte';
 
   let { children } = $props();
+
+  // Apply the saved display currency (USD/INR) before any child renders money.
+  if (typeof window !== 'undefined') applyPrefs();
+
   let locked = $state(false);
   let checking = $state(true);
 
