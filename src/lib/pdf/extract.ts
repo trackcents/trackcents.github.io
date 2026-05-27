@@ -9,7 +9,12 @@
 // That clustering is implemented in src/lib/adapters/_layout/table.ts; this
 // module returns the raw positional items and lets that layer handle layout.
 
-import * as pdfjsLib from 'pdfjs-dist';
+// Use the LEGACY build in the browser too (not just in tests/Node). The modern
+// build's ES-module worker fails to load on iOS Safari (strict worker MIME +
+// tighter memory), so the same PDF that parses on Android/desktop errored on
+// iPhone. The legacy build is broadly compatible and is exactly what the adapter
+// tests validate against, so the browser now matches the tested code path.
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import type { PDFDocumentProxy, PDFPageProxy, TextItem } from 'pdfjs-dist/types/src/display/api';
 import type { PdfPage, PdfTextItem, PdfTextWithPositions } from '../adapters/types';
 
@@ -24,7 +29,7 @@ async function ensureWorker() {
   if (typeof window !== 'undefined') {
     // Browser: load worker from the bundled URL.
     // Vite resolves the `?url` suffix at build time to the hashed asset.
-    const workerSrcModule = await import('pdfjs-dist/build/pdf.worker.mjs?url');
+    const workerSrcModule = await import('pdfjs-dist/legacy/build/pdf.worker.mjs?url');
     pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrcModule.default;
   } else {
     // Node / jsdom test environment: use the bundled fake worker.

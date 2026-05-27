@@ -63,7 +63,7 @@ test('Chase marketing sample PDF is REFUSED by the checksum gate (known quirk)',
   await expect(page.getByText(/off by \$.*\b(high|low)\b/).first()).toBeVisible();
 
   // No statement card should be rendered.
-  await expect(page.getByText(/No statements imported yet/i)).toBeVisible();
+  await expect(page.getByText(/No statements yet/i)).toBeVisible();
 });
 
 test('non-PDF file is silently filtered out (no error, no state change)', async ({ page }) => {
@@ -75,6 +75,6 @@ test('non-PDF file is silently filtered out (no error, no state change)', async 
   await page.waitForTimeout(500);
 
   // Still on the empty state.  No error banner.
-  await expect(page.getByText(/No statements imported yet/i)).toBeVisible();
+  await expect(page.getByText(/No statements yet/i)).toBeVisible();
   await expect(page.getByText(/Checksum refused/i)).toHaveCount(0);
 });
