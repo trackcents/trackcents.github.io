@@ -9,11 +9,13 @@
 // That clustering is implemented in src/lib/adapters/_layout/table.ts; this
 // module returns the raw positional items and lets that layer handle layout.
 
-// Use the LEGACY build in the browser too (not just in tests/Node). The modern
-// build's ES-module worker fails to load on iOS Safari (strict worker MIME +
-// tighter memory), so the same PDF that parses on Android/desktop errored on
-// iPhone. The legacy build is broadly compatible and is exactly what the adapter
-// tests validate against, so the browser now matches the tested code path.
+// Polyfills BEFORE PDF.js: it calls Promise.withResolvers(), which only exists
+// in iOS Safari 17.4+. On older iPhones the import threw "undefined is not a
+// function" — this shim fixes it (and applies to the main-thread parse below).
+import '../util/polyfills';
+// Use the LEGACY PDF.js build (broadly compatible; matches the adapter tests).
+// In the browser the worker is a custom entry (./pdf.worker) that polyfills the
+// worker scope too — see ensureWorker.
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import type { PDFDocumentProxy, PDFPageProxy, TextItem } from 'pdfjs-dist/types/src/display/api';
 import type { PdfPage, PdfTextItem, PdfTextWithPositions } from '../adapters/types';
@@ -23,20 +25,21 @@ import type { PdfPage, PdfTextItem, PdfTextWithPositions } from '../adapters/typ
 // the fake worker that PDF.js falls back to (slower but functional).
 let workerInitialized = false;
 
-async function ensureWorker() {
+async function ensureWorker(): Promise<void> {
   if (workerInitialized) return;
   workerInitialized = true;
-  if (typeof window !== 'undefined') {
-    // Browser: load worker from the bundled URL.
-    // Vite resolves the `?url` suffix at build time to the hashed asset.
-    const workerSrcModule = await import('pdfjs-dist/legacy/build/pdf.worker.mjs?url');
-    pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrcModule.default;
-  } else {
-    // Node / jsdom test environment: use the bundled fake worker.
-    // Setting workerSrc to an empty string disables the worker; PDF.js runs
-    // synchronously on the main thread.  Acceptable for tests; not used in prod.
+  if (typeof window === 'undefined') {
+    // Node / jsdom (tests): run inline on the main thread (no worker).
     pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+    return;
   }
+  // Browser: use our custom module worker (./pdf.worker) which installs the
+  // polyfills in the WORKER scope before PDF.js runs there. PDF.js calls
+  // Promise.withResolvers() in the worker, which iOS Safari < 17.4 lacks — that
+  // crashed PDF import on iPhone. Vite bundles the worker; hand PDF.js the live
+  // instance via workerPort.
+  const { default: PdfjsWorker } = await import('./pdf.worker?worker');
+  pdfjsLib.GlobalWorkerOptions.workerPort = new PdfjsWorker();
 }
 
 export interface ExtractOptions {

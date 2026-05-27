@@ -63,6 +63,18 @@
     // The SW (src/service-worker.ts) precaches build+files and serves them cache-first
     // when offline; it never caches cross-origin (Google auth/sync stays live).
     if (!dev && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      // Auto-update: when a new deployed version takes control, reload once so
+      // the latest code reaches the user — including an installed (home-screen)
+      // PWA, which otherwise keeps serving the cached old version. Guarded to the
+      // already-controlled case so a first install doesn't trigger a reload loop.
+      if (navigator.serviceWorker.controller) {
+        let reloaded = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (reloaded) return;
+          reloaded = true;
+          window.location.reload();
+        });
+      }
       try {
         await navigator.serviceWorker.register(`${base}/service-worker.js`, { type: 'module' });
       } catch {
