@@ -3,17 +3,19 @@
   // glance — a progress ring, top categories with colour + icon, and recent
   // transactions. Combines the new visual primitives (rings, icons, colours).
   import { onMount } from 'svelte';
-  import { loadState } from '$lib/db/store';
+  import { loadState, addImport } from '$lib/db/store';
   import type { ImportRecord } from '$lib/db/store';
   import { loadCategorization, type CategorizationState } from '$lib/db/categorization-store';
   import { summaryFromImports, detailedRowsFromImports } from '$lib/app/categorization-glue';
   import { netByMonth, spendingByCategoryByMonth, sortedMonths } from '$lib/app/spending-summary';
   import { monthOverMonthInsight, topMovers } from '$lib/app/spending-insights';
+  import { monthBudget } from '$lib/app/month-budget';
+  import { makeManualImport, newManualId, ManualEntryError } from '$lib/app/manual-entry';
+  import { parseAmountToCents, CsvImportError } from '$lib/app/csv-import';
   import { categoryColor, categoryIconName } from '$lib/app/category-visuals';
   import { goalProgress, type SavingsGoal } from '$lib/app/savings-goal';
   import { loadGoals } from '$lib/db/goals-store';
-  import { formatMoney } from '$lib/util/money';
-  import ProgressRing from '$components/ProgressRing.svelte';
+  import { formatMoney, getDisplayCurrency } from '$lib/util/money';
   import CategoryIcon from '$components/CategoryIcon.svelte';
 
   let loading = $state(true);
@@ -27,6 +29,50 @@
     goals = await loadGoals();
     loading = false;
   });
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+
+  // Quick "add income" from the budget hero — logs a manual income entry dated
+  // today, so a manual-first user can record salary/bonus and see their budget.
+  let showIncome = $state(false);
+  let incomeAmount = $state('');
+  let incomeLabel = $state('');
+  let incomeError = $state<string | null>(null);
+
+  async function submitIncome(): Promise<void> {
+    incomeError = null;
+    try {
+      const mag = parseAmountToCents(incomeAmount, 1);
+      const abs = mag < 0n ? -mag : mag;
+      if (abs === 0n) {
+        incomeError = 'Enter an amount.';
+        return;
+      }
+      const rec = makeManualImport(
+        {
+          posted_date: todayIso,
+          description: incomeLabel.trim() || 'Income',
+          amount_minor: abs,
+          account_nickname: 'Income',
+          currency: getDisplayCurrency()
+        },
+        newManualId(),
+        new Date().toISOString()
+      );
+      await addImport(rec);
+      imports = (await loadState()).imports;
+      showIncome = false;
+      incomeAmount = '';
+      incomeLabel = '';
+    } catch (e) {
+      incomeError =
+        e instanceof ManualEntryError || e instanceof CsvImportError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : String(e);
+    }
+  }
 
   function catName(id: string | null): string {
     if (id === null) return 'Uncategorized';
@@ -57,6 +103,7 @@
   const nbm = $derived(netByMonth(txns));
   const month = $derived(sortedMonths(nbm).at(-1) ?? null);
   const flow = $derived(month ? nbm.get(month) : undefined);
+  const budget = $derived(monthBudget(flow, month ?? todayIso.slice(0, 7), todayIso));
 
   // Top categories this month, sorted by spend desc.
   const topCats = $derived(
@@ -86,8 +133,6 @@
   const needsReview = $derived(
     allDetailed.filter((r) => r.category_id === null && !r.ignored).length
   );
-
-  const toN = (m: bigint): number => Number(m) / 100;
 </script>
 
 <svelte:head><title>Home · trackcents</title></svelte:head>
@@ -124,56 +169,165 @@
       </a>
     {/if}
 
-    <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
-      <!-- Ring: spent vs income -->
-      <div class="card rise flex flex-col items-center justify-center gap-3 p-6">
-        <ProgressRing
-          value={toN(flow.outflow_minor)}
-          max={toN(flow.inflow_minor)}
-          color={flow.net_minor < 0n ? 'var(--color-danger)' : 'var(--color-accent)'}
-          label={formatMoney(flow.net_minor)}
-          sublabel="left this month"
-        />
-        <div class="text-center text-xs" style:color="var(--color-muted)">
-          spent {formatMoney(flow.outflow_minor)} of {formatMoney(flow.inflow_minor)} in
+    <!-- This month — spent vs income, what's left, and a safe daily spend. -->
+    <section class="card rise p-5">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <p class="text-sm" style:color="var(--color-muted)">Spent this month</p>
+          <p class="num mt-1 text-4xl font-semibold tracking-tight">
+            {formatMoney(budget.spent_minor)}
+          </p>
+          {#if budget.income_minor > 0n}
+            <p class="mt-1 text-sm" style:color="var(--color-muted)">
+              of {formatMoney(budget.income_minor)} income
+            </p>
+          {/if}
+        </div>
+        <div class="flex flex-none flex-col items-end gap-2">
+          {#if budget.income_minor > 0n}
+            <span
+              class="num rounded-full px-2.5 py-0.5 text-sm font-semibold"
+              style:color={budget.over_pace ? 'var(--color-danger)' : 'var(--color-success)'}
+              style:background-color={budget.over_pace
+                ? 'color-mix(in oklab, var(--color-danger) 12%, transparent)'
+                : 'color-mix(in oklab, var(--color-success) 14%, transparent)'}
+            >
+              {budget.pct_spent}%
+            </span>
+          {/if}
+          <button
+            type="button"
+            class="btn btn-ghost"
+            style="padding: 0.4rem 0.8rem; font-size: 0.8rem;"
+            onclick={() => {
+              showIncome = !showIncome;
+              incomeError = null;
+            }}
+          >
+            + Income
+          </button>
         </div>
       </div>
 
-      <!-- Top categories -->
-      <div class="card rise p-5 md:col-span-2" style="animation-delay: 60ms;">
-        <h2 class="mb-3 text-sm font-semibold">Top categories</h2>
-        {#if topCats.length === 0}
-          <p class="text-sm" style:color="var(--color-muted)">No spending this month.</p>
-        {:else}
-          <div class="space-y-3">
-            {#each topCats.slice(0, 5) as [id, amt] (id)}
-              {@const color = categoryColor(id)}
-              <div class="flex items-center gap-3">
-                <CategoryIcon icon={categoryIconName(catName(id))} {color} tint />
-                <div class="min-w-0 flex-1">
-                  <div class="flex items-baseline justify-between gap-2">
-                    <span class="truncate text-sm font-medium">{catName(id)}</span>
-                    <span class="num text-sm" style:color="var(--color-text)"
-                      >{formatMoney(amt)}</span
-                    >
-                  </div>
-                  <div
-                    class="mt-1 h-1.5 overflow-hidden rounded-full"
-                    style="background-color: var(--color-elevated);"
+      {#if budget.income_minor > 0n}
+        <div
+          class="mt-4 h-2 overflow-hidden rounded-full"
+          style="background-color: var(--color-elevated);"
+        >
+          <div
+            class="h-full rounded-full"
+            style:width="{Math.min(100, budget.pct_spent)}%"
+            style:background-color={budget.remaining_minor < 0n
+              ? 'var(--color-danger)'
+              : 'transparent'}
+            style:background-image={budget.remaining_minor < 0n ? 'none' : 'var(--grad-primary)'}
+          ></div>
+        </div>
+        <div class="mt-4 grid grid-cols-3 gap-2 text-center">
+          <div>
+            <p
+              class="num text-base font-semibold"
+              style:color={budget.remaining_minor < 0n
+                ? 'var(--color-danger)'
+                : 'var(--color-text)'}
+            >
+              {formatMoney(budget.remaining_minor)}
+            </p>
+            <p class="text-xs" style:color="var(--color-muted)">Remaining</p>
+          </div>
+          <div>
+            <p class="num text-base font-semibold">{formatMoney(budget.daily_pace_minor)}</p>
+            <p class="text-xs" style:color="var(--color-muted)">Safe / day</p>
+          </div>
+          <div>
+            <p class="num text-base font-semibold">{budget.days_left}</p>
+            <p class="text-xs" style:color="var(--color-muted)">Days left</p>
+          </div>
+        </div>
+        {#if budget.over_pace}
+          <p class="mt-3 text-xs" style:color="var(--color-danger)">
+            You're spending faster than your income for the month — ease off to stay on track.
+          </p>
+        {/if}
+      {:else}
+        <p class="mt-3 text-sm" style:color="var(--color-muted)">
+          Add the income you got this month to see what's left, your safe daily spend, and your
+          pace.
+        </p>
+      {/if}
+
+      {#if showIncome}
+        <div class="mt-4 border-t pt-4" style="border-color: var(--color-border);">
+          <div class="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+            <label class="block text-sm">
+              <span class="mb-1 block text-xs" style:color="var(--color-muted)">Amount</span>
+              <input
+                type="text"
+                inputmode="decimal"
+                bind:value={incomeAmount}
+                placeholder="50000"
+                class="num w-full rounded-lg border px-3 py-2"
+                style="border-color: var(--color-border); background-color: var(--color-bg);"
+              />
+            </label>
+            <label class="block text-sm">
+              <span class="mb-1 block text-xs" style:color="var(--color-muted)">
+                Source (optional)
+              </span>
+              <input
+                type="text"
+                bind:value={incomeLabel}
+                placeholder="Salary"
+                class="w-full rounded-lg border px-3 py-2"
+                style="border-color: var(--color-border); background-color: var(--color-bg);"
+              />
+            </label>
+            <div class="flex items-end">
+              <button type="button" class="btn btn-primary w-full sm:w-auto" onclick={submitIncome}>
+                Add
+              </button>
+            </div>
+          </div>
+          {#if incomeError}
+            <p class="mt-2 text-xs" style:color="var(--color-danger)">{incomeError}</p>
+          {/if}
+        </div>
+      {/if}
+    </section>
+
+    <!-- Top categories -->
+    <div class="card rise mt-4 p-5" style="animation-delay: 60ms;">
+      <h2 class="mb-3 text-sm font-semibold">Top categories</h2>
+      {#if topCats.length === 0}
+        <p class="text-sm" style:color="var(--color-muted)">No spending this month.</p>
+      {:else}
+        <div class="space-y-3">
+          {#each topCats.slice(0, 5) as [id, amt] (id)}
+            {@const color = categoryColor(id)}
+            <div class="flex items-center gap-3">
+              <CategoryIcon icon={categoryIconName(catName(id))} {color} tint />
+              <div class="min-w-0 flex-1">
+                <div class="flex items-baseline justify-between gap-2">
+                  <span class="truncate text-sm font-medium">{catName(id)}</span>
+                  <span class="num text-sm" style:color="var(--color-text)">{formatMoney(amt)}</span
                   >
-                    <div
-                      class="h-full rounded-full"
-                      style="width: {topSpend > 0n
-                        ? Number((amt * 100n) / topSpend)
-                        : 0}%; background-color: {color};"
-                    ></div>
-                  </div>
+                </div>
+                <div
+                  class="mt-1 h-1.5 overflow-hidden rounded-full"
+                  style="background-color: var(--color-elevated);"
+                >
+                  <div
+                    class="h-full rounded-full"
+                    style="width: {topSpend > 0n
+                      ? Number((amt * 100n) / topSpend)
+                      : 0}%; background-color: {color};"
+                  ></div>
                 </div>
               </div>
-            {/each}
-          </div>
-        {/if}
-      </div>
+            </div>
+          {/each}
+        </div>
+      {/if}
     </div>
 
     <!-- Spending vs last month (US-INSIGHT) -->
