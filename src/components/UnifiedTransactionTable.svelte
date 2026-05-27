@@ -1,13 +1,17 @@
 <script lang="ts">
-  // Sortable, inline-expandable table for the /transactions route.
+  // Sortable, inline-expandable transaction list for the /transactions route.
+  //
+  //   - Desktop (≥768px): a sortable multi-column table.
+  //   - Phone (<768px): a clean tap-to-expand card list (icon · name ·
+  //     date/account · amount) — a wide table is unreadable on a phone.
+  // Both layouts share the same expanded "details" panel via a snippet, and the
+  // same expand state, so behaviour is identical across sizes.
   //
   // Differences from the per-statement TransactionTable.svelte:
   //   - Shows the source account on every row (bank + last_4 + type).
   //   - Header cells are click-to-sort with asc/desc toggle and arrow glyph.
   //   - Click a row to expand its provenance fields (raw_text, pdf_hash,
   //     parser version) inline beneath the row.
-  //   - No reconciliation-link badges (the drill is on the per-statement
-  //     card view; the unified view is for browsing, not drilling).
 
   import { goto } from '$app/navigation';
   import type { TransactionType } from '$lib/adapters/types';
@@ -134,6 +138,14 @@
     return categories.find((c) => c.id === id)?.name ?? id;
   }
 
+  function amountColor(r: UnifiedRow): string {
+    return r.amount_minor < 0n
+      ? 'var(--color-danger)'
+      : r.amount_minor > 0n
+        ? 'var(--color-success)'
+        : 'var(--color-muted)';
+  }
+
   const TYPE_LABELS: Record<TransactionType, string> = {
     purchase: 'Purchase',
     refund: 'Refund',
@@ -190,7 +202,212 @@
   }
 </script>
 
-<div class="overflow-x-auto rounded-xl border" style="border-color: var(--color-border);">
+<!-- Shared category picker (used in the desktop column and the mobile card). -->
+{#snippet categoryPicker(r: UnifiedRow)}
+  <div class="flex items-center gap-2">
+    <CategoryIcon
+      icon={categoryIconName(currentCatName(r))}
+      color={categoryColor(categoryFor?.(r) ?? null)}
+      size={15}
+    />
+    <select
+      class="min-w-0 flex-1 rounded-md border px-1.5 py-1 text-xs"
+      style="border-color: var(--color-border); background-color: var(--color-surface); color: var(--color-text);"
+      value={categoryFor?.(r) ?? ''}
+      onchange={(e) => onAssignCategory?.(r, e.currentTarget.value || null)}
+      aria-label="Category"
+    >
+      <option value="">Uncategorized</option>
+      {#each categories as c (c.id)}
+        <option value={c.id}>{c.name}</option>
+      {/each}
+    </select>
+  </div>
+{/snippet}
+
+<!-- Shared expanded detail panel: provenance + actions + source link. -->
+{#snippet details(r: UnifiedRow)}
+  <dl class="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
+    <div class="flex gap-2">
+      <dt class="text-[var(--color-muted)]">Bank:</dt>
+      <dd class="text-[var(--color-text)]">{r.bank_name}</dd>
+    </div>
+    <div class="flex gap-2">
+      <dt class="text-[var(--color-muted)]">Account type:</dt>
+      <dd class="text-[var(--color-text)]">{r.account_type}</dd>
+    </div>
+    <div class="flex gap-2">
+      <dt class="text-[var(--color-muted)]">Account ••••:</dt>
+      <dd class="font-mono text-[var(--color-text)]">{r.account_last_4 ?? '—'}</dd>
+    </div>
+    <div class="flex gap-2">
+      <dt class="text-[var(--color-muted)]">Parser:</dt>
+      <dd class="font-mono text-[var(--color-text)]">{r.adapter_name} v{r.adapter_version}</dd>
+    </div>
+    <div class="flex gap-2 sm:col-span-2">
+      <dt class="text-[var(--color-muted)]">PDF hash:</dt>
+      <dd class="font-mono break-all text-[var(--color-text)]">{r.pdf_source_hash}</dd>
+    </div>
+    <div class="flex gap-2 sm:col-span-2">
+      <dt class="text-[var(--color-muted)]">Raw text:</dt>
+      <dd class="font-mono text-xs whitespace-pre-wrap text-[var(--color-text)]">{r.raw_text}</dd>
+    </div>
+  </dl>
+  {#if showActions}
+    <div class="mt-3 border-t pt-3" style="border-color: var(--color-border);">
+      <p class="mb-2 text-[11px] font-medium tracking-wide text-[var(--color-muted)] uppercase">
+        Actions
+      </p>
+      <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <label class="block">
+          <span class="mb-1 block text-[var(--color-muted)]">Rename (display name)</span>
+          <input
+            type="text"
+            value={annotationFor?.(r)?.custom_name ?? ''}
+            placeholder={r.description}
+            class="w-full rounded-md border px-2 py-1 text-xs"
+            style="border-color: var(--color-border); background-color: var(--color-bg); color: var(--color-text);"
+            onchange={(e) => onUpdateAnnotation?.(r, { custom_name: e.currentTarget.value })}
+          />
+        </label>
+        <label class="block">
+          <span class="mb-1 block text-[var(--color-muted)]">Tags (comma-separated)</span>
+          <input
+            type="text"
+            value={tagsStr(r)}
+            placeholder="e.g. work, reimbursable"
+            class="w-full rounded-md border px-2 py-1 text-xs"
+            style="border-color: var(--color-border); background-color: var(--color-bg); color: var(--color-text);"
+            onchange={(e) => commitTags(r, e.currentTarget.value)}
+          />
+        </label>
+        <label class="block sm:col-span-2">
+          <span class="mb-1 block text-[var(--color-muted)]">Note</span>
+          <input
+            type="text"
+            value={annotationFor?.(r)?.note ?? ''}
+            placeholder="Add a note…"
+            class="w-full rounded-md border px-2 py-1 text-xs"
+            style="border-color: var(--color-border); background-color: var(--color-bg); color: var(--color-text);"
+            onchange={(e) => onUpdateAnnotation?.(r, { note: e.currentTarget.value })}
+          />
+        </label>
+      </div>
+      <div class="mt-3 flex flex-wrap items-center gap-4">
+        <label class="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={isIgnored(r)}
+            onchange={(e) => onUpdateAnnotation?.(r, { ignored: e.currentTarget.checked })}
+          />
+          <span>Exclude from spending</span>
+        </label>
+        <label class="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={isRecurring(r)}
+            onchange={(e) => onUpdateAnnotation?.(r, { is_recurring: e.currentTarget.checked })}
+          />
+          <span>Mark as recurring</span>
+        </label>
+      </div>
+
+      {#if r.amount_minor > 0n && refundCandidates.length > 0}
+        <label class="mt-3 block">
+          <span class="mb-1 block text-[var(--color-muted)]">
+            Refund of (links this credit to a purchase so it nets, not double-counts)
+          </span>
+          <select
+            class="w-full rounded-md border px-2 py-1 text-xs"
+            style="border-color: var(--color-border); background-color: var(--color-bg); color: var(--color-text);"
+            value={annotationFor?.(r)?.refund_of ?? ''}
+            onchange={(e) => onUpdateAnnotation?.(r, { refund_of: e.currentTarget.value })}
+          >
+            <option value="">— not a refund —</option>
+            {#each refundCandidates as c (c.key)}
+              <option value={c.key}>{c.label}</option>
+            {/each}
+          </select>
+        </label>
+      {/if}
+
+      {#if categories.length > 0}
+        {@const parts = splitOf(r)}
+        <div class="mt-3">
+          <div class="mb-1 flex items-center justify-between">
+            <span class="text-[var(--color-muted)]">Split across categories (US-SPLIT)</span>
+            <button
+              type="button"
+              class="rounded-md border px-2 py-0.5 text-xs transition-colors hover:border-[var(--color-accent)]"
+              style="border-color: var(--color-border); background-color: var(--color-bg);"
+              onclick={() => addSplitPart(r)}
+            >
+              + Add split
+            </button>
+          </div>
+          {#if parts.length > 0}
+            <div class="space-y-1.5">
+              {#each parts as part, idx (idx)}
+                <div class="flex items-center gap-2">
+                  <select
+                    class="min-w-0 flex-1 rounded-md border px-1.5 py-1 text-xs"
+                    style="border-color: var(--color-border); background-color: var(--color-bg); color: var(--color-text);"
+                    value={part.category_id ?? ''}
+                    onchange={(e) => setSplitCategory(r, idx, e.currentTarget.value || null)}
+                  >
+                    <option value="">Uncategorized</option>
+                    {#each categories as c (c.id)}
+                      <option value={c.id}>{c.name}</option>
+                    {/each}
+                  </select>
+                  <span class="text-[var(--color-muted)]">$</span>
+                  <input
+                    type="text"
+                    inputmode="decimal"
+                    value={splitAmountStr(part)}
+                    class="num w-20 rounded-md border px-2 py-1 text-right text-xs"
+                    style="border-color: var(--color-border); background-color: var(--color-bg); color: var(--color-text);"
+                    onchange={(e) => setSplitAmount(r, idx, e.currentTarget.value)}
+                  />
+                  <button
+                    type="button"
+                    class="text-xs text-[var(--color-muted)] hover:text-[var(--color-danger)]"
+                    onclick={() => removeSplitPart(r, idx)}
+                    aria-label="Remove split part">✕</button
+                  >
+                </div>
+              {/each}
+            </div>
+            <p class="mt-1 text-[11px] text-[var(--color-muted)]">
+              {#if splitRemainderMinor(r) === 0n}
+                Split covers the full amount.
+              {:else}
+                Remainder {formatMoney(splitRemainderMinor(r))} stays in the transaction's category.
+              {/if}
+            </p>
+          {/if}
+        </div>
+      {/if}
+    </div>
+  {/if}
+
+  <div class="mt-3 flex gap-2">
+    <button
+      type="button"
+      onclick={() => goto(`/statements/${encodeURIComponent(r.pdf_source_hash)}`)}
+      class="rounded-md border px-2 py-1 text-xs text-[var(--color-muted)] transition-colors hover:text-[var(--color-text)]"
+      style="border-color: var(--color-border); background-color: var(--color-bg);"
+    >
+      View source statement →
+    </button>
+  </div>
+{/snippet}
+
+<!-- ── Desktop: sortable table (≥768px) ── -->
+<div
+  class="hidden overflow-x-auto rounded-xl border md:block"
+  style="border-color: var(--color-border);"
+>
   <table class="w-full text-sm">
     <thead
       class="text-xs text-[var(--color-muted)]"
@@ -202,30 +419,24 @@
             type="button"
             onclick={() => onHeaderClick('date')}
             class="-mx-1 rounded px-1 py-0.5 transition-colors hover:text-[var(--color-text)]"
-            aria-label="Sort by date"
+            aria-label="Sort by date">Date{sortIndicator('date')}</button
           >
-            Date{sortIndicator('date')}
-          </button>
         </th>
         <th class="px-3 py-2 text-left font-medium">
           <button
             type="button"
             onclick={() => onHeaderClick('description')}
             class="-mx-1 rounded px-1 py-0.5 transition-colors hover:text-[var(--color-text)]"
-            aria-label="Sort by description"
+            aria-label="Sort by description">Description{sortIndicator('description')}</button
           >
-            Description{sortIndicator('description')}
-          </button>
         </th>
         <th class="px-3 py-2 text-left font-medium">
           <button
             type="button"
             onclick={() => onHeaderClick('account')}
             class="-mx-1 rounded px-1 py-0.5 transition-colors hover:text-[var(--color-text)]"
-            aria-label="Sort by account"
+            aria-label="Sort by account">Account{sortIndicator('account')}</button
           >
-            Account{sortIndicator('account')}
-          </button>
         </th>
         {#if showCategory}
           <th class="px-3 py-2 text-left font-medium">Category</th>
@@ -235,20 +446,16 @@
             type="button"
             onclick={() => onHeaderClick('type')}
             class="-mx-1 rounded px-1 py-0.5 transition-colors hover:text-[var(--color-text)]"
-            aria-label="Sort by type"
+            aria-label="Sort by type">Type{sortIndicator('type')}</button
           >
-            Type{sortIndicator('type')}
-          </button>
         </th>
         <th class="px-3 py-2 text-right font-medium">
           <button
             type="button"
             onclick={() => onHeaderClick('amount')}
             class="-mx-1 rounded px-1 py-0.5 transition-colors hover:text-[var(--color-text)]"
-            aria-label="Sort by amount"
+            aria-label="Sort by amount">Amount{sortIndicator('amount')}</button
           >
-            Amount{sortIndicator('amount')}
-          </button>
         </th>
       </tr>
     </thead>
@@ -307,39 +514,12 @@
             {/if}
           </td>
           {#if showCategory}
-            <td class="px-3 py-2">
-              <div class="flex items-center gap-2">
-                <CategoryIcon
-                  icon={categoryIconName(currentCatName(r))}
-                  color={categoryColor(categoryFor?.(r) ?? null)}
-                  size={15}
-                />
-                <select
-                  class="rounded-md border px-1.5 py-1 text-xs"
-                  style="border-color: var(--color-border); background-color: var(--color-surface); color: var(--color-text);"
-                  value={categoryFor?.(r) ?? ''}
-                  onchange={(e) => onAssignCategory?.(r, e.currentTarget.value || null)}
-                  aria-label="Category"
-                >
-                  <option value="">Uncategorized</option>
-                  {#each categories as c (c.id)}
-                    <option value={c.id}>{c.name}</option>
-                  {/each}
-                </select>
-              </div>
-            </td>
+            <td class="px-3 py-2">{@render categoryPicker(r)}</td>
           {/if}
           <td class="px-3 py-2 text-xs text-[var(--color-muted)]">
             {TYPE_LABELS[r.transaction_type]}
           </td>
-          <td
-            class="px-3 py-2 text-right font-mono whitespace-nowrap"
-            style:color={r.amount_minor < 0n
-              ? 'var(--color-danger)'
-              : r.amount_minor > 0n
-                ? 'var(--color-success)'
-                : 'var(--color-muted)'}
-          >
+          <td class="px-3 py-2 text-right font-mono whitespace-nowrap" style:color={amountColor(r)}>
             {formatMoney(r.amount_minor, { currency: r.currency })}
           </td>
         </tr>
@@ -348,201 +528,7 @@
           <!-- Inline provenance row — Constitution Principle VI says every
                transaction must carry full provenance, and we show it here. -->
           <tr style:background-color="color-mix(in oklab, var(--color-accent) 4%, transparent)">
-            <td colspan={colSpan} class="px-6 py-3 text-xs">
-              <dl class="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
-                <div class="flex gap-2">
-                  <dt class="text-[var(--color-muted)]">Bank:</dt>
-                  <dd class="text-[var(--color-text)]">{r.bank_name}</dd>
-                </div>
-                <div class="flex gap-2">
-                  <dt class="text-[var(--color-muted)]">Account type:</dt>
-                  <dd class="text-[var(--color-text)]">{r.account_type}</dd>
-                </div>
-                <div class="flex gap-2">
-                  <dt class="text-[var(--color-muted)]">Account ••••:</dt>
-                  <dd class="font-mono text-[var(--color-text)]">{r.account_last_4 ?? '—'}</dd>
-                </div>
-                <div class="flex gap-2">
-                  <dt class="text-[var(--color-muted)]">Parser:</dt>
-                  <dd class="font-mono text-[var(--color-text)]">
-                    {r.adapter_name} v{r.adapter_version}
-                  </dd>
-                </div>
-                <div class="flex gap-2 sm:col-span-2">
-                  <dt class="text-[var(--color-muted)]">PDF hash:</dt>
-                  <dd class="font-mono break-all text-[var(--color-text)]">
-                    {r.pdf_source_hash}
-                  </dd>
-                </div>
-                <div class="flex gap-2 sm:col-span-2">
-                  <dt class="text-[var(--color-muted)]">Raw text:</dt>
-                  <dd class="font-mono text-xs whitespace-pre-wrap text-[var(--color-text)]">
-                    {r.raw_text}
-                  </dd>
-                </div>
-              </dl>
-              {#if showActions}
-                <div class="mt-3 border-t pt-3" style="border-color: var(--color-border);">
-                  <p
-                    class="mb-2 text-[11px] font-medium tracking-wide text-[var(--color-muted)] uppercase"
-                  >
-                    Actions
-                  </p>
-                  <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <label class="block">
-                      <span class="mb-1 block text-[var(--color-muted)]">Rename (display name)</span
-                      >
-                      <input
-                        type="text"
-                        value={annotationFor?.(r)?.custom_name ?? ''}
-                        placeholder={r.description}
-                        class="w-full rounded-md border px-2 py-1 text-xs"
-                        style="border-color: var(--color-border); background-color: var(--color-bg); color: var(--color-text);"
-                        onchange={(e) =>
-                          onUpdateAnnotation?.(r, { custom_name: e.currentTarget.value })}
-                      />
-                    </label>
-                    <label class="block">
-                      <span class="mb-1 block text-[var(--color-muted)]"
-                        >Tags (comma-separated)</span
-                      >
-                      <input
-                        type="text"
-                        value={tagsStr(r)}
-                        placeholder="e.g. work, reimbursable"
-                        class="w-full rounded-md border px-2 py-1 text-xs"
-                        style="border-color: var(--color-border); background-color: var(--color-bg); color: var(--color-text);"
-                        onchange={(e) => commitTags(r, e.currentTarget.value)}
-                      />
-                    </label>
-                    <label class="block sm:col-span-2">
-                      <span class="mb-1 block text-[var(--color-muted)]">Note</span>
-                      <input
-                        type="text"
-                        value={annotationFor?.(r)?.note ?? ''}
-                        placeholder="Add a note…"
-                        class="w-full rounded-md border px-2 py-1 text-xs"
-                        style="border-color: var(--color-border); background-color: var(--color-bg); color: var(--color-text);"
-                        onchange={(e) => onUpdateAnnotation?.(r, { note: e.currentTarget.value })}
-                      />
-                    </label>
-                  </div>
-                  <div class="mt-3 flex flex-wrap items-center gap-4">
-                    <label class="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={isIgnored(r)}
-                        onchange={(e) =>
-                          onUpdateAnnotation?.(r, { ignored: e.currentTarget.checked })}
-                      />
-                      <span>Exclude from spending</span>
-                    </label>
-                    <label class="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={isRecurring(r)}
-                        onchange={(e) =>
-                          onUpdateAnnotation?.(r, { is_recurring: e.currentTarget.checked })}
-                      />
-                      <span>Mark as recurring</span>
-                    </label>
-                  </div>
-
-                  {#if r.amount_minor > 0n && refundCandidates.length > 0}
-                    <label class="mt-3 block">
-                      <span class="mb-1 block text-[var(--color-muted)]">
-                        Refund of (links this credit to a purchase so it nets, not double-counts)
-                      </span>
-                      <select
-                        class="w-full rounded-md border px-2 py-1 text-xs"
-                        style="border-color: var(--color-border); background-color: var(--color-bg); color: var(--color-text);"
-                        value={annotationFor?.(r)?.refund_of ?? ''}
-                        onchange={(e) =>
-                          onUpdateAnnotation?.(r, { refund_of: e.currentTarget.value })}
-                      >
-                        <option value="">— not a refund —</option>
-                        {#each refundCandidates as c (c.key)}
-                          <option value={c.key}>{c.label}</option>
-                        {/each}
-                      </select>
-                    </label>
-                  {/if}
-
-                  {#if categories.length > 0}
-                    {@const parts = splitOf(r)}
-                    <div class="mt-3">
-                      <div class="mb-1 flex items-center justify-between">
-                        <span class="text-[var(--color-muted)]"
-                          >Split across categories (US-SPLIT)</span
-                        >
-                        <button
-                          type="button"
-                          class="rounded-md border px-2 py-0.5 text-xs transition-colors hover:border-[var(--color-accent)]"
-                          style="border-color: var(--color-border); background-color: var(--color-bg);"
-                          onclick={() => addSplitPart(r)}
-                        >
-                          + Add split
-                        </button>
-                      </div>
-                      {#if parts.length > 0}
-                        <div class="space-y-1.5">
-                          {#each parts as part, idx (idx)}
-                            <div class="flex items-center gap-2">
-                              <select
-                                class="flex-1 rounded-md border px-1.5 py-1 text-xs"
-                                style="border-color: var(--color-border); background-color: var(--color-bg); color: var(--color-text);"
-                                value={part.category_id ?? ''}
-                                onchange={(e) =>
-                                  setSplitCategory(r, idx, e.currentTarget.value || null)}
-                              >
-                                <option value="">Uncategorized</option>
-                                {#each categories as c (c.id)}
-                                  <option value={c.id}>{c.name}</option>
-                                {/each}
-                              </select>
-                              <span class="text-[var(--color-muted)]">$</span>
-                              <input
-                                type="text"
-                                inputmode="decimal"
-                                value={splitAmountStr(part)}
-                                class="num w-20 rounded-md border px-2 py-1 text-right text-xs"
-                                style="border-color: var(--color-border); background-color: var(--color-bg); color: var(--color-text);"
-                                onchange={(e) => setSplitAmount(r, idx, e.currentTarget.value)}
-                              />
-                              <button
-                                type="button"
-                                class="text-xs text-[var(--color-muted)] hover:text-[var(--color-danger)]"
-                                onclick={() => removeSplitPart(r, idx)}
-                                aria-label="Remove split part">✕</button
-                              >
-                            </div>
-                          {/each}
-                        </div>
-                        <p class="mt-1 text-[11px] text-[var(--color-muted)]">
-                          {#if splitRemainderMinor(r) === 0n}
-                            Split covers the full amount.
-                          {:else}
-                            Remainder {formatMoney(splitRemainderMinor(r))} stays in the transaction's
-                            category.
-                          {/if}
-                        </p>
-                      {/if}
-                    </div>
-                  {/if}
-                </div>
-              {/if}
-
-              <div class="mt-3 flex gap-2">
-                <button
-                  type="button"
-                  onclick={() => goto(`/statements/${encodeURIComponent(r.pdf_source_hash)}`)}
-                  class="rounded-md border px-2 py-1 text-xs text-[var(--color-muted)] transition-colors hover:text-[var(--color-text)]"
-                  style="border-color: var(--color-border); background-color: var(--color-bg);"
-                >
-                  View source statement →
-                </button>
-              </div>
-            </td>
+            <td colspan={colSpan} class="px-6 py-3 text-xs">{@render details(r)}</td>
           </tr>
         {/if}
       {/each}
@@ -550,6 +536,64 @@
   </table>
   {#if rows.length === 0}
     <p class="p-6 text-center text-sm text-[var(--color-muted)]">
+      No transactions match the current filters.
+    </p>
+  {/if}
+</div>
+
+<!-- ── Phone: tap-to-expand card list (<768px) ── -->
+<div class="space-y-2 md:hidden">
+  {#each rows as r (rowKey(r))}
+    {@const expandedNow = isExpanded(r)}
+    <div
+      class="rounded-xl border"
+      style="border-color: var(--color-border); background-color: var(--color-surface);"
+    >
+      <button
+        type="button"
+        onclick={() => toggleExpanded(r)}
+        class="flex w-full items-center gap-3 p-3 text-left"
+        aria-expanded={expandedNow}
+      >
+        <CategoryIcon
+          icon={categoryIconName(currentCatName(r))}
+          color={categoryColor(categoryFor?.(r) ?? null)}
+          tint
+        />
+        <div class="min-w-0 flex-1">
+          <div
+            class="truncate text-sm font-medium text-[var(--color-text)]"
+            class:line-through={isIgnored(r)}
+            style:opacity={isIgnored(r) ? '0.5' : '1'}
+          >
+            {displayName(r)}
+            {#if isRecurring(r)}<span class="ml-1 text-[10px]" style="color: var(--color-accent);"
+                >↻</span
+              >{/if}
+          </div>
+          <div class="truncate text-xs text-[var(--color-muted)]">
+            {r.posted_date} · {r.bank_name}{#if r.account_last_4}&nbsp;••••{r.account_last_4}{/if}
+          </div>
+        </div>
+        <div class="num text-sm font-semibold whitespace-nowrap" style:color={amountColor(r)}>
+          {formatMoney(r.amount_minor, { currency: r.currency })}
+        </div>
+      </button>
+      {#if showCategory}
+        <div class="px-3 pb-3">{@render categoryPicker(r)}</div>
+      {/if}
+      {#if expandedNow}
+        <div class="border-t px-3 py-3 text-xs" style="border-color: var(--color-border);">
+          {@render details(r)}
+        </div>
+      {/if}
+    </div>
+  {/each}
+  {#if rows.length === 0}
+    <p
+      class="rounded-xl border p-6 text-center text-sm text-[var(--color-muted)]"
+      style="border-color: var(--color-border);"
+    >
       No transactions match the current filters.
     </p>
   {/if}
