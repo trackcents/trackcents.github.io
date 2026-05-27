@@ -1,9 +1,14 @@
 // Runtime polyfills for older mobile browsers (iOS Safari is the app's main
 // phone browser). Import this BEFORE PDF.js.
 //
-// PDF.js 5.x calls `Promise.withResolvers()` heavily — an API that only landed
-// in iOS Safari 17.4. On an iPhone running iOS 17.0–17.3, importing a PDF threw
-// "undefined is not a function". This shim makes it work on those devices.
+// PRIMARY iOS fix: we pin pdfjs-dist to 4.4.168 — the last release BEFORE the
+// 4.5 cutover that started calling `Promise.withResolvers()` (and assuming a
+// newer Safari baseline generally). pdf.js >= 4.5 / 5.x threw "undefined is not
+// a function" on the cousins' iPhones; v4.4 targets the broad older-Safari
+// baseline they run. See package.json + src/lib/pdf/extract.ts.
+//
+// This shim is now DEFENSIVE depth only: v4.4 doesn't need it, but it's a cheap
+// guard for any browser that still lacks `Promise.withResolvers` (Safari < 17.4).
 
 interface Resolvers<T> {
   promise: Promise<T>;

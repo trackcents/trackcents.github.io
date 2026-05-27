@@ -75,12 +75,24 @@ html.dark {
 html,
 body {
   height: 100%;
+  /* Hard guard against horizontal overflow on mobile. Without this, a single
+     element a few px wider than the viewport (a long unbreakable string, a
+     100vw box, a wide grid child) stretches the page — iOS Safari then loads
+     the page "zoomed out to fit" with a horizontal scrollbar, exactly the bug
+     reported on iPhone. `clip` (not `hidden`) kills the scroll without
+     creating a scroll container, so it doesn't break sticky/fixed children or
+     smooth scrollIntoView. Width is also clamped so nothing can force the
+     layout wider than the screen. */
+  max-width: 100%;
+  overflow-x: clip;
 }
 
 /* Reserve the scrollbar track on every page so navigating between a page that
    scrolls and one that doesn't no longer shifts the centered layout sideways. */
 html {
   scrollbar-gutter: stable;
+  /* Stop the rubber-band horizontal pan that can reveal sub-pixel overflow. */
+  overscroll-behavior-x: none;
 }
 
 body {

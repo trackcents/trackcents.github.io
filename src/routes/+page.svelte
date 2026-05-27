@@ -211,11 +211,19 @@
       });
     } catch (err) {
       console.error('[money-tracker] uncaught import error', err);
+      const detail = err instanceof Error ? err.message : String(err);
+      // "undefined is not a function" is the signature of a PDF engine that
+      // needs a newer browser than this device has. Give the user a plain,
+      // actionable message instead of the raw JS error they can't act on.
+      const looksLikeUnsupportedRuntime = /is not a function|undefined is not an object/i.test(
+        detail
+      );
       failures.push({
         fileName: file.name,
         reason: 'parse',
-        message:
-          'Unexpected error during import: ' + (err instanceof Error ? err.message : String(err))
+        message: looksLikeUnsupportedRuntime
+          ? `This PDF couldn't be read in this browser. If you're on an iPhone, updating iOS (Settings → General → Software Update) usually fixes it. (Technical detail: ${detail})`
+          : `Couldn't read this PDF. (Technical detail: ${detail})`
       });
       return;
     }
@@ -509,7 +517,7 @@
   duplicates or failures so the user can read them at their own pace.
 -->
 <div
-  class="pointer-events-none fixed right-4 bottom-4 z-50 flex w-[28rem] max-w-[calc(100vw-2rem)] flex-col gap-2"
+  class="pointer-events-none fixed right-4 bottom-4 z-50 flex w-[28rem] max-w-[calc(100%-2rem)] flex-col gap-2"
   aria-live="polite"
 >
   {#each toasts as t (t.id)}

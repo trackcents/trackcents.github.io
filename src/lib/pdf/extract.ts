@@ -9,13 +9,15 @@
 // That clustering is implemented in src/lib/adapters/_layout/table.ts; this
 // module returns the raw positional items and lets that layer handle layout.
 
-// Polyfills BEFORE PDF.js: it calls Promise.withResolvers(), which only exists
-// in iOS Safari 17.4+. On older iPhones the import threw "undefined is not a
-// function" — this shim fixes it (and applies to the main-thread parse below).
+// iOS compatibility: pdfjs-dist is PINNED to 4.4.168 (see package.json). pdf.js
+// >= 4.5 calls Promise.withResolvers() and assumes a modern-Safari baseline, so
+// it threw "undefined is not a function" on the cousins' iPhones; v4.4 is the
+// last release before that cutover and runs on the older Safari they have.
+// The polyfill import below is now belt-and-suspenders (harmless on v4.4).
 import '../util/polyfills';
-// Use the LEGACY PDF.js build (broadly compatible; matches the adapter tests).
-// In the browser the worker is a custom entry (./pdf.worker) that polyfills the
-// worker scope too — see ensureWorker.
+// Use the LEGACY PDF.js build (transpiled for older browsers; matches the
+// adapter tests). In the browser the worker is a custom entry (./pdf.worker)
+// that loads the polyfill in the worker scope too — see ensureWorker.
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import type { PDFDocumentProxy, PDFPageProxy, TextItem } from 'pdfjs-dist/types/src/display/api';
 import type { PdfPage, PdfTextItem, PdfTextWithPositions } from '../adapters/types';

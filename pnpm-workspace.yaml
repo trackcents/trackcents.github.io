@@ -1,7 +1,14 @@
-# pnpm 10+ config for build-script approval. esbuild is a transitive dep
-# of Vite and needs its postinstall to fetch the platform-specific native
-# binary. Without this, pnpm install exits non-zero with ERR_PNPM_IGNORED_BUILDS.
+# pnpm build-script approval. pnpm does NOT run a dependency's install script
+# unless it's approved here; an UNRESOLVED entry (a placeholder string instead
+# of a boolean) is invalid and makes pnpm ignore ALL builds, which fails the
+# pre-run deps check with ERR_PNPM_IGNORED_BUILDS.
+#
+# - esbuild (Vite's native binary) MUST build.
+# - canvas is pdfjs-dist v4's OPTIONAL server-side PDF *rendering* dep. We only
+#   extract text (browser + jsdom), never render in Node, so we skip its native
+#   addon build (false). Leaving it unresolved is what was breaking install.
 onlyBuiltDependencies:
   - esbuild
 allowBuilds:
   esbuild: true
+  canvas: false
