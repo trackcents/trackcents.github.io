@@ -5,9 +5,12 @@
   //     where "More" opens a bottom sheet with the rest.
   // Rendered once by +layout.svelte; pages no longer carry their own nav.
   import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
+  import { base } from '$app/paths';
   import BrandMark from '$components/BrandMark.svelte';
   import SyncStatusIndicator from '$components/SyncStatusIndicator.svelte';
   import ThemeToggle from '$components/ThemeToggle.svelte';
+  import AddSheet, { type AddKind } from '$components/AddSheet.svelte';
 
   interface Item {
     href: string;
@@ -28,14 +31,27 @@
     { href: '/settings', label: 'Settings', icon: 'gear' }
   ];
 
-  // The phone bottom bar shows these four (in this order); the rest live in
-  // "More". Statements is here so importing/re-uploading is always one tap away.
-  const primaryHrefs = ['/today', '/transactions', '/', '/recurring'];
+  // Bottom-bar layout: Home · Transactions · [+] · Statements · More.
+  // The "+" is the universal entry point for adding a transaction (locked
+  // design v1).  Recurring moves into More because it's glance-only.
+  const primaryHrefsLeft = ['/today', '/transactions'];
+  const primaryHrefsRight = ['/'];
   const byHref = new Map(items.map((i) => [i.href, i]));
-  const bottomItems = primaryHrefs.map((h) => byHref.get(h)).filter((i) => i !== undefined);
-  const moreItems = items.filter((i) => !primaryHrefs.includes(i.href));
+  const bottomLeft = primaryHrefsLeft.map((h) => byHref.get(h)).filter((i) => i !== undefined);
+  const bottomRight = primaryHrefsRight.map((h) => byHref.get(h)).filter((i) => i !== undefined);
+  const moreItems = items.filter(
+    (i) => !primaryHrefsLeft.includes(i.href) && !primaryHrefsRight.includes(i.href)
+  );
 
   let moreOpen = $state(false);
+  let addOpen = $state(false);
+
+  /** Handle a pick from the AddSheet — route to Home with a query param the
+   *  Today page reads to open QuickAddSheet preset to the chosen direction. */
+  async function handleAddPick(kind: AddKind): Promise<void> {
+    // expense / income / transfer → ?add=...  Today page picks it up.
+    await goto(`${base}/today?add=${kind}`);
+  }
 
   function isActive(href: string, path: string): boolean {
     if (href === '/') return path === '/';
@@ -125,9 +141,39 @@
   </div>
 </nav>
 
-<!-- Phone: bottom tab bar -->
+<!-- Phone: bottom tab bar (Home · Trans · [+] · Statements · More) -->
 <nav class="nav-bar" aria-label="Primary">
-  {#each bottomItems as it (it.href)}
+  {#each bottomLeft as it (it.href)}
+    {@const active = isActive(it.href, $page.url.pathname)}
+    <a href={it.href} class="tab-item" class:active aria-current={active ? 'page' : undefined}>
+      {@render navIcon(it.icon)}
+      <span>{it.label}</span>
+    </a>
+  {/each}
+
+  <!-- Center "+" — the universal Add affordance.  Larger, accent-coloured,
+       slightly raised so it reads as the visual anchor of the tab bar
+       (Instagram / Cash App / Robinhood pattern). -->
+  <button
+    type="button"
+    class="add-tab"
+    onclick={() => (addOpen = true)}
+    aria-label="Add a transaction"
+  >
+    <span class="add-disc">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+        <path
+          d="M12 5v14M5 12h14"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.4"
+          stroke-linecap="round"
+        />
+      </svg>
+    </span>
+  </button>
+
+  {#each bottomRight as it (it.href)}
     {@const active = isActive(it.href, $page.url.pathname)}
     <a href={it.href} class="tab-item" class:active aria-current={active ? 'page' : undefined}>
       {@render navIcon(it.icon)}
@@ -139,6 +185,9 @@
     <span>More</span>
   </button>
 </nav>
+
+<!-- The Add sheet (opened by the center "+") -->
+<AddSheet open={addOpen} onPick={handleAddPick} onClose={() => (addOpen = false)} />
 
 <!-- Phone: "More" bottom sheet -->
 {#if moreOpen}
@@ -249,6 +298,53 @@
   }
   .tab-item.active {
     color: var(--color-accent);
+  }
+
+  /* ── Center "+" Add tab ── */
+  .add-tab {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: 0;
+    cursor: pointer;
+    padding: 0 0.4rem;
+    margin: 0 0.25rem;
+  }
+  .add-disc {
+    width: 54px;
+    height: 54px;
+    border-radius: 18px;
+    background-image: var(
+      --grad-primary,
+      linear-gradient(
+        135deg,
+        var(--color-accent),
+        color-mix(in oklab, var(--color-accent) 80%, #d99474)
+      )
+    );
+    background-color: var(--color-accent);
+    color: var(--color-accent-fg, white);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow:
+      0 6px 16px color-mix(in oklab, var(--color-accent) 38%, transparent),
+      0 1px 3px rgba(0, 0, 0, 0.12);
+    margin-top: -16px;
+    transition:
+      transform 0.16s ease,
+      box-shadow 0.16s ease;
+  }
+  .add-tab:hover .add-disc {
+    transform: translateY(-1px);
+    box-shadow:
+      0 8px 20px color-mix(in oklab, var(--color-accent) 45%, transparent),
+      0 1px 4px rgba(0, 0, 0, 0.14);
+  }
+  .add-tab:active .add-disc {
+    transform: scale(0.96);
   }
 
   /* ── "More" sheet ── */

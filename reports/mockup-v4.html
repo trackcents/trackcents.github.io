@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --bg: #f5efe6; --surface: #ffffff; --text: #2a2622; --muted: #7d756c;
+    --accent: #c97757; --accent-soft: #f6d8c4;
+    --success: #4a8a5e; --success-soft: #d6ecdb;
+    --border: rgba(42, 38, 34, 0.08); --elevated: rgba(42, 38, 34, 0.04);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+    background: #d9d3c8; padding: 40px;
+    display: flex; gap: 32px; align-items: flex-start; justify-content: center;
+  }
+  .phone {
+    width: 390px; background: var(--bg); border-radius: 36px;
+    padding: 14px 0 32px;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.25), 0 0 0 8px #2a2622, 0 0 0 9px #444;
+    overflow: hidden;
+    position: relative;
+  }
+  .label-row { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .label {
+    color: white; text-align: center; margin-bottom: 6px;
+    font-weight: 700; font-size: 14px; letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .sublabel {
+    color: rgba(255,255,255,0.85); font-size: 12px;
+    margin-bottom: 18px; text-align: center; max-width: 380px;
+    line-height: 1.4;
+  }
+  .statusbar {
+    height: 36px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 28px; color: var(--text); font-size: 14px; font-weight: 600;
+  }
+  .statusbar .right { display: flex; gap: 6px; align-items: center; }
+  .content { padding: 12px 18px 0; }
+  .toprow { margin-bottom: 14px; }
+  .chip-review {
+    background: white; border-radius: 14px; padding: 12px 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 13px; color: var(--text);
+  }
+  .chip-review .review-btn {
+    background: var(--accent); color: white; padding: 6px 14px;
+    border-radius: 999px; font-size: 12px; font-weight: 600;
+  }
+
+  .hero {
+    background: white; border-radius: 22px; padding: 22px 22px 18px;
+    margin-bottom: 14px; position: relative;
+  }
+
+  /* CENTERED widget — sits alone in the middle, no headroom on the side */
+  .nav-wrap {
+    display: flex; justify-content: center; margin-bottom: 22px;
+  }
+  .nav-widget {
+    display: inline-flex; align-items: center;
+    background: var(--elevated);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    overflow: hidden;
+    height: 36px;
+  }
+  .nav-widget button {
+    background: none; border: 0; cursor: pointer;
+    padding: 0 14px; height: 100%;
+    color: var(--muted); font-size: 14px;
+    display: inline-flex; align-items: center;
+  }
+  .nav-widget .month-label {
+    padding: 0 16px; height: 100%;
+    color: var(--text); font-weight: 600; font-size: 14px;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    display: inline-flex; align-items: center; gap: 6px;
+    background: white;
+    cursor: pointer;
+  }
+  .nav-widget .chev { color: var(--muted); font-size: 10px; }
+
+  .spent-label { color: var(--muted); font-size: 14px; margin-bottom: 4px; }
+  .spent-amount {
+    font-size: 48px; font-weight: 700; letter-spacing: -0.025em;
+    color: var(--text); line-height: 1; margin-bottom: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+  .of-income { color: var(--muted); font-size: 14px; margin-bottom: 14px; }
+  .extra-row {
+    display: inline-flex; align-items: center; gap: 6px; color: var(--success);
+    font-size: 13px; font-weight: 600; background: var(--success-soft);
+    padding: 4px 10px; border-radius: 999px; margin-bottom: 18px;
+  }
+
+  /* Progress bar with INLINE % label at the right edge — replaces the side pill */
+  .progress-block {
+    margin-bottom: 22px;
+  }
+  .progress-meta {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 6px;
+    font-size: 12px;
+  }
+  .progress-meta .left {
+    color: var(--muted); font-weight: 500;
+  }
+  .progress-meta .right {
+    color: var(--success); font-weight: 700;
+  }
+  .progress {
+    height: 6px; background: var(--elevated);
+    border-radius: 999px; overflow: hidden;
+  }
+  .progress .fill {
+    height: 100%; width: 63%;
+    background: linear-gradient(90deg, var(--accent) 0%, #d99474 100%);
+    border-radius: 999px;
+  }
+
+  .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .stat { display: flex; flex-direction: column; gap: 4px; }
+  .stat-value {
+    font-size: 18px; font-weight: 700; color: var(--text);
+    font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+  }
+  .stat-value.primary { color: var(--accent); font-size: 22px; }
+  .stat-label {
+    font-size: 11px; color: var(--muted); font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+
+  /* ── Bottom sheet picker (data-only months) ── */
+  .sheet-backdrop {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.45);
+    backdrop-filter: blur(2px);
+  }
+  .sheet {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: var(--bg);
+    border-radius: 28px 28px 0 0;
+    padding: 14px 20px 28px;
+    box-shadow: 0 -10px 30px rgba(0,0,0,0.2);
+  }
+  .sheet-grabber {
+    width: 40px; height: 4px; border-radius: 999px;
+    background: rgba(42,38,34,0.2);
+    margin: 0 auto 14px;
+  }
+  .sheet-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 18px;
+  }
+  .sheet-head h2 {
+    font-size: 16px; font-weight: 700; color: var(--text);
+  }
+  .jump-today {
+    background: var(--accent); color: white;
+    padding: 7px 14px; border-radius: 999px;
+    font-size: 12px; font-weight: 600;
+    border: 0; cursor: pointer;
+  }
+
+  /* Year group: heading + chip row */
+  .year-group { margin-bottom: 22px; }
+  .year-group:last-child { margin-bottom: 0; }
+  .year-head {
+    font-size: 13px; font-weight: 700; color: var(--muted);
+    letter-spacing: 0.04em; text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .month-pills {
+    display: flex; flex-wrap: wrap; gap: 8px;
+  }
+  .month-pill {
+    background: white;
+    border-radius: 14px;
+    padding: 12px 16px;
+    text-align: center;
+    font-size: 14px; font-weight: 600;
+    color: var(--text);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    min-width: 64px;
+  }
+  .month-pill.selected {
+    background: var(--text); color: white;
+    border-color: var(--text);
+  }
+  .month-pill:hover { background: var(--elevated); }
+  .month-pill.selected:hover { background: var(--text); }
+
+  /* Tap markers */
+  .tap {
+    position: absolute;
+    border: 3px solid #ef4444;
+    border-radius: 999px;
+    box-shadow: 0 0 0 6px rgba(239, 68, 68, 0.18);
+    pointer-events: none;
+    z-index: 5;
+  }
+  .step-badge {
+    position: absolute;
+    background: #ef4444; color: white;
+    width: 28px; height: 28px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    z-index: 6;
+  }
+</style>
+</head>
+<body>
+
+<!-- CLOSED state -->
+<div class="label-row">
+  <div class="label">closed — widget centered</div>
+  <div class="sublabel">"63% used" now lives WITH the progress bar (where it belongs).<br>Nav widget sits centered, alone, in the high-attention slot.</div>
+  <div class="phone">
+    <div class="statusbar">
+      <span>7:12</span>
+      <div class="right"><span>📶</span><span>5G</span><span>🔋</span></div>
+    </div>
+    <div class="content">
+      <div class="toprow">
+        <div class="chip-review">
+          <span><strong>1</strong> transaction needs a category</span>
+          <span class="review-btn">Review →</span>
+        </div>
+      </div>
+      <div class="hero">
+
+        <div class="nav-wrap">
+          <div class="nav-widget">
+            <button aria-label="Previous month">◀</button>
+            <div class="month-label">May 2026 <span class="chev">▾</span></div>
+            <button aria-label="Next month">▶</button>
+          </div>
+        </div>
+
+        <div class="spent-label">Spent this month</div>
+        <div class="spent-amount">₹11,528</div>
+        <div class="of-income">of ₹18,300 income</div>
+        <div class="extra-row">+₹10,000 other inflows →</div>
+
+        <div class="progress-block">
+          <div class="progress-meta">
+            <span class="left">63% used</span>
+            <span class="right">✓ on track</span>
+          </div>
+          <div class="progress"><div class="fill"></div></div>
+        </div>
+
+        <div class="stats">
+          <div class="stat"><span class="stat-value primary">₹4,802</span><span class="stat-label">Remaining</span></div>
+          <div class="stat"><span class="stat-value">₹1,201</span><span class="stat-label">Daily pace</span></div>
+          <div class="stat"><span class="stat-value">4</span><span class="stat-label">Days left</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- OPEN sheet, data-only months -->
+<div class="label-row">
+  <div class="label">picker open — data-only</div>
+  <div class="sublabel">Only months WITH data appear. Empty months/years are hidden entirely.<br>Hemanth's data: 5 months of 2026, 4 from late 2025, one from Dec 2023.</div>
+  <div class="phone">
+    <div class="statusbar">
+      <span>7:12</span>
+      <div class="right"><span>📶</span><span>5G</span><span>🔋</span></div>
+    </div>
+    <div class="content" style="filter: blur(1px) brightness(0.85); pointer-events:none;">
+      <div class="toprow">
+        <div class="chip-review">
+          <span><strong>1</strong> transaction needs a category</span>
+          <span class="review-btn">Review →</span>
+        </div>
+      </div>
+      <div class="hero">
+        <div class="nav-wrap">
+          <div class="nav-widget">
+            <button>◀</button>
+            <div class="month-label">May 2026 <span class="chev">▾</span></div>
+            <button>▶</button>
+          </div>
+        </div>
+        <div class="spent-label">Spent this month</div>
+        <div class="spent-amount">₹11,528</div>
+      </div>
+    </div>
+
+    <!-- Bottom sheet -->
+    <div class="sheet-backdrop"></div>
+    <div class="sheet">
+      <div class="sheet-grabber"></div>
+      <div class="sheet-head">
+        <h2>Pick a month</h2>
+        <button class="jump-today">Today</button>
+      </div>
+
+      <div class="year-group">
+        <div class="year-head">2026</div>
+        <div class="month-pills">
+          <div class="month-pill">Jan</div>
+          <div class="month-pill">Feb</div>
+          <div class="month-pill">Mar</div>
+          <div class="month-pill">Apr</div>
+          <div class="month-pill selected">May</div>
+        </div>
+      </div>
+
+      <div class="year-group">
+        <div class="year-head">2025</div>
+        <div class="month-pills">
+          <div class="month-pill">Sep</div>
+          <div class="month-pill">Oct</div>
+          <div class="month-pill">Nov</div>
+          <div class="month-pill">Dec</div>
+        </div>
+      </div>
+
+      <div class="year-group">
+        <div class="year-head">2023</div>
+        <div class="month-pills">
+          <div class="month-pill">Dec</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Highlight Dec 2023 — that's where Hemanth wants to jump -->
+    <div class="tap" style="bottom:64px; left:24px; width:74px; height:46px; border-radius:14px;"></div>
+  </div>
+</div>
+
+</body>
+</html>

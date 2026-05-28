@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --bg: #f5efe6; --surface: #ffffff; --text: #2a2622; --muted: #7d756c;
+    --accent: #c97757; --accent-soft: #f6d8c4;
+    --success: #4a8a5e; --success-soft: #d6ecdb;
+    --border: rgba(42, 38, 34, 0.08); --elevated: rgba(42, 38, 34, 0.04);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+    background: #d9d3c8; padding: 40px;
+    display: flex; gap: 32px; align-items: flex-start; justify-content: center;
+  }
+  .phone {
+    width: 390px; background: var(--bg); border-radius: 36px;
+    padding: 14px 0 32px;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.25), 0 0 0 8px #2a2622, 0 0 0 9px #444;
+    overflow: hidden;
+  }
+  .label-row { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .label {
+    color: white; text-align: center; margin-bottom: 14px;
+    font-weight: 600; font-size: 13px; letter-spacing: 0.06em;
+    text-transform: uppercase; opacity: 0.85;
+  }
+  .sublabel {
+    color: rgba(255,255,255,0.7); font-size: 11px;
+    margin-bottom: 18px; text-align: center; max-width: 380px;
+    line-height: 1.4;
+  }
+  .statusbar {
+    height: 36px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 28px; color: var(--text); font-size: 14px; font-weight: 600;
+  }
+  .statusbar .right { display: flex; gap: 6px; align-items: center; }
+  .content { padding: 12px 18px 0; }
+  .toprow { margin-bottom: 14px; }
+  .chip-review {
+    background: white; border-radius: 14px; padding: 12px 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 13px; color: var(--text);
+  }
+  .chip-review .review-btn {
+    background: var(--accent); color: white; padding: 6px 14px;
+    border-radius: 999px; font-size: 12px; font-weight: 600;
+  }
+
+  /* Hero */
+  .hero {
+    background: white; border-radius: 22px; padding: 22px 22px 18px;
+    margin-bottom: 8px; position: relative;
+  }
+  .hero.swipeable::after {
+    content: '';
+    position: absolute; top: 50%; right: 8px; transform: translateY(-50%);
+    width: 4px; height: 30px; opacity: 0.08;
+    background: var(--text); border-radius: 2px;
+  }
+
+  .month-row {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 22px;
+  }
+  .month-pill {
+    background: var(--elevated); border: 1px solid var(--border);
+    border-radius: 999px; padding: 6px 14px; font-size: 14px; font-weight: 600;
+    color: var(--text); display: inline-flex; align-items: center; gap: 6px;
+  }
+  .month-pill .chev { color: var(--muted); font-size: 10px; }
+  .headroom {
+    background: var(--success-soft); color: var(--success);
+    padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  }
+  .spent-label { color: var(--muted); font-size: 14px; margin-bottom: 4px; }
+  .spent-amount {
+    font-size: 48px; font-weight: 700; letter-spacing: -0.025em;
+    color: var(--text); line-height: 1; margin-bottom: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+  .of-income { color: var(--muted); font-size: 14px; margin-bottom: 14px; }
+  .extra-row {
+    display: inline-flex; align-items: center; gap: 6px; color: var(--success);
+    font-size: 13px; font-weight: 600; background: var(--success-soft);
+    padding: 4px 10px; border-radius: 999px; margin-bottom: 18px;
+  }
+  .progress {
+    height: 6px; background: var(--elevated);
+    border-radius: 999px; overflow: hidden; margin-bottom: 22px;
+  }
+  .progress .fill {
+    height: 100%; width: 63%;
+    background: linear-gradient(90deg, var(--accent) 0%, #d99474 100%);
+    border-radius: 999px;
+  }
+  .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .stat { display: flex; flex-direction: column; gap: 4px; }
+  .stat-value {
+    font-size: 18px; font-weight: 700; color: var(--text);
+    font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+  }
+  .stat-value.primary { color: var(--accent); font-size: 22px; }
+  .stat-label {
+    font-size: 11px; color: var(--muted); font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+
+  /* CLEAN: only swipe-dots indicator */
+  .swipe-dots {
+    display: flex; justify-content: center; gap: 5px;
+    margin: 6px 0 18px;
+    opacity: 0.7;
+  }
+  .swipe-dots .d {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--text); opacity: 0.18;
+  }
+  .swipe-dots .d.active { width: 16px; border-radius: 3px; background: var(--accent); opacity: 1; }
+
+  /* STRIP: horizontal month pills */
+  .month-strip {
+    display: flex; gap: 6px; padding: 6px 0 14px;
+    overflow-x: auto; scrollbar-width: none;
+    margin: 4px -18px 8px;
+    padding-left: 18px; padding-right: 18px;
+  }
+  .month-strip::-webkit-scrollbar { display: none; }
+  .month-strip .mp {
+    flex: 0 0 auto;
+    padding: 6px 14px; border-radius: 999px;
+    font-size: 13px; font-weight: 500; color: var(--muted);
+    background: var(--elevated); border: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .month-strip .mp.active {
+    color: white; background: var(--text); border-color: var(--text);
+    font-weight: 600;
+  }
+
+  /* Top cats */
+  .top-cats { background: white; border-radius: 22px; padding: 18px 20px; }
+  .top-cats h3 {
+    font-size: 14px; font-weight: 600; margin-bottom: 14px; color: var(--text);
+  }
+  .cat-row {
+    display: flex; align-items: center; gap: 12px; padding: 6px 0;
+  }
+  .cat-icon {
+    width: 32px; height: 32px; border-radius: 10px;
+    background: var(--accent-soft);
+    display: flex; align-items: center; justify-content: center; font-size: 16px;
+  }
+  .cat-meta { flex: 1; }
+  .cat-name { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+  .cat-bar {
+    height: 4px; background: var(--elevated);
+    border-radius: 999px; overflow: hidden;
+  }
+  .cat-bar > div { height: 100%; border-radius: 999px; }
+  .cat-amount {
+    font-size: 14px; font-weight: 600; color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+</style>
+</head>
+<body>
+
+<!-- CLEAN (recommended) -->
+<div class="label-row">
+  <div class="label">A · clean — swipe + tap pill</div>
+  <div class="sublabel">Gesture-first. Swipe left/right on the card for ±1 month.<br>Tap the pill to jump to any month. Dots hint position.</div>
+  <div class="phone">
+    <div class="statusbar">
+      <span>7:12</span>
+      <div class="right"><span>📶</span><span>5G</span><span>🔋</span></div>
+    </div>
+    <div class="content">
+      <div class="toprow">
+        <div class="chip-review">
+          <span><strong>1</strong> transaction needs a category</span>
+          <span class="review-btn">Review →</span>
+        </div>
+      </div>
+
+      <div class="hero swipeable">
+        <div class="month-row">
+          <div class="month-pill">May 2026 <span class="chev">▾</span></div>
+          <div class="headroom">63% on track</div>
+        </div>
+        <div class="spent-label">Spent this month</div>
+        <div class="spent-amount">₹11,528</div>
+        <div class="of-income">of ₹18,300 income</div>
+        <div class="extra-row">+₹10,000 other inflows →</div>
+        <div class="progress"><div class="fill"></div></div>
+        <div class="stats">
+          <div class="stat"><span class="stat-value primary">₹4,802</span><span class="stat-label">Remaining</span></div>
+          <div class="stat"><span class="stat-value">₹1,201</span><span class="stat-label">Daily pace</span></div>
+          <div class="stat"><span class="stat-value">4</span><span class="stat-label">Days left</span></div>
+        </div>
+      </div>
+
+      <div class="swipe-dots">
+        <span class="d"></span><span class="d"></span>
+        <span class="d active"></span>
+        <span class="d"></span>
+      </div>
+
+      <div class="top-cats">
+        <h3>Top categories · May 2026</h3>
+        <div class="cat-row">
+          <div class="cat-icon" style="background:#fee2c4">🛒</div>
+          <div class="cat-meta">
+            <div class="cat-name">Groceries</div>
+            <div class="cat-bar"><div style="width:90%;background:#c97757"></div></div>
+          </div>
+          <div class="cat-amount">₹4,200</div>
+        </div>
+        <div class="cat-row">
+          <div class="cat-icon" style="background:#d6ecdb">🏠</div>
+          <div class="cat-meta">
+            <div class="cat-name">Rent/Mortgage</div>
+            <div class="cat-bar"><div style="width:70%;background:#4a8a5e"></div></div>
+          </div>
+          <div class="cat-amount">₹3,300</div>
+        </div>
+        <div class="cat-row">
+          <div class="cat-icon" style="background:#e0e7ff">📱</div>
+          <div class="cat-meta">
+            <div class="cat-name">Phone &amp; Internet</div>
+            <div class="cat-bar"><div style="width:32%;background:#6366f1"></div></div>
+          </div>
+          <div class="cat-amount">₹1,499</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- STRIP -->
+<div class="label-row">
+  <div class="label">A · strip — month rail above</div>
+  <div class="sublabel">Always-visible months. Tap any pill to switch.<br>Scrolls horizontally for older/future months.</div>
+  <div class="phone">
+    <div class="statusbar">
+      <span>7:12</span>
+      <div class="right"><span>📶</span><span>5G</span><span>🔋</span></div>
+    </div>
+    <div class="content">
+      <div class="toprow">
+        <div class="chip-review">
+          <span><strong>1</strong> transaction needs a category</span>
+          <span class="review-btn">Review →</span>
+        </div>
+      </div>
+
+      <div class="month-strip">
+        <span class="mp">Feb</span>
+        <span class="mp">Mar</span>
+        <span class="mp">Apr</span>
+        <span class="mp active">May 2026</span>
+        <span class="mp">Jun</span>
+        <span class="mp">Jul</span>
+      </div>
+
+      <div class="hero">
+        <div class="month-row">
+          <div class="month-pill" style="visibility:hidden">May 2026 <span class="chev">▾</span></div>
+          <div class="headroom">63% on track</div>
+        </div>
+        <div class="spent-label" style="margin-top:-22px">Spent this month</div>
+        <div class="spent-amount">₹11,528</div>
+        <div class="of-income">of ₹18,300 income</div>
+        <div class="extra-row">+₹10,000 other inflows →</div>
+        <div class="progress"><div class="fill"></div></div>
+        <div class="stats">
+          <div class="stat"><span class="stat-value primary">₹4,802</span><span class="stat-label">Remaining</span></div>
+          <div class="stat"><span class="stat-value">₹1,201</span><span class="stat-label">Daily pace</span></div>
+          <div class="stat"><span class="stat-value">4</span><span class="stat-label">Days left</span></div>
+        </div>
+      </div>
+
+      <div class="top-cats" style="margin-top:14px">
+        <h3>Top categories · May 2026</h3>
+        <div class="cat-row">
+          <div class="cat-icon" style="background:#fee2c4">🛒</div>
+          <div class="cat-meta">
+            <div class="cat-name">Groceries</div>
+            <div class="cat-bar"><div style="width:90%;background:#c97757"></div></div>
+          </div>
+          <div class="cat-amount">₹4,200</div>
+        </div>
+        <div class="cat-row">
+          <div class="cat-icon" style="background:#d6ecdb">🏠</div>
+          <div class="cat-meta">
+            <div class="cat-name">Rent/Mortgage</div>
+            <div class="cat-bar"><div style="width:70%;background:#4a8a5e"></div></div>
+          </div>
+          <div class="cat-amount">₹3,300</div>
+        </div>
+        <div class="cat-row">
+          <div class="cat-icon" style="background:#e0e7ff">📱</div>
+          <div class="cat-meta">
+            <div class="cat-name">Phone &amp; Internet</div>
+            <div class="cat-bar"><div style="width:32%;background:#6366f1"></div></div>
+          </div>
+          <div class="cat-amount">₹1,499</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

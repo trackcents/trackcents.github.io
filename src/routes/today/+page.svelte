@@ -79,9 +79,9 @@
   let pickerOpen = $state(false);
 
   // ── Quick-add sheet (smart NL "type-it" entry) ────────────────────────────
-  // Replaces the old inline +Income form AND the old "navigate to /transactions"
-  // for +Add expense.  One sheet, both flows, with a natural-language parser at
-  // the top — Hemanth's entry-first design promise.
+  // The tab-bar center "+" is the universal entry point — it opens an
+  // intermediary AddSheet (in Nav.svelte) which routes here with `?add=<kind>`.
+  // We read that query param on mount and open QuickAddSheet preset to it.
   let quickAddOpen = $state(false);
   let quickAddType = $state<'expense' | 'income'>('expense');
 
@@ -89,6 +89,25 @@
     quickAddType = type;
     quickAddOpen = true;
   }
+
+  // Read ?add=expense|income|transfer on mount to honour the AddSheet flow.
+  // Transfer routes back through expense for now (no dedicated transfer flow
+  // yet — flow_intent inference catches them automatically).
+  $effect(() => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    const add = url.searchParams.get('add');
+    if (add === 'expense' || add === 'income') {
+      openQuickAdd(add);
+      url.searchParams.delete('add');
+      window.history.replaceState(null, '', url.toString());
+    } else if (add === 'transfer') {
+      // Open as expense; the user marks transfer via the row drawer later.
+      openQuickAdd('expense');
+      url.searchParams.delete('add');
+      window.history.replaceState(null, '', url.toString());
+    }
+  });
 
   // Small toast that confirms a save + (when applicable) signals "I learned
   // from this" — Bhargav's feedback in round-3: "no haptic/toast when the
@@ -221,6 +240,21 @@
     }
   });
 
+  // ── BudgetBox nav widget — ◀ / ▶ handlers + bounds (locked v1) ──────────
+  // Position of activeMonth within the available list dictates whether the
+  // chevrons are enabled.  The picker sheet handles "jump anywhere" + Today.
+  const activeIdx = $derived(monthsAvailable.indexOf(activeMonth));
+  const canPrevMonth = $derived(activeIdx > 0);
+  const canNextMonth = $derived(activeIdx >= 0 && activeIdx < monthsAvailable.length - 1);
+  function prevMonth(): void {
+    if (activeIdx > 0) activeMonth = monthsAvailable[activeIdx - 1]!;
+  }
+  function nextMonth(): void {
+    if (activeIdx >= 0 && activeIdx < monthsAvailable.length - 1) {
+      activeMonth = monthsAvailable[activeIdx + 1]!;
+    }
+  }
+
   const activeFlow = $derived(nbm.get(activeMonth));
   const activeMonthLabel = $derived(monthName(activeMonth));
 
@@ -228,23 +262,9 @@
    *  "+₹X from April" / "−₹X from April" carry-forward line under the income
    *  sub-line on the box.  Returns 0n when there's no data for the prior month
    *  (or its income/spend net is exactly zero) so the line stays hidden. */
-  function prevMonthOf(ym: string): string {
-    const [yStr, mStr] = ym.split('-');
-    const y = Number(yStr);
-    const m = Number(mStr);
-    const py = m === 1 ? y - 1 : y;
-    const pm = m === 1 ? 12 : m - 1;
-    return `${py}-${String(pm).padStart(2, '0')}`;
-  }
-  const activeCarryForwardMinor = $derived.by<bigint>(() => {
-    const prev = prevMonthOf(activeMonth);
-    const prevFlow = nbm.get(prev);
-    if (prevFlow === undefined) return 0n;
-    return prevFlow.inflow_minor - prevFlow.outflow_minor;
-  });
-  const activeCarryFromLabel = $derived(
-    monthName(prevMonthOf(activeMonth)).split(' ')[0] ?? 'last month'
-  );
+  // Carry-forward derived values were removed when the "(FYI — not added in)"
+  // chip was killed in the locked v1 hero redesign.  Kept the source comment
+  // here so future me knows where to look if the chip is ever re-introduced.
 
   // "Spent today so far" — current-day burn.  Shown ONLY on the current month
   // (the chip is meaningless when browsing past months); hidden when 0 so the
@@ -340,10 +360,11 @@
         flow={activeFlow}
         {todayIso}
         extraIncomeMinor={activeExtraIncomeMinor}
-        carryForwardMinor={activeCarryForwardMinor}
-        carryForwardFromLabel={activeCarryFromLabel}
+        onPrevMonth={prevMonth}
+        onNextMonth={nextMonth}
+        canPrev={canPrevMonth}
+        canNext={canNextMonth}
         onLabelClick={() => (pickerOpen = true)}
-        onAddIncome={() => openQuickAdd('income')}
         onManageIncome={() => goto(`/transactions?month=${activeMonth}`)}
       />
     </MonthSlider>
@@ -420,10 +441,11 @@
         flow={activeFlow}
         {todayIso}
         extraIncomeMinor={activeExtraIncomeMinor}
-        carryForwardMinor={activeCarryForwardMinor}
-        carryForwardFromLabel={activeCarryFromLabel}
+        onPrevMonth={prevMonth}
+        onNextMonth={nextMonth}
+        canPrev={canPrevMonth}
+        canNext={canNextMonth}
         onLabelClick={() => (pickerOpen = true)}
-        onAddIncome={() => openQuickAdd('income')}
         onManageIncome={() => goto(`/transactions?month=${activeMonth}`)}
       />
     </MonthSlider>
@@ -628,6 +650,7 @@
     open={pickerOpen}
     currentMonth={activeMonth}
     monthsWithData={monthsWithDataSet}
+    todayMonth={currentMonth}
     onSelect={(m) => (activeMonth = m)}
     onClose={() => (pickerOpen = false)}
   />
@@ -652,73 +675,13 @@
     <div class="save-toast" role="status" aria-live="polite">{saveToast}</div>
   {/if}
 
-  <!-- Floating "+" — always reachable; no scrolling to find the button.  Per
-       Bhargav's #2 quick win ("thumb travels 60% of the screen before I reach
-       the only button I care about").  Hidden while the sheet is open so it
-       doesn't peek through the dimmed backdrop. -->
-  {#if !loading && !quickAddOpen}
-    <button
-      type="button"
-      class="fab"
-      onclick={() => openQuickAdd('expense')}
-      aria-label="Add expense"
-    >
-      <svg
-        width="26"
-        height="26"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2.5"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"
-      >
-        <path d="M12 5v14M5 12h14" />
-      </svg>
-    </button>
-  {/if}
+  <!-- The floating "+" FAB was removed: the universal "Add a transaction"
+       affordance now lives in the bottom tab-bar's center button (locked
+       design v1).  No more FAB / tab-bar collision. -->
 </main>
 
 <style>
-  .fab {
-    position: fixed;
-    z-index: 30;
-    width: 58px;
-    height: 58px;
-    border-radius: 999px;
-    border: 0;
-    background-image: var(--grad-primary);
-    color: var(--color-accent-fg);
-    box-shadow: var(--shadow-primary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition:
-      transform 0.16s ease,
-      box-shadow 0.16s ease,
-      filter 0.16s ease;
-    /* Phone: float above the bottom tab bar.  64px nav + 16px gutter + safe-area. */
-    bottom: calc(80px + env(safe-area-inset-bottom));
-    right: 16px;
-  }
-  @media (min-width: 768px) {
-    /* Desktop: left rail is the nav, no bottom bar — corner-anchor the FAB. */
-    .fab {
-      bottom: 28px;
-      right: 28px;
-    }
-  }
-  .fab:hover {
-    filter: brightness(1.07);
-    box-shadow:
-      var(--shadow-md),
-      0 8px 22px rgba(190, 110, 75, 0.42);
-  }
-  .fab:active {
-    transform: scale(0.94);
-  }
+  /* FAB removed (locked design v1) — center "+" lives in the tab bar now. */
   .save-toast {
     position: fixed;
     z-index: 60;

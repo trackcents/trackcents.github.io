@@ -1,31 +1,28 @@
 <script lang="ts">
-  // Bottom sheet for picking a (year, month) to jump to.  Opens when the user
-  // taps the month label inside the BudgetBox.  Year selector at the top, a
-  // 4×3 month grid below.  Months that already have data show a small dot.
+  // Month picker sheet — locked design v1 (2026-05-28).
+  // Spec: reports/design/home-budgetbox-v1-LOCKED.md
+  //
+  // Data-only: ONLY months with imported transactions appear.  Grouped by
+  // year, year-heading on top, months as chips below.  Empty months are
+  // hidden entirely; empty years are hidden entirely.
+  //
+  // Header: "Pick a month" (left) · "Today" pill (right, accent).
 
   interface Props {
     open: boolean;
-    /** YYYY-MM, the month currently shown by the slider (highlighted in the grid). */
+    /** YYYY-MM currently shown by the hero — highlighted in the grid. */
     currentMonth: string;
-    /** YYYY-MM keys we have ANY transaction data for — those get a "data" dot. */
+    /** YYYY-MM keys we have ANY transaction data for. */
     monthsWithData: Set<string>;
+    /** YYYY-MM of "today" — for the "Jump to today" button. */
+    todayMonth: string;
     onSelect: (month: string) => void;
     onClose: () => void;
   }
 
-  const { open, currentMonth, monthsWithData, onSelect, onClose }: Props = $props();
+  const { open, currentMonth, monthsWithData, todayMonth, onSelect, onClose }: Props = $props();
 
-  // Year being viewed (state).  Initialised to the device's current year so the
-  // value is set BEFORE props are first read (which avoids Svelte's
-  // `state_referenced_locally` warning); the $effect below then syncs it to the
-  // active month's year every time the sheet OPENS, so reopening feels
-  // predictable.
-  let viewYear = $state(new Date().getUTCFullYear());
-  $effect(() => {
-    if (open) viewYear = parseInt(currentMonth.slice(0, 4), 10);
-  });
-
-  const MONTHS = [
+  const MONTH_LABELS = [
     'Jan',
     'Feb',
     'Mar',
@@ -40,17 +37,42 @@
     'Dec'
   ];
 
-  function monthKey(m1to12: number): string {
-    return `${viewYear}-${String(m1to12).padStart(2, '0')}`;
+  /** Build { year → [monthIndex0to11, ...] } from monthsWithData.
+   *  Always include the current shown month even if it has no data (so the
+   *  highlighted "current" chip is visible).  Sorted year descending, months
+   *  ascending within a year. */
+  const grouped = $derived.by<Array<{ year: number; months: number[] }>>(() => {
+    const map = new Map<number, Set<number>>();
+    const add = (ym: string) => {
+      const y = parseInt(ym.slice(0, 4), 10);
+      const m = parseInt(ym.slice(5, 7), 10) - 1;
+      if (Number.isNaN(y) || Number.isNaN(m) || m < 0 || m > 11) return;
+      const set = map.get(y) ?? new Set<number>();
+      set.add(m);
+      map.set(y, set);
+    };
+    for (const ym of monthsWithData) add(ym);
+    add(currentMonth); // ensure highlighted month is in the list
+
+    const years = [...map.keys()].sort((a, b) => b - a); // newest first
+    return years.map((year) => ({
+      year,
+      months: [...(map.get(year) ?? [])].sort((a, b) => a - b)
+    }));
+  });
+
+  function ymOf(year: number, m: number): string {
+    return `${year}-${String(m + 1).padStart(2, '0')}`;
   }
-  function isCurrent(m1to12: number): boolean {
-    return monthKey(m1to12) === currentMonth;
+  function isCurrent(year: number, m: number): boolean {
+    return ymOf(year, m) === currentMonth;
   }
-  function hasData(m1to12: number): boolean {
-    return monthsWithData.has(monthKey(m1to12));
+  function select(year: number, m: number): void {
+    onSelect(ymOf(year, m));
+    onClose();
   }
-  function select(m1to12: number): void {
-    onSelect(monthKey(m1to12));
+  function jumpToday(): void {
+    onSelect(todayMonth);
     onClose();
   }
 </script>
@@ -58,30 +80,37 @@
 {#if open}
   <button type="button" class="backdrop" aria-label="Close month picker" onclick={onClose}></button>
   <div class="sheet" role="dialog" aria-modal="true" aria-label="Pick a month">
-    <div class="year-nav">
+    <div class="grabber"></div>
+    <div class="head">
+      <h2>Pick a month</h2>
       <button
         type="button"
-        class="year-btn"
-        onclick={() => (viewYear -= 1)}
-        aria-label="Previous year">‹</button
+        class="today-btn"
+        onclick={jumpToday}
+        aria-label="Jump to current month"
       >
-      <span class="year-label num">{viewYear}</span>
-      <button type="button" class="year-btn" onclick={() => (viewYear += 1)} aria-label="Next year"
-        >›</button
-      >
+        Today
+      </button>
     </div>
-    <div class="month-grid">
-      {#each MONTHS as label, i (label)}
-        {@const m = i + 1}
-        <button
-          type="button"
-          class="month-cell"
-          class:current={isCurrent(m)}
-          class:has-data={hasData(m)}
-          onclick={() => select(m)}
-        >
-          {label}
-        </button>
+
+    <div class="years">
+      {#each grouped as g (g.year)}
+        <div class="year-group">
+          <div class="year-head">{g.year}</div>
+          <div class="month-pills">
+            {#each g.months as m (m)}
+              <button
+                type="button"
+                class="m-chip"
+                class:selected={isCurrent(g.year, m)}
+                onclick={() => select(g.year, m)}
+                aria-current={isCurrent(g.year, m) ? 'true' : undefined}
+              >
+                {MONTH_LABELS[m]}
+              </button>
+            {/each}
+          </div>
+        </div>
       {/each}
     </div>
   </div>
@@ -105,16 +134,19 @@
       opacity: 1;
     }
   }
+
   .sheet {
     position: fixed;
     inset-inline: 0;
     bottom: 0;
     z-index: 50;
-    background: var(--color-surface);
-    border-top-left-radius: 20px;
-    border-top-right-radius: 20px;
-    padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom));
+    background: var(--color-bg);
+    border-top-left-radius: 24px;
+    border-top-right-radius: 24px;
+    padding: 0.6rem 1.1rem calc(1.4rem + env(safe-area-inset-bottom));
     box-shadow: var(--shadow-md);
+    max-height: 80vh;
+    overflow-y: auto;
     animation: rise 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
   }
   @keyframes rise {
@@ -125,80 +157,91 @@
       transform: translateY(0);
     }
   }
-  .year-nav {
+
+  .grabber {
+    width: 40px;
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(42, 38, 34, 0.2);
+    margin: 0 auto 0.85rem;
+  }
+
+  .head {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0.25rem 0.5rem 0.85rem;
+    margin-bottom: 1rem;
   }
-  .year-btn {
-    width: 36px;
-    height: 36px;
-    border-radius: 999px;
-    background: var(--color-elevated);
-    border: 1px solid var(--color-border);
+  .head h2 {
+    font-size: 1rem;
+    font-weight: 700;
     color: var(--color-text);
-    font-size: 1.1rem;
-    line-height: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  }
+  .today-btn {
+    background: var(--color-accent);
+    color: var(--color-accent-fg, white);
+    border: 0;
+    padding: 0.45rem 0.95rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
     cursor: pointer;
     transition:
       background-color 0.16s ease,
       transform 0.16s ease;
   }
-  .year-btn:hover {
-    background: var(--color-surface-hover);
+  .today-btn:hover {
+    background: color-mix(in oklab, var(--color-accent) 88%, white);
   }
-  .year-btn:active {
-    transform: scale(0.96);
-  }
-  .year-label {
-    font-size: 1.1rem;
-    font-weight: 600;
-  }
-  .month-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 0.5rem;
-  }
-  .month-cell {
-    position: relative;
-    padding: 0.85rem 0.5rem;
-    border-radius: 14px;
-    background: var(--color-elevated);
-    border: 1px solid transparent;
-    color: var(--color-text);
-    font-size: 0.9rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition:
-      background-color 0.16s ease,
-      transform 0.16s ease,
-      border-color 0.16s ease;
-  }
-  .month-cell:hover {
-    background: var(--color-surface-hover);
-  }
-  .month-cell:active {
+  .today-btn:active {
     transform: scale(0.97);
   }
-  .month-cell.has-data::after {
-    /* Tiny data dot under the month name. */
-    content: '';
-    position: absolute;
-    bottom: 6px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 4px;
-    height: 4px;
-    border-radius: 999px;
-    background: var(--color-accent);
+
+  .years {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
   }
-  .month-cell.current {
-    background: var(--color-accent-soft);
-    border-color: var(--color-accent);
-    color: var(--color-accent);
+  .year-head {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--color-muted);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 0.55rem;
+  }
+  .month-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .m-chip {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    padding: 0.75rem 1.05rem;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--color-text);
+    cursor: pointer;
+    min-width: 64px;
+    transition:
+      background-color 0.16s ease,
+      transform 0.12s ease,
+      border-color 0.16s ease;
+  }
+  .m-chip:hover {
+    background: var(--color-surface-hover);
+  }
+  .m-chip:active {
+    transform: scale(0.97);
+  }
+  .m-chip.selected {
+    background: var(--color-text);
+    color: var(--color-bg);
+    border-color: var(--color-text);
+  }
+  .m-chip.selected:hover {
+    background: var(--color-text);
   }
 </style>

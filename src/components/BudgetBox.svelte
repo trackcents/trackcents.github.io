@@ -1,43 +1,46 @@
 <script lang="ts">
-  // Reusable month budget "hero box" — works for current, past, or future month.
-  // Renders the headroom % pill (signed, goes negative when overspent), the big
-  // spent number, "of ₹X income" subline, progress bar, stat row, and the
-  // "+ Add expense" + "+ Income" buttons.  Pure display; the parent provides
-  // the month's flow + handlers.
+  // Hero budget card — locked design v1 (2026-05-28).
+  // Spec: reports/design/home-budgetbox-v1-LOCKED.md
+  // Mockup: reports/mockup-v4.png + reports/mockup-add-placement.png
+  //
+  // Layout (top → bottom):
+  //   1. Centered nav widget  ◀ May 2026 ▾ ▶   (1-tap chevrons + tap-pill = picker)
+  //   2. "Spent this month"  label (muted)
+  //   3. Big spent number     no decimals
+  //   4. "of ₹X income"       subline
+  //   5. "+₹X other inflows →" green chip (when extra > 0)
+  //   6. Progress meta row    "63% used"  ··  "✓ on track" / "⚠ over budget"
+  //   7. Progress bar
+  //   8. Stat row             Remaining (primary) · Daily pace · Days left
+  //
+  // KILLED (do not bring back):
+  //   - Side-of-month headroom pill (Q used to compete with month nav)
+  //   - Carry-forward "+₹X ended Apr (FYI — not added in)" chip
+  //   - Decimal precision on the headline number
+  //   - "+ Income" inline button (lives on the tab-bar center "+" now)
+  //   - Edge chevrons inside the box
+  //   - Bottom "◀ Apr · Jun ▶" row
 
   import { formatMoney } from '$lib/util/money';
   import { monthBudget } from '$lib/app/month-budget';
 
   interface Props {
-    /** YYYY-MM */
     monthKey: string;
-    /** Human-readable label, e.g. "May 2026". */
     monthLabel: string;
-    /** Inflow / outflow magnitudes for THIS month (undefined → zeros). */
     flow: { inflow_minor: bigint; outflow_minor: bigint } | undefined;
-    /** ISO YYYY-MM-DD device-local today date. */
     todayIso: string;
-    /**
-     * Sum of "extra" income for the month: total income MINUS the single
-     * largest income transaction (treated as the base / recurring source).
-     * 0n if there's only one income source (or none); when > 0 the box shows
-     * a small green "+$X extra income · tap to manage" line under the total.
-     */
     extraIncomeMinor?: bigint;
-    /**
-     * Signed leftover from the PREVIOUS month (its income − spent).  Positive
-     * means money rolled in, negative means an overspend rolled forward.  0n =
-     * no prior data or exactly zero leftover; the line stays hidden.  Computed
-     * by the parent; this component is pure display.
-     */
-    carryForwardMinor?: bigint;
-    /** Human-readable label of the previous month ("April 2026") for the chip. */
-    carryForwardFromLabel?: string;
-    /** Tap-to-open the month picker. */
+
+    /** ◀ / ▶ tap handlers — parent navigates ±1 month inside its month list. */
+    onPrevMonth?: () => void;
+    onNextMonth?: () => void;
+    /** Disabled when the boundary month is reached (no earlier / later data). */
+    canPrev?: boolean;
+    canNext?: boolean;
+
+    /** Tap on the pill center — opens the month picker sheet. */
     onLabelClick: () => void;
-    /** Reveal the + Income inline form (only shown on current/future months). */
-    onAddIncome: () => void;
-    /** Tap-to-jump to a filtered income view (for "tap to manage"). */
+    /** Tap the "+₹X other inflows" green chip — opens income filter. */
     onManageIncome?: () => void;
   }
 
@@ -47,15 +50,14 @@
     flow,
     todayIso,
     extraIncomeMinor = 0n,
-    carryForwardMinor = 0n,
-    carryForwardFromLabel,
+    onPrevMonth,
+    onNextMonth,
+    canPrev = true,
+    canNext = true,
     onLabelClick,
-    onAddIncome,
     onManageIncome
   }: Props = $props();
 
-  // Props are reactive only when read inside `$derived`/`$effect`/the template —
-  // bare top-level slicing would freeze on the initial value.
   const todayMonth = $derived(todayIso.slice(0, 7));
   const isPast = $derived(monthKey < todayMonth);
   const isFuture = $derived(monthKey > todayMonth);
@@ -67,295 +69,360 @@
 
   // Progress bar: visually clamp 0–100; overspend communicated via color, not width.
   const barFill = $derived(Math.min(100, Math.max(0, budget.pct_spent)));
+  const pctUsed = $derived(Math.max(0, budget.pct_spent));
+
+  // No-decimal format for the big headline number.  Falls back to the
+  // currency-aware formatMoney for the rest (subline, stats) so locale stays
+  // consistent.
+  const headlineSpend = $derived(formatMoneyNoDecimal(budget.spent_minor));
+  function formatMoneyNoDecimal(minor: bigint): string {
+    // Drop the fractional part (round half-away-from-zero) before formatting,
+    // then strip the ".00" that formatMoney prints.  Bigint safe.
+    const sign = minor < 0n ? -1n : 1n;
+    const abs = minor < 0n ? -minor : minor;
+    const rounded = ((abs + 50n) / 100n) * 100n; // round to nearest rupee
+    const signed = sign * rounded;
+    const full = formatMoney(signed);
+    // Strip trailing .00 / .NN.  Works for $, ₹, €, £, ¥ since formatMoney's
+    // decimal is always "." for our supported locales.
+    return full.replace(/\.\d+$/, '');
+  }
 </script>
 
-<section class="card rise budget-box">
-  <div class="mb-2 flex items-center justify-between gap-2">
-    <button
-      type="button"
-      class="month-label"
-      onclick={onLabelClick}
-      aria-label="Pick a different month"
-    >
-      <span class="num">{monthLabel}</span>
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        aria-hidden="true"><path d="M6 9l6 6 6-6" /></svg
-      >
-    </button>
-    {#if hasIncome}
-      <!-- Headroom pill: % LEFT of the month's income (signed). Goes negative when overspent. -->
-      <span
-        class="num headroom-pill"
-        class:over={overspent}
-        title={overspent ? 'Over budget' : '% left to spend'}
-      >
-        {budget.pct_left}%
-      </span>
-    {/if}
-  </div>
-
-  <div class="flex items-start justify-between gap-3">
-    <div class="min-w-0">
-      <p class="text-sm" style:color="var(--color-muted)">
-        {isPast ? 'Spent' : isFuture ? 'Planned spend' : 'Spent this month'}
-      </p>
-      <p class="num mt-1 text-4xl font-semibold tracking-tight">
-        {formatMoney(budget.spent_minor)}
-      </p>
-      {#if hasIncome}
-        <p class="mt-1 text-sm" style:color="var(--color-muted)">
-          of {formatMoney(budget.income_minor)} income
-        </p>
-        {#if extraIncomeMinor > 0n}
-          <!-- "Extra income" breakdown line — green, slightly smaller, tappable
-               to jump to the income transactions of this month.  Shown only
-               when there's more than one income source (largest = base, the
-               rest sum into `extraIncomeMinor`). -->
-          <button
-            type="button"
-            class="extra-income"
-            onclick={onManageIncome}
-            disabled={onManageIncome === undefined}
-            aria-label="Review other inflow transactions for this month"
-          >
-            <span class="num font-medium">+{formatMoney(extraIncomeMinor)}</span>
-            <span>other inflows</span>
-            {#if onManageIncome !== undefined}
-              <span class="extra-arrow" aria-hidden="true">→</span>
-            {/if}
-          </button>
-        {/if}
-        {#if carryForwardMinor !== 0n}
-          <!-- Carry-forward line: last month's leftover (+ green) or overspend
-               (− red) rolls forward.  Display-only for v1; informational so the
-               user sees the trend without the engine doing magic math behind
-               their back. -->
-          {@const carryPositive = carryForwardMinor > 0n}
-          <p
-            class="carry-line"
-            class:carry-negative={!carryPositive}
-            title="Last month's net — shown here as a heads-up, NOT added to this month's totals."
-          >
-            <span class="num font-medium">
-              {carryPositive ? '+' : '−'}{formatMoney(
-                carryForwardMinor < 0n ? -carryForwardMinor : carryForwardMinor
-              )}
-            </span>
-            <span>
-              ended {carryForwardFromLabel ?? 'last month'}
-              <span class="extra-manage">(FYI — not added in)</span>
-            </span>
-          </p>
-        {/if}
-      {/if}
-    </div>
-    {#if isCurrent}
+<section class="card rise budget-box" aria-label="Budget for {monthLabel}">
+  <!-- ── 1 · Centered nav widget ◀ pill ▶ ───────────────────────────── -->
+  <div class="nav-wrap">
+    <div class="nav-widget" role="group" aria-label="Switch month">
       <button
         type="button"
-        class="btn btn-ghost flex-none"
-        style="padding: 0.4rem 0.8rem; font-size: 0.8rem;"
-        onclick={onAddIncome}
+        class="nav-btn"
+        onclick={onPrevMonth}
+        disabled={!canPrev || onPrevMonth === undefined}
+        aria-label="Previous month"
       >
-        + Income
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+          <path
+            d="M15 6l-6 6 6 6"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
       </button>
-    {/if}
+      <button
+        type="button"
+        class="month-pill"
+        onclick={onLabelClick}
+        aria-label="Pick a different month, currently {monthLabel}"
+      >
+        <span class="num">{monthLabel}</span>
+        <svg
+          width="11"
+          height="11"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="nav-btn"
+        onclick={onNextMonth}
+        disabled={!canNext || onNextMonth === undefined}
+        aria-label="Next month"
+      >
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+          <path
+            d="M9 6l6 6-6 6"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </button>
+    </div>
   </div>
 
+  <!-- ── 2 · "Spent this month" label ─────────────────────────────────── -->
+  <p class="spent-label">
+    {isPast ? 'Spent' : isFuture ? 'Planned spend' : 'Spent this month'}
+  </p>
+
+  <!-- ── 3 · Big spent number (no decimals) ──────────────────────────── -->
+  <p class="num spent-amount" aria-live="polite">
+    {headlineSpend}
+  </p>
+
   {#if hasIncome}
-    <div
-      class="mt-4 h-2 overflow-hidden rounded-full"
-      style="background-color: var(--color-elevated);"
-    >
-      <div
-        class="h-full rounded-full"
-        style:width="{barFill}%"
-        style:background-color={overspent ? 'var(--color-danger)' : 'transparent'}
-        style:background-image={overspent ? 'none' : 'var(--grad-primary)'}
-      ></div>
+    <!-- ── 4 · "of ₹X income" subline ─────────────────────────────────── -->
+    <p class="of-income">of {formatMoneyNoDecimal(budget.income_minor)} income</p>
+
+    {#if extraIncomeMinor > 0n}
+      <!-- ── 5 · "+₹X other inflows →" green chip ────────────────────── -->
+      <button
+        type="button"
+        class="extra-chip"
+        onclick={onManageIncome}
+        disabled={onManageIncome === undefined}
+        aria-label="Review other inflow transactions for this month"
+      >
+        <span class="num">+{formatMoneyNoDecimal(extraIncomeMinor)}</span>
+        <span>other inflows</span>
+        {#if onManageIncome !== undefined}
+          <span class="extra-arrow" aria-hidden="true">→</span>
+        {/if}
+      </button>
+    {/if}
+
+    <!-- ── 6 · Progress meta + ── 7 · Bar ──────────────────────────────── -->
+    <div class="progress-block">
+      <div class="progress-meta">
+        <span class="meta-left">{pctUsed}% used</span>
+        <span class="meta-right" class:over={overspent}>
+          {overspent ? '⚠ over budget' : '✓ on track'}
+        </span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" style:width="{barFill}%" class:over={overspent}></div>
+      </div>
     </div>
 
-    <!-- Stat row: Remaining is the number you live by, so it leads visually
-         (bigger, bolder).  Daily pace + Days left are secondary glances. -->
-    <div class="mt-4 grid grid-cols-3 gap-2 text-center">
+    <!-- ── 8 · Stat row ─────────────────────────────────────────────────── -->
+    <div class="stats">
       <div class="stat stat-primary">
         <p
-          class="num stat-value"
-          style:color={overspent ? 'var(--color-danger)' : 'var(--color-text)'}
+          class="num stat-value-primary"
+          style:color={overspent ? 'var(--color-danger)' : 'var(--color-accent)'}
         >
-          {formatMoney(budget.remaining_minor)}
+          {formatMoneyNoDecimal(budget.remaining_minor)}
         </p>
         <p class="stat-label">Remaining</p>
       </div>
       <div class="stat">
-        <p class="num stat-value-sub">{formatMoney(budget.daily_pace_minor)}</p>
+        <p class="num stat-value">{formatMoneyNoDecimal(budget.daily_pace_minor)}</p>
         <p class="stat-label">Daily pace</p>
       </div>
       <div class="stat">
-        <p class="num stat-value-sub">
+        <p class="num stat-value">
           {isPast ? 'Final' : isFuture ? '—' : budget.days_left}
         </p>
         <p class="stat-label">
-          {isPast ? 'Status' : isFuture ? 'Days' : 'Days left in month'}
+          {isPast ? 'Status' : isFuture ? 'Days' : 'Days left'}
         </p>
       </div>
     </div>
 
     {#if isCurrent && budget.over_pace}
-      <p class="mt-3 text-xs" style:color="var(--color-danger)">
+      <p class="pace-warning">
         You're spending faster than your income for the month — ease off to stay on track.
       </p>
     {/if}
   {:else if isFuture}
-    <p class="mt-3 text-sm" style:color="var(--color-muted)">
-      Plan ahead — add expected income or expenses for {monthLabel}.
-    </p>
+    <p class="empty-note">Plan ahead — add expected income or expenses for {monthLabel}.</p>
   {:else if isPast}
-    <p class="mt-3 text-sm" style:color="var(--color-muted)">
-      No income recorded for {monthLabel}.
-    </p>
+    <p class="empty-note">No income recorded for {monthLabel}.</p>
   {:else}
-    <p class="mt-3 text-sm" style:color="var(--color-muted)">
+    <p class="empty-note">
       Add the income you got this month to see what's left, your safe daily spend, and your pace.
     </p>
   {/if}
-
-  <!-- The "+ Add expense" affordance lives on a floating FAB on the page; we
-       deliberately removed the duplicate bottom button from inside the box per
-       both personas' round-2 feedback (Bhargav: "now I have the FAB AND the
-       old button doing the exact same thing"; Murali: "pick one front door
-       per action"). -->
 </section>
 
 <style>
   .budget-box {
-    /* Slightly more breathing room than the default card. */
-    padding: 1.25rem;
+    padding: 1.4rem 1.4rem 1.25rem;
   }
-  .month-label {
+
+  /* ── Nav widget (centered, tap-only) ─────────────────────────────── */
+  .nav-wrap {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 1.4rem;
+  }
+  .nav-widget {
     display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: var(--color-text);
+    align-items: stretch;
     background: var(--color-elevated);
     border: 1px solid var(--color-border);
     border-radius: 999px;
-    padding: 0.3rem 0.85rem;
+    overflow: hidden;
+    height: 38px;
+  }
+  .nav-btn {
+    background: none;
+    border: 0;
+    cursor: pointer;
+    padding: 0 0.95rem;
+    color: var(--color-muted);
+    display: inline-flex;
+    align-items: center;
+    transition:
+      background-color 0.16s ease,
+      color 0.16s ease;
+  }
+  .nav-btn:hover:not(:disabled) {
+    background: var(--color-surface-hover);
+    color: var(--color-text);
+  }
+  .nav-btn:active:not(:disabled) {
+    transform: scale(0.95);
+  }
+  .nav-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+  .month-pill {
+    background: var(--color-surface);
+    border: 0;
+    border-left: 1px solid var(--color-border);
+    border-right: 1px solid var(--color-border);
+    color: var(--color-text);
+    font-weight: 600;
+    font-size: 0.92rem;
+    padding: 0 1rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    cursor: pointer;
+    transition: background-color 0.16s ease;
+  }
+  .month-pill:hover {
+    background: var(--color-surface-hover);
+  }
+  .month-pill:active {
+    transform: scale(0.98);
+  }
+  .month-pill svg {
+    color: var(--color-muted);
+  }
+
+  /* ── Spent number block ──────────────────────────────────────────── */
+  .spent-label {
+    color: var(--color-muted);
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
+  }
+  .spent-amount {
+    font-size: 2.7rem;
+    font-weight: 700;
+    color: var(--color-text);
+    letter-spacing: -0.025em;
+    line-height: 1;
+    margin-bottom: 0.5rem;
+  }
+  .of-income {
+    color: var(--color-muted);
+    font-size: 0.9rem;
+    margin-bottom: 0.85rem;
+  }
+
+  /* ── Extra-inflows chip ──────────────────────────────────────────── */
+  .extra-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 1.1rem;
+    padding: 0.3rem 0.7rem;
+    background: color-mix(in oklab, var(--color-success) 14%, transparent);
+    color: var(--color-success);
+    border: 0;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
     transition:
       background-color 0.16s ease,
       transform 0.16s ease;
-    cursor: pointer;
-    white-space: nowrap;
   }
-  .month-label:hover {
-    background: var(--color-surface-hover);
-  }
-  .month-label:active {
-    transform: scale(0.97);
-  }
-  .headroom-pill {
-    display: inline-flex;
-    align-items: center;
-    border-radius: 999px;
-    padding: 0.2rem 0.7rem;
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--color-success);
-    background-color: color-mix(in oklab, var(--color-success) 14%, transparent);
-    white-space: nowrap;
-  }
-  .headroom-pill.over {
-    color: var(--color-danger);
-    background-color: color-mix(in oklab, var(--color-danger) 14%, transparent);
-  }
-  .extra-income {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    margin-top: 0.35rem;
-    padding: 0;
-    background: none;
-    border: 0;
-    color: var(--color-success);
-    font-size: 0.85rem;
-    cursor: pointer;
-    text-align: left;
-  }
-  .extra-income:disabled {
+  .extra-chip:disabled {
     cursor: default;
   }
-  .extra-income:not(:disabled):hover {
-    text-decoration: underline;
-    text-decoration-color: color-mix(in oklab, var(--color-success) 40%, transparent);
-    text-underline-offset: 3px;
+  .extra-chip:not(:disabled):hover {
+    background: color-mix(in oklab, var(--color-success) 22%, transparent);
   }
-  .extra-manage {
-    color: var(--color-muted);
-    font-size: 0.78rem;
-  }
-  /* Small affordance arrow so the "other inflows" row reads as tappable on
-     mobile (Murali round-5: green text without an obvious arrow looks like a
-     stat, not a button). */
-  .extra-arrow {
-    color: var(--color-muted);
-    font-size: 0.85rem;
-    margin-left: 0.15rem;
+  .extra-chip .extra-arrow {
     transition: transform 0.16s ease;
   }
-  .extra-income:not(:disabled):hover .extra-arrow {
+  .extra-chip:not(:disabled):hover .extra-arrow {
     transform: translateX(2px);
+  }
+
+  /* ── Progress meta + bar ─────────────────────────────────────────── */
+  .progress-block {
+    margin-bottom: 1.4rem;
+  }
+  .progress-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.4rem;
+    font-size: 0.75rem;
+  }
+  .meta-left {
+    color: var(--color-muted);
+    font-weight: 500;
+  }
+  .meta-right {
     color: var(--color-success);
+    font-weight: 700;
   }
-  .carry-line {
-    margin-top: 0.3rem;
-    font-size: 0.82rem;
-    color: var(--color-success);
-    /* Block layout so the "(FYI — not added in)" tail wraps onto its own line
-       on narrow phones rather than orphaning awkwardly between amount + month
-       (Murali round-5). */
-    display: block;
-    line-height: 1.35;
-  }
-  .carry-line .num {
-    margin-right: 0.35rem;
-  }
-  .carry-line .extra-manage {
-    display: inline-block;
-    margin-left: 0.2rem;
-  }
-  .carry-line.carry-negative {
+  .meta-right.over {
     color: var(--color-danger);
   }
-  /* ── Stat row hierarchy: Remaining leads, the other two play support. ── */
+  .progress-track {
+    height: 6px;
+    background: var(--color-elevated);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 999px;
+    background-image: var(--grad-primary);
+    transition: width 0.3s ease;
+  }
+  .progress-fill.over {
+    background-image: none;
+    background-color: var(--color-danger);
+  }
+
+  /* ── Stats row ───────────────────────────────────────────────────── */
+  .stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.6rem;
+  }
   .stat {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 0.15rem;
+    align-items: flex-start;
+    gap: 0.2rem;
   }
-  .stat-value {
+  .stat-value-primary {
     font-size: 1.4rem;
     font-weight: 700;
-    line-height: 1.1;
+    line-height: 1.05;
     letter-spacing: -0.01em;
+    color: var(--color-accent);
   }
-  .stat-value-sub {
-    font-size: 1rem;
-    font-weight: 600;
+  .stat-value {
+    font-size: 1.05rem;
+    font-weight: 700;
     line-height: 1.1;
     color: var(--color-text);
   }
   .stat-label {
-    font-size: 0.7rem;
+    font-size: 0.66rem;
     font-weight: 500;
     color: var(--color-muted);
     text-transform: uppercase;
@@ -363,5 +430,17 @@
   }
   .stat-primary .stat-label {
     color: var(--color-accent);
+  }
+
+  /* ── Empty / warning notes ───────────────────────────────────────── */
+  .pace-warning {
+    margin-top: 0.85rem;
+    font-size: 0.78rem;
+    color: var(--color-danger);
+  }
+  .empty-note {
+    margin-top: 0.85rem;
+    font-size: 0.88rem;
+    color: var(--color-muted);
   }
 </style>

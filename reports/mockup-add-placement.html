@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --bg: #f5efe6; --surface: #ffffff; --text: #2a2622; --muted: #7d756c;
+    --accent: #c97757; --accent-soft: #f6d8c4;
+    --success: #4a8a5e; --success-soft: #d6ecdb;
+    --info: #5b8aa3; --info-soft: #d4e3ec;
+    --border: rgba(42, 38, 34, 0.08); --elevated: rgba(42, 38, 34, 0.04);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Segoe UI", system-ui, sans-serif;
+    background: #d9d3c8; padding: 40px;
+    display: flex; gap: 32px; align-items: flex-start; justify-content: center;
+  }
+  .phone {
+    width: 390px; height: 800px; background: var(--bg); border-radius: 36px;
+    padding: 14px 0 0;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.25), 0 0 0 8px #2a2622, 0 0 0 9px #444;
+    overflow: hidden;
+    position: relative;
+  }
+  .label-row { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .label {
+    color: white; text-align: center; margin-bottom: 6px;
+    font-weight: 700; font-size: 14px; letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .sublabel {
+    color: rgba(255,255,255,0.85); font-size: 12px;
+    margin-bottom: 18px; text-align: center; max-width: 380px;
+    line-height: 1.4;
+  }
+  .recommend-badge {
+    display: inline-block; background: #4a8a5e; color: white;
+    padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+    margin-bottom: 4px;
+  }
+  .runnerup-badge {
+    display: inline-block; background: #7d756c; color: white;
+    padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+    margin-bottom: 4px;
+  }
+
+  .statusbar {
+    height: 36px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 28px; color: var(--text); font-size: 14px; font-weight: 600;
+  }
+  .statusbar .right { display: flex; gap: 6px; align-items: center; }
+  .content { padding: 12px 18px 0; }
+  .toprow { margin-bottom: 14px; }
+  .chip-review {
+    background: white; border-radius: 14px; padding: 12px 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 13px; color: var(--text);
+  }
+  .chip-review .review-btn {
+    background: var(--accent); color: white; padding: 6px 14px;
+    border-radius: 999px; font-size: 12px; font-weight: 600;
+  }
+
+  /* Page header with optional top-right "+" icon */
+  .page-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 0 16px;
+  }
+  .page-head h1 {
+    font-size: 24px; font-weight: 700; color: var(--text);
+    letter-spacing: -0.02em;
+  }
+  .head-add {
+    width: 38px; height: 38px; border-radius: 12px;
+    background: var(--accent); color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 300;
+    box-shadow: 0 4px 12px rgba(201, 119, 87, 0.3);
+  }
+
+  .hero {
+    background: white; border-radius: 22px; padding: 22px 22px 18px;
+    margin-bottom: 14px; position: relative;
+  }
+  .nav-wrap { display: flex; justify-content: center; margin-bottom: 22px; }
+  .nav-widget {
+    display: inline-flex; align-items: center;
+    background: var(--elevated); border: 1px solid var(--border);
+    border-radius: 999px; overflow: hidden; height: 36px;
+  }
+  .nav-widget button {
+    background: none; border: 0; cursor: pointer;
+    padding: 0 14px; height: 100%;
+    color: var(--muted); font-size: 14px;
+    display: inline-flex; align-items: center;
+  }
+  .nav-widget .month-label {
+    padding: 0 16px; height: 100%;
+    color: var(--text); font-weight: 600; font-size: 14px;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    display: inline-flex; align-items: center; gap: 6px;
+    background: white; cursor: pointer;
+  }
+  .nav-widget .chev { color: var(--muted); font-size: 10px; }
+  .spent-label { color: var(--muted); font-size: 14px; margin-bottom: 4px; }
+  .spent-amount {
+    font-size: 48px; font-weight: 700; letter-spacing: -0.025em;
+    color: var(--text); line-height: 1; margin-bottom: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+  .of-income { color: var(--muted); font-size: 14px; margin-bottom: 14px; }
+  .extra-row {
+    display: inline-flex; align-items: center; gap: 6px; color: var(--success);
+    font-size: 13px; font-weight: 600; background: var(--success-soft);
+    padding: 4px 10px; border-radius: 999px; margin-bottom: 18px;
+  }
+  .progress-block { margin-bottom: 22px; }
+  .progress-meta {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 6px; font-size: 12px;
+  }
+  .progress-meta .left { color: var(--muted); font-weight: 500; }
+  .progress-meta .right { color: var(--success); font-weight: 700; }
+  .progress {
+    height: 6px; background: var(--elevated);
+    border-radius: 999px; overflow: hidden;
+  }
+  .progress .fill {
+    height: 100%; width: 63%;
+    background: linear-gradient(90deg, var(--accent) 0%, #d99474 100%);
+    border-radius: 999px;
+  }
+  .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .stat { display: flex; flex-direction: column; gap: 4px; }
+  .stat-value {
+    font-size: 18px; font-weight: 700; color: var(--text);
+    font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+  }
+  .stat-value.primary { color: var(--accent); font-size: 22px; }
+  .stat-label {
+    font-size: 11px; color: var(--muted); font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+
+  /* ── tab bar with CENTER + ── */
+  .tabbar {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: white;
+    border-top: 1px solid var(--border);
+    height: 72px;
+    display: flex; align-items: center; justify-content: space-around;
+    padding: 0 8px 14px;
+  }
+  .tabbar .t {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 3px; font-size: 11px; color: var(--muted);
+    flex: 1;
+  }
+  .tabbar .t.active { color: var(--accent); }
+  .tabbar .t .ico { font-size: 18px; }
+
+  .tabbar .add-tab {
+    flex: 0 0 auto;
+    margin: 0 8px;
+  }
+  .tabbar .add-btn {
+    width: 56px; height: 56px;
+    border-radius: 18px;
+    background: var(--accent);
+    color: white;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; font-weight: 300;
+    box-shadow: 0 6px 16px rgba(201, 119, 87, 0.35);
+    margin-top: -22px;
+  }
+
+  /* ── bottom sheet shown when + tapped ── */
+  .sheet-backdrop {
+    position: absolute; inset: 0;
+    background: rgba(0,0,0,0.45);
+    backdrop-filter: blur(2px);
+  }
+  .sheet {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: var(--bg);
+    border-radius: 28px 28px 0 0;
+    padding: 14px 20px 24px;
+    box-shadow: 0 -10px 30px rgba(0,0,0,0.2);
+  }
+  .sheet-grabber {
+    width: 40px; height: 4px; border-radius: 999px;
+    background: rgba(42,38,34,0.2);
+    margin: 0 auto 14px;
+  }
+  .sheet h2 {
+    font-size: 16px; font-weight: 700; color: var(--text);
+    margin-bottom: 14px; text-align: center;
+  }
+  .add-actions {
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .add-action {
+    display: flex; align-items: center; gap: 14px;
+    background: white;
+    border-radius: 14px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .add-action .ico-circle {
+    width: 44px; height: 44px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; font-weight: 700;
+  }
+  .add-action.expense .ico-circle { background: var(--accent-soft); color: var(--accent); }
+  .add-action.income .ico-circle { background: var(--success-soft); color: var(--success); }
+  .add-action.transfer .ico-circle { background: var(--info-soft); color: var(--info); }
+  .add-action .meta { flex: 1; }
+  .add-action .meta strong {
+    font-size: 15px; font-weight: 700; color: var(--text);
+    display: block; margin-bottom: 2px;
+  }
+  .add-action .meta span {
+    font-size: 12px; color: var(--muted);
+  }
+  .add-action .chev-r { color: var(--muted); font-size: 16px; }
+</style>
+</head>
+<body>
+
+<!-- A: center-plus tab bar (recommended) -->
+<div class="label-row">
+  <div class="recommend-badge">★ MY PICK</div>
+  <div class="label">A · center "+" in tab bar</div>
+  <div class="sublabel">Instagram / Cash App / Venmo pattern. The "+" IS a tab.<br>Zero collision. Hero box untouched. Ambidextrous thumb-reach.</div>
+  <div class="phone">
+    <div class="statusbar">
+      <span>7:12</span>
+      <div class="right"><span>📶</span><span>5G</span><span>🔋</span></div>
+    </div>
+    <div class="content">
+      <div class="toprow">
+        <div class="chip-review">
+          <span><strong>1</strong> transaction needs a category</span>
+          <span class="review-btn">Review →</span>
+        </div>
+      </div>
+      <div class="hero">
+        <div class="nav-wrap">
+          <div class="nav-widget">
+            <button>◀</button>
+            <div class="month-label">May 2026 <span class="chev">▾</span></div>
+            <button>▶</button>
+          </div>
+        </div>
+        <div class="spent-label">Spent this month</div>
+        <div class="spent-amount">₹11,528</div>
+        <div class="of-income">of ₹18,300 income</div>
+        <div class="extra-row">+₹10,000 other inflows →</div>
+        <div class="progress-block">
+          <div class="progress-meta">
+            <span class="left">63% used</span>
+            <span class="right">✓ on track</span>
+          </div>
+          <div class="progress"><div class="fill"></div></div>
+        </div>
+        <div class="stats">
+          <div class="stat"><span class="stat-value primary">₹4,802</span><span class="stat-label">Remaining</span></div>
+          <div class="stat"><span class="stat-value">₹1,201</span><span class="stat-label">Daily pace</span></div>
+          <div class="stat"><span class="stat-value">4</span><span class="stat-label">Days left</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="tabbar">
+      <div class="t active"><span class="ico">🏠</span><span>Home</span></div>
+      <div class="t"><span class="ico">📋</span><span>Transactions</span></div>
+      <div class="add-tab"><div class="add-btn">+</div></div>
+      <div class="t"><span class="ico">📤</span><span>Statements</span></div>
+      <div class="t"><span class="ico">≡</span><span>More</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- B: top-right header "+" icon -->
+<div class="label-row">
+  <div class="runnerup-badge">runner-up</div>
+  <div class="label">B · top-right header "+"</div>
+  <div class="sublabel">Apple Notes / Mail pattern. Quiet, no collision, less prominent.<br>Thumb-reach is worse on big phones.</div>
+  <div class="phone">
+    <div class="statusbar">
+      <span>7:12</span>
+      <div class="right"><span>📶</span><span>5G</span><span>🔋</span></div>
+    </div>
+    <div class="content">
+      <div class="page-head">
+        <h1>Home</h1>
+        <div class="head-add">+</div>
+      </div>
+      <div class="toprow">
+        <div class="chip-review">
+          <span><strong>1</strong> transaction needs a category</span>
+          <span class="review-btn">Review →</span>
+        </div>
+      </div>
+      <div class="hero">
+        <div class="nav-wrap">
+          <div class="nav-widget">
+            <button>◀</button>
+            <div class="month-label">May 2026 <span class="chev">▾</span></div>
+            <button>▶</button>
+          </div>
+        </div>
+        <div class="spent-label">Spent this month</div>
+        <div class="spent-amount">₹11,528</div>
+        <div class="of-income">of ₹18,300 income</div>
+        <div class="extra-row">+₹10,000 other inflows →</div>
+        <div class="progress-block">
+          <div class="progress-meta">
+            <span class="left">63% used</span>
+            <span class="right">✓ on track</span>
+          </div>
+          <div class="progress"><div class="fill"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="tabbar" style="height:64px; padding-bottom:8px;">
+      <div class="t active"><span class="ico">🏠</span><span>Home</span></div>
+      <div class="t"><span class="ico">📋</span><span>Transactions</span></div>
+      <div class="t"><span class="ico">📤</span><span>Statements</span></div>
+      <div class="t"><span class="ico">🔁</span><span>Recurring</span></div>
+      <div class="t"><span class="ico">≡</span><span>More</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- C: tap A's +, sheet opens -->
+<div class="label-row">
+  <div class="label">A flow — tap + sheet opens</div>
+  <div class="sublabel">Same bottom-sheet pattern as month picker.<br>Three rows, colored direction icons + helper text.</div>
+  <div class="phone">
+    <div class="statusbar">
+      <span>7:12</span>
+      <div class="right"><span>📶</span><span>5G</span><span>🔋</span></div>
+    </div>
+    <div class="content" style="filter: blur(1px) brightness(0.85);">
+      <div class="toprow">
+        <div class="chip-review">
+          <span><strong>1</strong> transaction needs a category</span>
+          <span class="review-btn">Review →</span>
+        </div>
+      </div>
+      <div class="hero">
+        <div class="nav-wrap">
+          <div class="nav-widget">
+            <button>◀</button>
+            <div class="month-label">May 2026 <span class="chev">▾</span></div>
+            <button>▶</button>
+          </div>
+        </div>
+        <div class="spent-label">Spent this month</div>
+        <div class="spent-amount">₹11,528</div>
+      </div>
+    </div>
+    <div class="sheet-backdrop"></div>
+    <div class="sheet">
+      <div class="sheet-grabber"></div>
+      <h2>Add a transaction</h2>
+      <div class="add-actions">
+        <div class="add-action expense">
+          <div class="ico-circle">↓</div>
+          <div class="meta">
+            <strong>+ Expense</strong>
+            <span>Money spent — counts toward budget</span>
+          </div>
+          <div class="chev-r">›</div>
+        </div>
+        <div class="add-action income">
+          <div class="ico-circle">↑</div>
+          <div class="meta">
+            <strong>+ Income</strong>
+            <span>Salary, refund, gift, freelance</span>
+          </div>
+          <div class="chev-r">›</div>
+        </div>
+        <div class="add-action transfer">
+          <div class="ico-circle">↔</div>
+          <div class="meta">
+            <strong>+ Transfer</strong>
+            <span>Between your own accounts (not spend)</span>
+          </div>
+          <div class="chev-r">›</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
