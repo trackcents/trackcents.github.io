@@ -6,6 +6,7 @@
   // really BROWSES the past, not just the box.
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
   import { loadState } from '$lib/db/store';
   import type { ImportRecord } from '$lib/db/store';
   import {
@@ -83,27 +84,32 @@
   // intermediary AddSheet (in Nav.svelte) which routes here with `?add=<kind>`.
   // We read that query param on mount and open QuickAddSheet preset to it.
   let quickAddOpen = $state(false);
-  let quickAddType = $state<'expense' | 'income'>('expense');
+  let quickAddType = $state<'expense' | 'income' | 'transfer'>('expense');
 
-  function openQuickAdd(type: 'expense' | 'income'): void {
+  function openQuickAdd(type: 'expense' | 'income' | 'transfer'): void {
     quickAddType = type;
     quickAddOpen = true;
   }
 
-  // Read ?add=expense|income|transfer on mount to honour the AddSheet flow.
-  // Transfer routes back through expense for now (no dedicated transfer flow
-  // yet — flow_intent inference catches them automatically).
+  // Reactively read ?add=expense|income|transfer from the URL store.
+  // Using $page (NOT window.location) ensures the effect re-runs when the
+  // Nav.svelte tab-bar "+" calls goto() — same-page nav doesn't refire
+  // onMount, but it DOES update $page reactively.  Transfer routes back
+  // through expense for now (the flow_intent inference catches transfers
+  // automatically; a dedicated transfer flow is REQ-B0.5).
   $effect(() => {
-    if (typeof window === 'undefined') return;
-    const url = new URL(window.location.href);
-    const add = url.searchParams.get('add');
-    if (add === 'expense' || add === 'income') {
+    const add = $page.url.searchParams.get('add');
+    if (add === null) return;
+    if (add === 'expense' || add === 'income' || add === 'transfer') {
       openQuickAdd(add);
-      url.searchParams.delete('add');
-      window.history.replaceState(null, '', url.toString());
-    } else if (add === 'transfer') {
-      // Open as expense; the user marks transfer via the row drawer later.
-      openQuickAdd('expense');
+    } else {
+      return;
+    }
+    // Clear the URL param after we've consumed it (so a refresh doesn't
+    // re-open the sheet).  Uses replaceState so it doesn't push a history
+    // entry.
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
       url.searchParams.delete('add');
       window.history.replaceState(null, '', url.toString());
     }
