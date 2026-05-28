@@ -6,9 +6,16 @@
   import type { TransactionFilter } from '$lib/app/transaction-view';
   import { accountKeyString, type AccountKey } from '$lib/app/transaction-view';
   import type { TransactionType } from '$lib/adapters/types';
-  import { getDisplayCurrencySymbol } from '$lib/util/money';
+  import { getDisplayCurrency, getDisplayCurrencySymbol } from '$lib/util/money';
 
   const currencySymbol = getDisplayCurrencySymbol();
+  // Locale-aware search examples so the placeholder isn't a USD-only joke
+  // (Bhargav's round-5 note: "starbucks doesn't exist in Bengaluru, payroll is
+  // a US-only word").  Falls back to a culture-neutral hint for unknown codes.
+  const searchPlaceholder =
+    getDisplayCurrency() === 'INR'
+      ? 'e.g. swiggy, zomato, salary …'
+      : 'e.g. groceries, salary, rent …';
 
   interface Props {
     filter: TransactionFilter;
@@ -127,7 +134,7 @@
       type="search"
       value={searchInput}
       oninput={(e) => onSearchInput(e.currentTarget.value)}
-      placeholder="e.g. amazon, starbucks, payroll …"
+      placeholder={searchPlaceholder}
       class="mt-1 w-full rounded-md border px-3 py-1.5 font-mono text-sm"
       style="border-color: var(--color-border); background-color: var(--color-bg); color: var(--color-text);"
     />

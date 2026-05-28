@@ -26,7 +26,10 @@
   // users expect cents (12.34).  Both NL-example and Amount placeholder follow.
   const isInr = currencySymbol === '₹';
   const amountPlaceholder = isInr ? '40' : '12.34';
-  const expensePlaceholder = isInr ? '“₹40 chai today”' : '“40 chai today”';
+  // Locale-appropriate everyday example.  Murali's round-5 callout: a Seattle
+  // user with USD shouldn't see "chai" (the Indian vernacular) — that bumps
+  // the "this app wasn't written for me" feeling.
+  const expensePlaceholder = isInr ? '“₹40 chai today”' : '“12.50 coffee today”';
   const incomePlaceholder = isInr ? '“salary 50000 yesterday”' : '“paycheck 2150 last friday”';
   import { today } from '$lib/util/date';
   import { categoryColor, categoryIconName } from '$lib/app/category-visuals';
@@ -41,7 +44,10 @@
     accountSuggestions: string[];
     onClose: () => void;
     /** Called after a successful save so the parent can re-hydrate. */
-    onSaved: () => void;
+    /** Called after a successful save.  `learned` is true when a category
+     *  annotation was saved — the parent's toast uses this so it doesn't
+     *  promise "I'll remember this" on a save with no category set. */
+    onSaved: (info: { learned: boolean }) => void;
   }
 
   const {
@@ -176,7 +182,7 @@
         const nextAnnotations = Object.fromEntries(next);
         await saveCategorization({ categories, rules, annotations: nextAnnotations });
       }
-      onSaved();
+      onSaved({ learned: categoryId !== null });
       onClose();
     } catch (e) {
       if (e instanceof ManualEntryError || e instanceof CsvImportError) error = e.message;

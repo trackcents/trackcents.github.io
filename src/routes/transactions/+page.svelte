@@ -85,7 +85,10 @@
   // Both personas in round-2 review flagged the duplicate inline form here.
   let quickAddOpen = $state(false);
 
-  async function refreshAfterSave(): Promise<void> {
+  // QuickAddSheet's onSaved now passes a {learned} flag; this view doesn't show
+  // a toast so we ignore it, but the signature has to match the prop type.
+  async function refreshAfterSave(info: { learned: boolean }): Promise<void> {
+    void info;
     const loaded = await loadImports();
     imports = loaded.imports;
     const c = await loadCategorization();
@@ -99,23 +102,39 @@
   let filter = $state<TransactionFilter>({});
   let sort = $state<SortSpec>({ key: 'date', dir: 'desc' });
 
-  /** Resolve `?month=YYYY-MM` URL param → date_from/date_to filter for that
-   *  whole month.  Lets the home BudgetBox "tap to manage" link drop the user
-   *  straight into a pre-filtered view (Murali's "tap-to-manage went nowhere
-   *  useful" feedback). */
+  /** Resolve query-string filters on landing.  Supports:
+   *    ?month=YYYY-MM           — whole-month filter (from the home BudgetBox)
+   *    ?date_from=YYYY-MM-DD&date_to=YYYY-MM-DD — explicit range
+   *  Lets the Home "Spent today so far" chip and BudgetBox "tap to manage" link
+   *  drop the user into a pre-filtered view (Murali's "tap-to-manage went
+   *  nowhere useful" feedback).  An explicit range overrides ?month if both
+   *  appear. */
   function applyMonthFromQuery(): void {
     const m = $page.url.searchParams.get('month');
-    if (m === null || !/^\d{4}-\d{2}$/.test(m)) return;
-    const [yStr, mStr] = m.split('-');
-    const y = Number(yStr);
-    const mo = Number(mStr);
-    // Last calendar day of the month (day 0 of next month).
-    const lastDay = new Date(Date.UTC(y, mo, 0)).getUTCDate();
-    filter = {
-      ...filter,
-      date_from: `${m}-01`,
-      date_to: `${m}-${String(lastDay).padStart(2, '0')}`
-    };
+    if (m !== null && /^\d{4}-\d{2}$/.test(m)) {
+      const [yStr, mStr] = m.split('-');
+      const y = Number(yStr);
+      const mo = Number(mStr);
+      // Last calendar day of the month (day 0 of next month).
+      const lastDay = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+      filter = {
+        ...filter,
+        date_from: `${m}-01`,
+        date_to: `${m}-${String(lastDay).padStart(2, '0')}`
+      };
+    }
+    const df = $page.url.searchParams.get('date_from');
+    const dt = $page.url.searchParams.get('date_to');
+    const isoRe = /^\d{4}-\d{2}-\d{2}$/;
+    const dfValid = df !== null && isoRe.test(df);
+    const dtValid = dt !== null && isoRe.test(dt);
+    if (dfValid || dtValid) {
+      filter = {
+        ...filter,
+        ...(dfValid ? { date_from: df } : {}),
+        ...(dtValid ? { date_to: dt } : {})
+      };
+    }
   }
 
   onMount(async () => {
@@ -264,7 +283,7 @@
       <p class="text-sm text-[var(--color-muted)]">
         Nothing here yet. Tap <strong>+ Add</strong> above, or
         <a href="/" class="text-[var(--color-accent)] hover:underline">drop a PDF</a>
-        to drop a PDF.
+        on the import page.
       </p>
     </div>
   {:else}

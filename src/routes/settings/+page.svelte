@@ -76,12 +76,17 @@
     const cat = await loadCategorization();
     const catName = (id: string | null) =>
       id === null ? '' : (cat.categories.find((c) => c.id === id)?.name ?? id);
+    // CSV currency should track the user's display preference — hard-coding USD
+    // mis-labels every row when an INR/EUR/GBP user opens the file in Excel.
+    // (Per-statement `r.currency` would be even better for multi-currency
+    // imports, but our DetailedRow doesn't surface it today; the display
+    // pref matches what's already shown in the UI for every row.)
     const rows: CsvExportRow[] = detailedRowsFromImports(state.imports, cat.annotations).map(
       (r) => ({
         posted_date: r.posted_date,
         description: r.description,
         amount_minor: r.amount_minor,
-        currency: 'USD',
+        currency,
         account: r.bank_name,
         category: catName(r.category_id)
       })

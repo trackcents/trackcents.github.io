@@ -59,29 +59,55 @@ export async function loadDemoData(): Promise<void> {
     transaction_type
   });
 
+  // Locale-appropriate merchant strings so an INR user's sample data doesn't
+  // look like an American's statement with a ₹ sprayed in front of it
+  // (Bhargav round-5: "SWIGGY's the only Indian touch; everything else is
+  // PAYROLL ACME / WHOLE FOODS / SHELL GAS — feels like a foreign app").
+  const merchants = inr
+    ? {
+        salary: 'SALARY - INFOSYS',
+        groc: 'BIGBASKET',
+        gas: 'INDIAN OIL',
+        shop: 'AMAZON.IN',
+        rent: 'RENT - HSR LAYOUT',
+        subs: 'NETFLIX',
+        food: 'SWIGGY ORDER',
+        coffee: 'CHAI POINT'
+      }
+    : {
+        salary: 'PAYROLL - ACME CORP',
+        groc: 'WHOLE FOODS',
+        gas: 'SHELL GAS',
+        shop: 'AMAZON MKTPL',
+        rent: 'RENT - OAK APTS',
+        subs: 'NETFLIX.COM',
+        food: 'DOORDASH',
+        coffee: 'STARBUCKS'
+      };
+
   // Previous full month — gives the "vs last month" comparison something to show.
   const prevRows: ParsedTransaction[] = [
-    tx(dt(prev, 1), 'PAYROLL - ACME CORP', A.salary, 'deposit'),
-    tx(dt(prev, 3), 'WHOLE FOODS', -A.groc, 'purchase'),
-    tx(dt(prev, 7), 'SHELL GAS', -A.gas, 'purchase'),
-    tx(dt(prev, 11), 'AMAZON MKTPL', -A.shop, 'purchase'),
-    tx(dt(prev, 15), 'RENT - OAK APTS', -A.rent, 'purchase'),
-    tx(dt(prev, 19), 'NETFLIX.COM', -A.subs, 'purchase'),
-    tx(dt(prev, 23), 'SWIGGY ORDER', -A.food, 'purchase'),
-    tx(dt(prev, 27), 'STARBUCKS', -A.coffee, 'purchase')
+    tx(dt(prev, 1), merchants.salary, A.salary, 'deposit'),
+    tx(dt(prev, 3), merchants.groc, -A.groc, 'purchase'),
+    tx(dt(prev, 7), merchants.gas, -A.gas, 'purchase'),
+    tx(dt(prev, 11), merchants.shop, -A.shop, 'purchase'),
+    tx(dt(prev, 15), merchants.rent, -A.rent, 'purchase'),
+    tx(dt(prev, 19), merchants.subs, -A.subs, 'purchase'),
+    tx(dt(prev, 23), merchants.food, -A.food, 'purchase'),
+    tx(dt(prev, 27), merchants.coffee, -A.coffee, 'purchase')
   ];
 
   // Current month up to today only (no future-dated spending).
   const curCandidates: Array<[number, string, bigint, TransactionType]> = [
-    [1, 'PAYROLL - ACME CORP', A.salary, 'deposit'],
-    [2, 'WHOLE FOODS', -A.groc, 'purchase'],
-    [4, 'STARBUCKS', -A.coffee, 'purchase'],
-    [6, 'SHELL GAS', -A.gas, 'purchase'],
-    [9, 'AMAZON MKTPL', -A.shop, 'purchase'],
-    [12, 'SWIGGY ORDER', -A.food, 'purchase'],
-    [16, 'WHOLE FOODS', -A.groc, 'purchase'],
-    [20, 'RENT - OAK APTS', -A.rent, 'purchase'],
-    [24, 'NETFLIX.COM', -A.subs, 'purchase']
+    [1, merchants.salary, A.salary, 'deposit'],
+    [2, merchants.groc, -A.groc, 'purchase'],
+    [4, merchants.coffee, -A.coffee, 'purchase'],
+    [6, merchants.gas, -A.gas, 'purchase'],
+    [9, merchants.shop, -A.shop, 'purchase'],
+    [12, merchants.food, -A.food, 'purchase'],
+    [16, merchants.groc, -A.groc, 'purchase'],
+    [20, merchants.rent, -A.rent, 'purchase'],
+    [24, merchants.subs, -A.subs, 'purchase']
   ];
   const curRows = curCandidates
     .filter(([day]) => day <= dToday)

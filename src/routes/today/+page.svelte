@@ -77,12 +77,13 @@
   // Bayes learns".  Auto-clears after 2.5s.
   let saveToast = $state<string | null>(null);
   let saveToastTimer: ReturnType<typeof setTimeout> | undefined;
-  async function refreshAfterSave(): Promise<void> {
+  async function refreshAfterSave(info: { learned: boolean }): Promise<void> {
     imports = (await loadState()).imports;
     cat = await loadCategorization();
-    // Show a tiny confirmation; the auto-categorise on next mount will absorb
-    // the new annotation into the classifier so the message is honest.
-    saveToast = '✓ Saved — I’ll remember this';
+    // Honest toast: only promise "I'll remember this" when the user actually
+    // picked / accepted a category — otherwise the Bayes classifier has nothing
+    // new to learn from (Murali round-5: don't over-promise the AI).
+    saveToast = info.learned ? '✓ Saved — I’ll remember this' : '✓ Saved';
     if (saveToastTimer !== undefined) clearTimeout(saveToastTimer);
     saveToastTimer = setTimeout(() => (saveToast = null), 2500);
     // Re-run auto-categorise on the freshly loaded data so the new annotation
@@ -223,6 +224,30 @@
     monthName(prevMonthOf(activeMonth)).split(' ')[0] ?? 'last month'
   );
 
+  // "Spent today so far" — current-day burn.  Shown ONLY on the current month
+  // (the chip is meaningless when browsing past months); hidden when 0 so the
+  // first quiet day of the month doesn't look like a UI bug.  Sums every
+  // outflow row whose posted_date is exactly todayIso, ignoring transfers and
+  // user-ignored rows (matches the budget box's "Spent" semantics).
+  const spentTodayMinor = $derived.by<bigint>(() => {
+    if (activeMonth !== currentMonth) return 0n;
+    let total = 0n;
+    for (const r of allDetailed) {
+      if (r.posted_date === todayIso && r.amount_minor < 0n && !r.ignored) {
+        total += -r.amount_minor;
+      }
+    }
+    return total;
+  });
+  const txnsTodayCount = $derived.by<number>(() => {
+    if (activeMonth !== currentMonth) return 0;
+    let n = 0;
+    for (const r of allDetailed) {
+      if (r.posted_date === todayIso && r.amount_minor < 0n && !r.ignored) n++;
+    }
+    return n;
+  });
+
   // Top categories for the ACTIVE month (so swiping back to April shows
   // April's top categories, not the current month's).
   const topCats = $derived(
@@ -315,7 +340,8 @@
         style="background-image: linear-gradient(to right, color-mix(in oklab, var(--color-accent) 8%, transparent), transparent);"
       >
         <span class="text-sm">
-          <strong>{needsReview}</strong> transaction{needsReview === 1 ? '' : 's'} need a category
+          <strong>{needsReview}</strong>
+          {needsReview === 1 ? 'transaction needs' : 'transactions need'} a category
         </span>
         <span
           class="rounded-full px-3 py-1 text-sm font-medium"
@@ -379,6 +405,36 @@
         onManageIncome={() => goto(`/transactions?month=${activeMonth}`)}
       />
     </MonthSlider>
+
+    {#if spentTodayMinor > 0n}
+      <!-- "Spent today so far" — current-day burn chip.  Shown only on the
+           current month and only when there's spend today, so the first quiet
+           morning of a month doesn't render a "₹0 today" chip (which Murali's
+           round-3 feedback called "demoralising negative reinforcement"). -->
+      <a
+        href={`/transactions?date_from=${todayIso}&date_to=${todayIso}`}
+        class="card card-hover rise mt-3 flex items-center justify-between gap-3 p-3"
+        style="animation-delay: 30ms;"
+      >
+        <div class="flex items-center gap-3">
+          <span
+            class="inline-flex h-9 w-9 items-center justify-center rounded-full text-base"
+            style="background-color: var(--color-elevated);"
+            aria-hidden="true">🕒</span
+          >
+          <div class="min-w-0">
+            <p class="text-xs" style:color="var(--color-muted)">Spent today so far</p>
+            <p class="num text-base font-semibold">
+              {formatMoney(spentTodayMinor)}
+              <span class="ml-1 text-xs font-normal" style:color="var(--color-muted)">
+                · {txnsTodayCount} txn{txnsTodayCount === 1 ? '' : 's'}
+              </span>
+            </p>
+          </div>
+        </div>
+        <span class="text-sm" style:color="var(--color-accent)">View →</span>
+      </a>
+    {/if}
 
     <!-- Top categories — for the ACTIVE month. -->
     <div class="card rise mt-4 p-5" style="animation-delay: 60ms;">
@@ -474,7 +530,11 @@
     <div class="card rise mt-4 p-5" style="animation-delay: 120ms;">
       <div class="mb-3 flex items-center justify-between">
         <h2 class="text-sm font-semibold">Recent · {activeMonthLabel}</h2>
-        <a href="/transactions" class="text-xs" style:color="var(--color-accent)">See all →</a>
+        <a
+          href={`/transactions?month=${activeMonth}`}
+          class="text-xs"
+          style:color="var(--color-accent)">See all →</a
+        >
       </div>
       {#if recent.length === 0}
         <p class="text-sm" style:color="var(--color-muted)">No transactions in this month.</p>

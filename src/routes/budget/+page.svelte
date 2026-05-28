@@ -17,8 +17,13 @@
   import { parseAmountToCents } from '$lib/app/csv-import';
   import { centsToDecimal } from '$lib/app/export-csv';
   import { categoryColor } from '$lib/app/category-visuals';
-  import { formatMoney, getDisplayCurrencySymbol } from '$lib/util/money';
+  import { formatMoney, getDisplayCurrency, getDisplayCurrencySymbol } from '$lib/util/money';
   const currencySymbol = getDisplayCurrencySymbol();
+  // The paycheck-window UI is designed around the US biweekly cadence (two
+  // paychecks fund one budget month).  Monthly-paid users (typical in India)
+  // get their salary tracked on /today's hero box instead; surface that path
+  // here so they don't bounce off this screen.
+  const isMonthlyPayCulture = getDisplayCurrency() === 'INR';
   import type { ImportSuccess } from '$lib/app/import';
   import type { ImportRecord } from '$lib/db/store';
   import ProgressRing from '$components/ProgressRing.svelte';
@@ -156,10 +161,22 @@
     <p class="text-sm" style:color="var(--color-muted)">Loading…</p>
   {:else if paychecks.length === 0}
     <div class="card rise p-10 text-center">
-      <p class="text-sm" style:color="var(--color-muted)">
-        No recurring paychecks detected yet. Import a few months of a checking statement so we can
-        spot your biweekly deposits.
-      </p>
+      {#if isMonthlyPayCulture}
+        <p class="mb-2 text-sm" style:color="var(--color-muted)">
+          This view groups <strong>biweekly</strong> paychecks (every 2 weeks) into a monthly
+          budget. Most Indian salaries are paid <strong>monthly</strong>, so this screen isn't built
+          for you — your monthly salary is already covered on
+          <a href="/today" style:color="var(--color-accent)">Home</a>.
+        </p>
+        <p class="text-sm" style:color="var(--color-muted)">
+          The <strong>Category budgets</strong> section below still works for everyone.
+        </p>
+      {:else}
+        <p class="text-sm" style:color="var(--color-muted)">
+          No recurring paychecks detected yet. Import a few months of a checking statement so we can
+          spot your biweekly deposits.
+        </p>
+      {/if}
     </div>
   {:else if anchor !== null}
     <div class="card rise mb-4 flex flex-wrap items-center gap-3 p-3 text-sm">
@@ -243,8 +260,11 @@
 
     <p class="mt-4 text-xs" style:color="var(--color-muted)">
       "Spent" counts money that left checking/savings in the window (including credit-card
-      payments), so individual card purchases aren't double-counted. Transfers to savings are still
-      counted for now.
+      payments), so individual card purchases aren't double-counted. Transfers to savings are
+      counted as "spend" by default —
+      <a href="/transactions#transfer-pairs" style:color="var(--color-accent)"
+        >mark them on the transactions page</a
+      > to exclude them and see a truer burn rate.
     </p>
   {/if}
 

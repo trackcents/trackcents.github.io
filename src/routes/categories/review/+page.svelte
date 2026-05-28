@@ -124,7 +124,7 @@
       <p class="mt-1 text-lg font-semibold text-[var(--color-text)]">{current.description}</p>
       <p
         class="num mt-1 text-2xl font-bold"
-        style:color={current.amount_minor < 0n ? 'var(--color-text)' : 'var(--color-success)'}
+        style:color={current.amount_minor < 0n ? 'var(--color-danger)' : 'var(--color-success)'}
       >
         {formatMoney(current.amount_minor)}
       </p>

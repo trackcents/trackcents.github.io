@@ -336,7 +336,7 @@
         {@const parts = splitOf(r)}
         <div class="mt-3">
           <div class="mb-1 flex items-center justify-between">
-            <span class="text-[var(--color-muted)]">Split across categories (US-SPLIT)</span>
+            <span class="text-[var(--color-muted)]">Split across categories</span>
             <button
               type="button"
               class="rounded-md border px-2 py-0.5 text-xs transition-colors hover:border-[var(--color-accent)]"
