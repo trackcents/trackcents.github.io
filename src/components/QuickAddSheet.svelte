@@ -62,6 +62,9 @@
 
   // ── Form state ─────────────────────────────────────────────────────────────
   let date = $state(today());
+  /** Free-form time text the user typed.  We accept "10:30", "10:30 PM",
+   *  "10pm", "22:30", etc.  Parsed to 24-hour HH:MM on save (see
+   *  parseFreeFormTime). */
   let time = $state('');
   let desc = $state('');
   let amount = $state('');
@@ -69,6 +72,12 @@
   let account = $state('Cash');
   let categoryId = $state<string | null>(null);
   let userTouchedCategory = $state(false);
+  /** Did the user manually edit the amount field?  Once true, the NL parser
+   *  in the description no longer overrides what they typed.  Until true,
+   *  the parser keeps updating the amount as the user keeps typing — fixes
+   *  the bug where typing "2" first locked the amount at $2.00 and the
+   *  later "$46" in "biryani worth $46" never made it through. */
+  let userTouchedAmount = $state(false);
   let saving = $state(false);
   let error = $state<string | null>(null);
   let pickerOpen = $state(false);
@@ -76,6 +85,37 @@
   function pickCategory(id: string | null): void {
     categoryId = id;
     userTouchedCategory = true;
+  }
+
+  /** Parse a free-form time string into 24-hour HH:MM.  Returns '' on
+   *  empty input, null on unparseable.  Examples:
+   *    "10:30"     -> "10:30"   (24h preserved)
+   *    "10:30 AM"  -> "10:30"
+   *    "10:30pm"   -> "22:30"
+   *    "10pm"      -> "22:00"
+   *    "22:30"     -> "22:30"
+   *    "noon"      -> "12:00"
+   *    "midnight"  -> "00:00"
+   */
+  function parseFreeFormTime(input: string): string | null {
+    const s = input.trim().toLowerCase();
+    if (s === '') return '';
+    if (s === 'noon') return '12:00';
+    if (s === 'midnight') return '00:00';
+    const m = s.match(/^(\d{1,2})(?::?(\d{2}))?\s*(am|pm|a|p)?$/);
+    if (!m) return null;
+    let h = parseInt(m[1]!, 10);
+    const min = m[2] ? parseInt(m[2], 10) : 0;
+    const ap = m[3] ? m[3][0] : '';
+    if (Number.isNaN(h) || Number.isNaN(min) || min < 0 || min > 59) return null;
+    if (h < 0 || h > 23) return null;
+    if (ap === 'a') {
+      if (h === 12) h = 0;
+    } else if (ap === 'p') {
+      if (h < 12) h += 12;
+    }
+    if (h < 0 || h > 23) return null;
+    return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
   }
 
   let amountInputEl = $state<HTMLInputElement | null>(null);
@@ -97,6 +137,7 @@
           initialType === 'income' ? 'Income' : initialType === 'transfer' ? 'Transfer' : 'Cash';
         categoryId = null;
         userTouchedCategory = false;
+        userTouchedAmount = false;
         saving = false;
         error = null;
       });
@@ -104,7 +145,12 @@
   });
 
   // Live parse the Description as the user types — pulls amount + date out of
-  // "₹40 chai today" and auto-suggests a category.
+  // "₹40 chai today" and auto-suggests a category.  The previous lock-in
+  // ("only set amount if currently empty") was wrong: typing "ate biryani on
+  // 24th may 2026 worth $46" produced $2 instead of $46 because the first
+  // digit landed in amount and then the field was no longer empty.  Now we
+  // track `userTouchedAmount` separately — until the user clicks INTO the
+  // amount field, the NL parser keeps it in sync with the description.
   $effect(() => {
     const trimmed = desc.trim();
     if (trimmed.length === 0) return;
@@ -112,11 +158,9 @@
     const guess = guessCategoryId(p.description, categories, rules);
     untrack(() => {
       if (p.date_iso !== today()) date = p.date_iso;
-      if (p.amount_minor !== null && amount.trim() === '') {
+      if (p.amount_minor !== null && !userTouchedAmount) {
         amount = (Number(p.amount_minor) / 100).toFixed(isInr ? 0 : 2);
       }
-      // Only switch direction when the parser is confident (text actually
-      // contains an income word).  Otherwise honour the user's preset.
       if (p.direction === 'income' && direction === 'expense') direction = 'income';
       if (!userTouchedCategory && guess !== null) categoryId = guess;
     });
@@ -144,7 +188,11 @@
       // Expense / Transfer = outflow (negative); Income = inflow.
       const signed = direction === 'income' ? abs : -abs;
       const baseDesc = desc.trim() || direction.charAt(0).toUpperCase() + direction.slice(1);
-      const finalDesc = time && /^\d{2}:\d{2}$/.test(time) ? `${time} · ${baseDesc}` : baseDesc;
+      // Time is free-form ("10:30 PM" / "10pm" / "22:30").  Normalize to
+      // 24-hour HH:MM for the description prefix.  Unparseable times are
+      // silently dropped (form save still succeeds — time was optional).
+      const parsedTime = parseFreeFormTime(time);
+      const finalDesc = parsedTime && parsedTime !== '' ? `${parsedTime} · ${baseDesc}` : baseDesc;
       const accountFinal =
         account ||
         (direction === 'income' ? 'Income' : direction === 'transfer' ? 'Transfer' : 'Cash');
@@ -243,7 +291,9 @@
       {/each}
     </div>
 
-    <!-- Amount (big & prominent) -->
+    <!-- Amount (big & prominent).  Tapping into the field marks it touched
+         so the NL-parse in the description stops overriding what the user
+         typed. -->
     <div class="qas-amount-row">
       <span class="qas-cur">{currencySymbol}</span>
       <input
@@ -254,6 +304,8 @@
         placeholder={amountPlaceholder}
         class="qas-amount num"
         aria-label="Amount"
+        oninput={() => (userTouchedAmount = true)}
+        onfocus={() => (userTouchedAmount = true)}
       />
     </div>
 
@@ -316,15 +368,27 @@
       </label>
     </div>
 
-    <!-- Date + Time -->
+    <!-- Date + Time.  Time is a free-form text input so the user can pick
+         their own 12h vs 24h: "10:30 PM", "10pm", "22:30", "noon" all
+         parse correctly via parseFreeFormTime on save.  This fixes the
+         "no AM/PM" complaint on Android where native <input type="time">
+         renders 24-hour only on most locales. -->
     <div class="qas-row-2col">
       <label class="qas-block">
         <span class="qas-lbl">Date</span>
         <input type="date" bind:value={date} class="qas-field" />
       </label>
       <label class="qas-block">
-        <span class="qas-lbl">Time <span class="qas-opt">(optional)</span></span>
-        <input type="time" bind:value={time} class="qas-field" />
+        <span class="qas-lbl">Time <span class="qas-opt">(e.g. 10:30 PM)</span></span>
+        <input
+          type="text"
+          inputmode="text"
+          bind:value={time}
+          placeholder="optional"
+          class="qas-field"
+          autocomplete="off"
+          spellcheck="false"
+        />
       </label>
     </div>
 

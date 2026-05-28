@@ -87,4 +87,35 @@ describe('parseQuickAddText', () => {
     expect(p.description.toLowerCase().startsWith('on ')).toBe(false);
     expect(p.description.toLowerCase()).toContain('groceries');
   });
+
+  // ── Smart-year heuristic (Hemanth feedback) ─────────────────────────────
+  // chrono-node with forwardDate:true picks NEXT year when a partial date
+  // (no year) lands in the past.  For a money tracker that's almost always
+  // wrong — entries are historical 99% of the time.  We post-process to roll
+  // back one year when the parsed date lands more than ~2 months in the
+  // future AND the user didn't type an explicit year.
+
+  it('prefers current year for partial dates: "may 23" when today is May 28 2026', () => {
+    const p = parseQuickAddText('ate biryani on may 23 worth $46', '2026-05-28');
+    expect(p.date_iso).toBe('2026-05-23'); // not 2027-05-23
+    expect(p.amount_minor).toBe(4600n);
+  });
+
+  it('prefers current year for partial dates: "december 15" when today is January', () => {
+    // December is in the recent past for someone in January — pick 2025.
+    const p = parseQuickAddText('hotel december 15', '2026-01-10');
+    expect(p.date_iso).toBe('2025-12-15');
+  });
+
+  it('keeps the typed year when the user is explicit', () => {
+    // User explicitly typed 2027 — keep it (forward-dated transaction).
+    const p = parseQuickAddText('emi 360 on may 23 2027', '2026-05-28');
+    expect(p.date_iso).toBe('2027-05-23');
+  });
+
+  it('does NOT roll near-future dates back ("in 3 days" stays this year)', () => {
+    // "in 3 days" from May 28 = May 31, still in the same year.  No bump.
+    const p = parseQuickAddText('rent in 3 days', '2026-05-28');
+    expect(p.date_iso).toBe('2026-05-31');
+  });
 });

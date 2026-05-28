@@ -69,7 +69,7 @@ export function parseQuickAddText(text: string, defaultDateIso: string): ParsedQ
 
   // Anchor chrono at noon LOCAL on the default date so DST / timezone edges
   // don't tip the parsed day. `forwardDate: true` resolves naked "Friday" as
-  // the nearest upcoming Friday — what the user usually means.
+  // the nearest upcoming Friday — what the user usually means for weekdays.
   const refDate = new Date(`${defaultDateIso}T12:00:00`);
   const chronoResults = chrono.parse(text, refDate, { forwardDate: true });
 
@@ -78,7 +78,21 @@ export function parseQuickAddText(text: string, defaultDateIso: string): ParsedQ
   let dateEnd = -1;
   if (chronoResults.length > 0) {
     const r = chronoResults[0]!;
-    const d = r.date();
+    let d = r.date();
+
+    // Smart year heuristic — fix for Hemanth's feedback "I type 'may 23rd'
+    // and it picks 2027 even though today is May 28 2026."  Money entries
+    // are historical 99% of the time; a date >60 days in the future when
+    // the user didn't type a year almost certainly means LAST year, not
+    // next year (chrono + forwardDate picks next year when the partial
+    // date is past).  We only roll back when no explicit 4-digit year
+    // was typed, so an intentional "in 2027" stays 2027.
+    const userTypedYear = /\b(19|20)\d{2}\b/.test(r.text);
+    const daysAhead = (d.getTime() - refDate.getTime()) / 86_400_000;
+    if (!userTypedYear && daysAhead > 60) {
+      d = new Date(d.getFullYear() - 1, d.getMonth(), d.getDate(), 12, 0, 0);
+    }
+
     dateIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     dateStart = r.index;
     dateEnd = r.index + r.text.length;
