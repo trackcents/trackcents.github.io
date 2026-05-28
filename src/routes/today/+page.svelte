@@ -71,9 +71,26 @@
     quickAddOpen = true;
   }
 
+  // Small toast that confirms a save + (when applicable) signals "I learned
+  // from this" — Bhargav's feedback in round-3: "no haptic/toast when the
+  // Bayes learns".  Auto-clears after 2.5s.
+  let saveToast = $state<string | null>(null);
+  let saveToastTimer: ReturnType<typeof setTimeout> | undefined;
   async function refreshAfterSave(): Promise<void> {
     imports = (await loadState()).imports;
     cat = await loadCategorization();
+    // Show a tiny confirmation; the auto-categorise on next mount will absorb
+    // the new annotation into the classifier so the message is honest.
+    saveToast = '✓ Saved — I’ll remember this';
+    if (saveToastTimer !== undefined) clearTimeout(saveToastTimer);
+    saveToastTimer = setTimeout(() => (saveToast = null), 2500);
+    // Re-run auto-categorise on the freshly loaded data so the new annotation
+    // immediately feeds the classifier for future predictions.
+    const updated = runAutoCategorize(imports, cat);
+    if (updated !== null) {
+      cat = updated;
+      await saveCategorization(updated);
+    }
   }
 
   // ── Derived data ───────────────────────────────────────────────────────────
@@ -540,6 +557,13 @@
     onSaved={refreshAfterSave}
   />
 
+  <!-- Save-confirmation toast — shows briefly after a manual transaction is
+       added, with explicit "I'll remember this" framing so the user knows the
+       Bayes classifier just got another training sample. -->
+  {#if saveToast !== null}
+    <div class="save-toast" role="status" aria-live="polite">{saveToast}</div>
+  {/if}
+
   <!-- Floating "+" — always reachable; no scrolling to find the button.  Per
        Bhargav's #2 quick win ("thumb travels 60% of the screen before I reach
        the only button I care about").  Hidden while the sheet is open so it
@@ -606,5 +630,38 @@
   }
   .fab:active {
     transform: scale(0.94);
+  }
+  .save-toast {
+    position: fixed;
+    z-index: 60;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: calc(158px + env(safe-area-inset-bottom));
+    background: var(--color-text);
+    color: var(--color-bg);
+    border-radius: 999px;
+    padding: 0.55rem 1.05rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    box-shadow: var(--shadow-md);
+    animation: toast-rise 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @media (min-width: 768px) {
+    .save-toast {
+      bottom: 100px;
+      right: 28px;
+      left: auto;
+      transform: none;
+    }
+  }
+  @keyframes toast-rise {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
   }
 </style>
