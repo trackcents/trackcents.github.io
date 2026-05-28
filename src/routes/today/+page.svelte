@@ -202,7 +202,7 @@
         onLabelClick={() => (pickerOpen = true)}
         onAddIncome={() => openQuickAdd('income')}
         onAddExpense={() => openQuickAdd('expense')}
-        onManageIncome={() => goto('/transactions')}
+        onManageIncome={() => goto(`/transactions?month=${activeMonth}`)}
       />
     </MonthSlider>
 
@@ -246,7 +246,7 @@
         onLabelClick={() => (pickerOpen = true)}
         onAddIncome={() => openQuickAdd('income')}
         onAddExpense={() => openQuickAdd('expense')}
-        onManageIncome={() => goto('/transactions')}
+        onManageIncome={() => goto(`/transactions?month=${activeMonth}`)}
       />
     </MonthSlider>
 
@@ -432,4 +432,72 @@
     onClose={() => (quickAddOpen = false)}
     onSaved={refreshAfterSave}
   />
+
+  <!-- Floating "+" — always reachable; no scrolling to find the button.  Per
+       Bhargav's #2 quick win ("thumb travels 60% of the screen before I reach
+       the only button I care about").  Hidden while the sheet is open so it
+       doesn't peek through the dimmed backdrop. -->
+  {#if !loading && !quickAddOpen}
+    <button
+      type="button"
+      class="fab"
+      onclick={() => openQuickAdd('expense')}
+      aria-label="Add expense"
+    >
+      <svg
+        width="26"
+        height="26"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M12 5v14M5 12h14" />
+      </svg>
+    </button>
+  {/if}
 </main>
+
+<style>
+  .fab {
+    position: fixed;
+    z-index: 30;
+    width: 58px;
+    height: 58px;
+    border-radius: 999px;
+    border: 0;
+    background-image: var(--grad-primary);
+    color: var(--color-accent-fg);
+    box-shadow: var(--shadow-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition:
+      transform 0.16s ease,
+      box-shadow 0.16s ease,
+      filter 0.16s ease;
+    /* Phone: float above the bottom tab bar.  64px nav + 16px gutter + safe-area. */
+    bottom: calc(80px + env(safe-area-inset-bottom));
+    right: 16px;
+  }
+  @media (min-width: 768px) {
+    /* Desktop: left rail is the nav, no bottom bar — corner-anchor the FAB. */
+    .fab {
+      bottom: 28px;
+      right: 28px;
+    }
+  }
+  .fab:hover {
+    filter: brightness(1.07);
+    box-shadow:
+      var(--shadow-md),
+      0 8px 22px rgba(190, 110, 75, 0.42);
+  }
+  .fab:active {
+    transform: scale(0.94);
+  }
+</style>

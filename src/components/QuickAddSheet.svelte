@@ -8,6 +8,7 @@
 
   import { tick, untrack } from 'svelte';
   import { parseQuickAddText, type ParsedQuickAdd } from '$lib/app/nl-quick-add';
+  import { guessCategoryId } from '$lib/app/category-guess';
   import { makeManualImport, newManualId, ManualEntryError } from '$lib/app/manual-entry';
   import { parseAmountToCents, CsvImportError } from '$lib/app/csv-import';
   import { addImport } from '$lib/db/store';
@@ -21,6 +22,8 @@
   } from '$lib/app/categorization';
   import { getDisplayCurrency, formatMoney } from '$lib/util/money';
   import { today } from '$lib/util/date';
+  import { categoryColor, categoryIconName } from '$lib/app/category-visuals';
+  import CategoryIcon from '$components/CategoryIcon.svelte';
 
   interface Props {
     open: boolean;
@@ -54,8 +57,27 @@
   let direction = $state<'expense' | 'income'>('expense');
   let account = $state('Cash');
   let categoryId = $state<string | null>(null);
+  // Tracks whether the USER has explicitly picked a category — keeps the smart
+  // auto-guess from overriding the user's choice as they keep typing.  Cleared
+  // on every sheet open.
+  let userTouchedCategory = $state(false);
+  // Shows the "More categories" overflow row when the user has more than 5
+  // categories.  Top 5 + Uncategorized + More = the chip row; the rest hide
+  // here.  Bhargav's #1 quick-add complaint was the native <select>: chips
+  // collapse the OS picker round-trip into one tap.
+  let showMoreCats = $state(false);
   let saving = $state(false);
   let error = $state<string | null>(null);
+
+  /** Top 6 categories shown as chips (rest go under "More").  Stable order so
+   *  muscle memory works — we just take the first 6 from the user's list. */
+  const topCats = $derived(categories.slice(0, 6));
+  const restCats = $derived(categories.slice(6));
+
+  function pickCategory(id: string | null): void {
+    categoryId = id;
+    userTouchedCategory = true;
+  }
 
   let nlInputEl = $state<HTMLInputElement | null>(null);
 
@@ -72,6 +94,7 @@
         direction = initialType;
         account = initialType === 'income' ? 'Income' : 'Cash';
         categoryId = null;
+        userTouchedCategory = false;
         saving = false;
         error = null;
       });
@@ -88,12 +111,19 @@
       return;
     }
     const p = parseQuickAddText(nlText, today());
+    // Smart category guess from the description — user's own rules first, then a
+    // small built-in keyword map (chai → Food, uber → Transport, …) resolved
+    // against the user's actual category names.  Null when nothing fits.
+    const guess = guessCategoryId(p.description, categories, rules);
     untrack(() => {
       parsed = p;
       date = p.date_iso;
       if (p.amount_minor !== null) amount = (Number(p.amount_minor) / 100).toFixed(2);
       desc = p.description;
       direction = p.direction;
+      // Auto-fill the category from the guess UNLESS the user has explicitly
+      // picked one — their choice always wins.
+      if (!userTouchedCategory) categoryId = guess;
     });
   });
 
@@ -241,16 +271,7 @@
           placeholder="12.34"
         />
       </label>
-      <label class="block">
-        <span class="label-text">Category</span>
-        <select bind:value={categoryId} class="field">
-          <option value={null}>Uncategorized</option>
-          {#each categories as c (c.id)}
-            <option value={c.id}>{c.name}</option>
-          {/each}
-        </select>
-      </label>
-      <div class="col-span-2">
+      <div class="block">
         <span class="label-text">Type</span>
         <div class="type-toggle">
           {#each [{ v: 'expense', l: 'Expense' }, { v: 'income', l: 'Income' }] as opt (opt.v)}
@@ -265,6 +286,74 @@
             </button>
           {/each}
         </div>
+      </div>
+      <div class="block col-span-2">
+        <span class="label-text">Category</span>
+        <!-- Category chips: 1-tap selection.  Replaced the native <select> (Bhargav:
+             "death by OS picker on Android"; Murali: "iOS wheel picker eats the
+             screen").  Top 6 are visible; "More" reveals the rest inline. -->
+        <div class="chip-row">
+          <button
+            type="button"
+            class="cat-chip"
+            class:active={categoryId === null}
+            onclick={() => pickCategory(null)}
+          >
+            <span class="cat-dot" style:background-color="var(--color-muted)"></span>
+            <span class="cat-name">Uncategorized</span>
+          </button>
+          {#each topCats as c (c.id)}
+            {@const isActive = categoryId === c.id}
+            {@const isAuto = isActive && !userTouchedCategory}
+            <button
+              type="button"
+              class="cat-chip"
+              class:active={isActive}
+              onclick={() => pickCategory(c.id)}
+              title={isAuto ? `${c.name} — auto-suggested from your text` : c.name}
+            >
+              <span class="cat-icon">
+                <CategoryIcon icon={categoryIconName(c.name)} color={categoryColor(c.id)} tint />
+              </span>
+              <span class="cat-name">{c.name}</span>
+              {#if isAuto}
+                <span class="auto-badge">auto</span>
+              {/if}
+            </button>
+          {/each}
+          {#if restCats.length > 0}
+            <button
+              type="button"
+              class="cat-chip cat-more"
+              class:active={showMoreCats}
+              onclick={() => (showMoreCats = !showMoreCats)}
+              aria-expanded={showMoreCats}
+            >
+              {showMoreCats ? '✕ Close' : `+${restCats.length} more`}
+            </button>
+          {/if}
+        </div>
+        {#if showMoreCats && restCats.length > 0}
+          <div class="chip-row chip-row-more">
+            {#each restCats as c (c.id)}
+              {@const isActive = categoryId === c.id}
+              <button
+                type="button"
+                class="cat-chip"
+                class:active={isActive}
+                onclick={() => {
+                  pickCategory(c.id);
+                  showMoreCats = false;
+                }}
+              >
+                <span class="cat-icon">
+                  <CategoryIcon icon={categoryIconName(c.name)} color={categoryColor(c.id)} tint />
+                </span>
+                <span class="cat-name">{c.name}</span>
+              </button>
+            {/each}
+          </div>
+        {/if}
       </div>
     </div>
 
@@ -463,6 +552,81 @@
   .type-opt.active {
     background-image: var(--grad-primary);
     color: var(--color-accent-fg);
+  }
+  /* ── Category chips ───────────────────────────────────────────────────── */
+  .chip-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  .chip-row-more {
+    margin-top: 0.4rem;
+    padding-top: 0.4rem;
+    border-top: 1px dashed var(--color-border);
+  }
+  .cat-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    border-radius: 999px;
+    border: 1px solid var(--color-border);
+    background: var(--color-elevated);
+    color: var(--color-text);
+    padding: 0.42rem 0.7rem 0.42rem 0.55rem;
+    font-size: 0.82rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition:
+      background-color 0.16s ease,
+      border-color 0.16s ease,
+      transform 0.12s ease,
+      box-shadow 0.16s ease;
+  }
+  .cat-chip:hover {
+    background: var(--color-surface-hover);
+  }
+  .cat-chip:active {
+    transform: scale(0.96);
+  }
+  .cat-chip.active {
+    background: var(--color-accent-soft);
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-accent) 22%, transparent);
+  }
+  .cat-icon {
+    display: inline-flex;
+    align-items: center;
+  }
+  .cat-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    display: inline-block;
+  }
+  .cat-name {
+    line-height: 1;
+  }
+  .auto-badge {
+    font-size: 0.62rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.1rem 0.35rem;
+    border-radius: 6px;
+    background: color-mix(in oklab, var(--color-accent) 18%, transparent);
+    color: var(--color-accent);
+  }
+  .cat-more {
+    background: transparent;
+    color: var(--color-muted);
+    font-weight: 600;
+  }
+  .cat-more.active {
+    background: var(--color-elevated);
+    border-color: var(--color-border);
+    color: var(--color-text);
+    box-shadow: none;
   }
   .error {
     margin-top: 0.7rem;

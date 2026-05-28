@@ -151,25 +151,27 @@
       ></div>
     </div>
 
+    <!-- Stat row: Remaining is the number you live by, so it leads visually
+         (bigger, bolder).  Daily pace + Days left are secondary glances. -->
     <div class="mt-4 grid grid-cols-3 gap-2 text-center">
-      <div>
+      <div class="stat stat-primary">
         <p
-          class="num text-base font-semibold"
+          class="num stat-value"
           style:color={overspent ? 'var(--color-danger)' : 'var(--color-text)'}
         >
           {formatMoney(budget.remaining_minor)}
         </p>
-        <p class="text-xs" style:color="var(--color-muted)">Remaining</p>
+        <p class="stat-label">Remaining</p>
       </div>
-      <div>
-        <p class="num text-base font-semibold">{formatMoney(budget.daily_pace_minor)}</p>
-        <p class="text-xs" style:color="var(--color-muted)">Daily pace</p>
+      <div class="stat">
+        <p class="num stat-value-sub">{formatMoney(budget.daily_pace_minor)}</p>
+        <p class="stat-label">Daily pace</p>
       </div>
-      <div>
-        <p class="num text-base font-semibold">
+      <div class="stat">
+        <p class="num stat-value-sub">
           {isPast ? 'Final' : isFuture ? '—' : budget.days_left}
         </p>
-        <p class="text-xs" style:color="var(--color-muted)">
+        <p class="stat-label">
           {isPast ? 'Status' : isFuture ? 'Days' : 'Days left'}
         </p>
       </div>
@@ -270,6 +272,35 @@
   .extra-manage {
     color: var(--color-muted);
     font-size: 0.78rem;
+  }
+  /* ── Stat row hierarchy: Remaining leads, the other two play support. ── */
+  .stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+  }
+  .stat-value {
+    font-size: 1.4rem;
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+  }
+  .stat-value-sub {
+    font-size: 1rem;
+    font-weight: 600;
+    line-height: 1.1;
+    color: var(--color-text);
+  }
+  .stat-label {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--color-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .stat-primary .stat-label {
+    color: var(--color-accent);
   }
   .add-expense-btn {
     width: 100%;

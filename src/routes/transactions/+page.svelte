@@ -8,6 +8,7 @@
   // can be re-implemented over SQL without changing this route.
 
   import { onMount } from 'svelte';
+  import { page } from '$app/stores';
   import { slide } from 'svelte/transition';
   import FilterBar from '$components/FilterBar.svelte';
   import UnifiedTransactionTable from '$components/UnifiedTransactionTable.svelte';
@@ -137,6 +138,25 @@
   let filter = $state<TransactionFilter>({});
   let sort = $state<SortSpec>({ key: 'date', dir: 'desc' });
 
+  /** Resolve `?month=YYYY-MM` URL param → date_from/date_to filter for that
+   *  whole month.  Lets the home BudgetBox "tap to manage" link drop the user
+   *  straight into a pre-filtered view (Murali's "tap-to-manage went nowhere
+   *  useful" feedback). */
+  function applyMonthFromQuery(): void {
+    const m = $page.url.searchParams.get('month');
+    if (m === null || !/^\d{4}-\d{2}$/.test(m)) return;
+    const [yStr, mStr] = m.split('-');
+    const y = Number(yStr);
+    const mo = Number(mStr);
+    // Last calendar day of the month (day 0 of next month).
+    const lastDay = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+    filter = {
+      ...filter,
+      date_from: `${m}-01`,
+      date_to: `${m}-${String(lastDay).padStart(2, '0')}`
+    };
+  }
+
   onMount(async () => {
     try {
       const loaded = await loadImports();
@@ -150,6 +170,7 @@
     } finally {
       hydrating = false;
     }
+    applyMonthFromQuery();
   });
 
   // Derived: flatten all imports into rows once per imports change.
