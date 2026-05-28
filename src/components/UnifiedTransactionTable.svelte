@@ -15,7 +15,8 @@
 
   import { goto } from '$app/navigation';
   import type { TransactionType } from '$lib/adapters/types';
-  import { formatMoney } from '$lib/util/money';
+  import { formatMoney, getDisplayCurrencySymbol } from '$lib/util/money';
+  const currencySymbol = getDisplayCurrencySymbol();
   import type { UnifiedRow, SortSpec, SortKey } from '$lib/app/transaction-view';
   import type { Category, TransactionAnnotation, TransactionSplit } from '$lib/app/categorization';
   import { categoryColor, categoryIconName } from '$lib/app/category-visuals';
@@ -360,7 +361,7 @@
                       <option value={c.id}>{c.name}</option>
                     {/each}
                   </select>
-                  <span class="text-[var(--color-muted)]">$</span>
+                  <span class="text-[var(--color-muted)]">{currencySymbol}</span>
                   <input
                     type="text"
                     inputmode="decimal"

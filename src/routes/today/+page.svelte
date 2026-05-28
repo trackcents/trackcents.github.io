@@ -18,6 +18,7 @@
   import { detectPaychecks } from '$lib/app/paycheck-detector';
   import type { ImportSuccess } from '$lib/app/import';
   import { netByMonth, spendingByCategoryByMonth } from '$lib/app/spending-summary';
+  import { getDisplayCurrency } from '$lib/util/money';
   import { today } from '$lib/util/date';
   import { monthOverMonthInsight, topMovers } from '$lib/app/spending-insights';
   import { categoryColor, categoryIconName } from '$lib/app/category-visuals';
@@ -156,6 +157,11 @@
   });
   const biweeklyDetected = $derived.by<boolean>(() => {
     if (imports.length === 0) return false;
+    // Suppress the "paid biweekly" nudge for INR users — Indian salaries are
+    // monthly, so this banner would only confuse Bhargav-type users (their
+    // round-3 feedback: "I'm paid MONTHLY in India.  This banner is the most
+    // 'US tech-bro' string in the app.  Suppress for INR users.").
+    if (getDisplayCurrency() === 'INR') return false;
     try {
       // ImportRecord ⊃ ImportSuccess for the fields detectPaychecks reads
       // (statement.account_type, transactions[].posted_date / amount_minor /
@@ -297,8 +303,8 @@
 
     <div class="card rise mt-4 p-8 text-center">
       <p class="text-sm" style:color="var(--color-muted)">
-        Nothing here yet. Tap <strong>+ Add expense</strong> above to log your first transaction, or
-        <a href="/" style:color="var(--color-accent)">import a statement</a>.
+        Nothing here yet. Tap the floating <strong>+</strong> button to log your first expense, or
+        <a href="/" style:color="var(--color-accent)">drop a PDF</a> if you have a statement.
       </p>
     </div>
   {:else}

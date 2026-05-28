@@ -10,6 +10,12 @@
   import { setSessionKey } from '$lib/crypto/session';
   import { SALT_STORAGE_KEY } from '$lib/app/unlock';
   import { CURRENCIES, setCurrencyPref, type CurrencyCode } from '$lib/app/prefs';
+  import { getDisplayCurrency } from '$lib/util/money';
+
+  // Adapt the welcome tagline to the user's currency once chosen.  Until then
+  // (first launch, before the currency step) we use the neutral default.
+  const displayCurrencyHere = $derived(getDisplayCurrency());
+  const taglineUnit = $derived(displayCurrencyHere === 'INR' ? 'rupee' : 'cent');
 
   type Step = 'install' | 'signin' | 'currency' | 'passphrase' | 'securing' | 'ready';
   let step = $state<Step>('signin');
@@ -60,7 +66,7 @@
     <div class="mb-3"><BrandMark size={46} wordmark={false} /></div>
     <h1 class="text-2xl font-semibold tracking-tight">Welcome to trackcents</h1>
     <p class="mt-1 text-sm" style:color="var(--color-muted)">
-      See where every cent goes — privately, on your device.
+      See where every {taglineUnit} goes — privately, on your device.
     </p>
   </div>
 
@@ -83,17 +89,19 @@
           Sign in so your <em>encrypted</em> backup can sync to your own Google Drive. The app only ever
           touches files it creates — it can't read your data.
         </p>
-        <button type="button" class="btn btn-primary mt-4 w-full" onclick={handleSignIn}>
-          Sign in with Google
-        </button>
         <button
           type="button"
-          class="mt-3 block w-full text-center text-xs"
-          style:color="var(--color-muted)"
+          class="btn btn-primary mt-4 w-full"
           onclick={() => (step = 'currency')}
         >
           Continue without sync
         </button>
+        <button type="button" class="btn btn-ghost mt-3 w-full" onclick={handleSignIn}>
+          Sign in with Google (optional)
+        </button>
+        <p class="mt-2 text-center text-xs" style:color="var(--color-muted)">
+          Sync is optional — you can add it later from Settings.
+        </p>
       {:else}
         <h2 class="text-lg font-semibold">Set up on this device</h2>
         <p class="mt-2 text-sm" style:color="var(--color-muted)">
@@ -147,7 +155,7 @@
       <p class="mt-2 text-sm" style:color="var(--color-muted)">
         Your passphrase is set and your data will be encrypted on this device.
       </p>
-      <a href="/" class="btn btn-primary mt-4 w-full">Start importing</a>
+      <a href="/today" class="btn btn-primary mt-4 w-full">Open my budget</a>
     </div>
   {/if}
 </main>

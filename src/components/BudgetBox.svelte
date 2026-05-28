@@ -126,9 +126,9 @@
             disabled={onManageIncome === undefined}
           >
             <span class="num font-medium">+{formatMoney(extraIncomeMinor)}</span>
-            <span>extra income</span>
+            <span>other inflows</span>
             {#if onManageIncome !== undefined}
-              <span class="extra-manage">· tap to manage</span>
+              <span class="extra-manage">· tap to review</span>
             {/if}
           </button>
         {/if}
@@ -138,13 +138,20 @@
                user sees the trend without the engine doing magic math behind
                their back. -->
           {@const carryPositive = carryForwardMinor > 0n}
-          <p class="carry-line" class:carry-negative={!carryPositive}>
+          <p
+            class="carry-line"
+            class:carry-negative={!carryPositive}
+            title="Last month's net — shown here as a heads-up, NOT added to this month's totals."
+          >
             <span class="num font-medium">
               {carryPositive ? '+' : '−'}{formatMoney(
                 carryForwardMinor < 0n ? -carryForwardMinor : carryForwardMinor
               )}
             </span>
-            <span>from {carryForwardFromLabel ?? 'last month'}</span>
+            <span>
+              ended {carryForwardFromLabel ?? 'last month'}
+              <span class="extra-manage">(FYI — not added in)</span>
+            </span>
           </p>
         {/if}
       {/if}
@@ -195,7 +202,7 @@
           {isPast ? 'Final' : isFuture ? '—' : budget.days_left}
         </p>
         <p class="stat-label">
-          {isPast ? 'Status' : isFuture ? 'Days' : 'Days left'}
+          {isPast ? 'Status' : isFuture ? 'Days' : 'Days left in month'}
         </p>
       </div>
     </div>

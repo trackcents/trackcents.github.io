@@ -20,7 +20,14 @@
     type CategoryRule,
     type TransactionAnnotation
   } from '$lib/app/categorization';
-  import { getDisplayCurrency, formatMoney } from '$lib/util/money';
+  import { getDisplayCurrency, getDisplayCurrencySymbol, formatMoney } from '$lib/util/money';
+  const currencySymbol = getDisplayCurrencySymbol();
+  // INR users live in integer rupees (40, 250, 15000) — no decimals; USD/EUR
+  // users expect cents (12.34).  Both NL-example and Amount placeholder follow.
+  const isInr = currencySymbol === '₹';
+  const amountPlaceholder = isInr ? '40' : '12.34';
+  const expensePlaceholder = isInr ? '“₹40 chai today”' : '“40 chai today”';
+  const incomePlaceholder = isInr ? '“salary 50000 yesterday”' : '“paycheck 2150 last friday”';
   import { today } from '$lib/util/date';
   import { categoryColor, categoryIconName } from '$lib/app/category-visuals';
   import CategoryIcon from '$components/CategoryIcon.svelte';
@@ -218,7 +225,7 @@
         type="text"
         bind:value={nlText}
         bind:this={nlInputEl}
-        placeholder={direction === 'income' ? '“salary 50000 yesterday”' : '“40 chai today”'}
+        placeholder={direction === 'income' ? incomePlaceholder : expensePlaceholder}
         class="nl-input"
         autocomplete="off"
         autocapitalize="off"
@@ -286,7 +293,7 @@
           inputmode="decimal"
           bind:value={amount}
           class="field num"
-          placeholder="12.34"
+          placeholder={amountPlaceholder}
         />
       </label>
       <div class="block">

@@ -242,7 +242,7 @@
       </p>
     </div>
     <button type="button" class="btn btn-primary" onclick={() => (quickAddOpen = true)}>
-      + Add transaction
+      + Add
     </button>
   </header>
 
@@ -262,9 +262,8 @@
       style="border-color: var(--color-border); background-color: var(--color-surface);"
     >
       <p class="text-sm text-[var(--color-muted)]">
-        No statements imported yet. <a href="/" class="text-[var(--color-accent)] hover:underline"
-          >Go back to Statements</a
-        >
+        Nothing here yet. Tap <strong>+ Add</strong> above, or
+        <a href="/" class="text-[var(--color-accent)] hover:underline">drop a PDF</a>
         to drop a PDF.
       </p>
     </div>

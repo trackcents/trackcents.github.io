@@ -83,6 +83,27 @@ export function getDisplayCurrency(): string {
 }
 
 /**
+ * The visible symbol for the currently-selected display currency.  Used for
+ * UI placeholders, filter labels, etc. that need a single glyph (not the
+ * full formatted amount).  Falls back to `$` for unknown codes — the same
+ * default the rest of the formatter uses.
+ */
+export function getDisplayCurrencySymbol(): string {
+  switch (displayCurrency) {
+    case 'INR':
+      return '₹';
+    case 'EUR':
+      return '€';
+    case 'GBP':
+      return '£';
+    case 'JPY':
+      return '¥';
+    default:
+      return '$';
+  }
+}
+
+/**
  * Group the integer part. Indian numbering (1,23,456) for INR — last three
  * digits, then groups of two — Western (1,234,567) for everything else.
  */

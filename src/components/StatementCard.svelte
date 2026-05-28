@@ -35,13 +35,18 @@
       <h2 class="text-lg font-medium text-[var(--color-text)]">
         {import_.bank_name}
         <span class="ml-2 font-mono text-sm text-[var(--color-muted)]"
-          >**** {import_.statement.account_last_4 ?? '—'}</span
+          >•••• {import_.statement.account_last_4 ?? '—'}</span
         >
         <span
           class="ml-2 inline-block rounded-md border px-2 py-0.5 text-xs uppercase tracking-wide text-[var(--color-muted)]"
           style="border-color: var(--color-border);"
         >
-          {import_.statement.account_type === 'credit_card' ? 'Credit card' : 'Checking'}
+          {#if import_.statement.account_type === 'credit_card'}Credit card
+          {:else if import_.statement.account_type === 'savings'}Savings
+          {:else if import_.statement.account_type === 'loan'}Loan
+          {:else if import_.statement.account_type === 'cash'}Cash
+          {:else if import_.statement.account_type === 'checking'}Checking
+          {:else}Account{/if}
         </span>
       </h2>
       <p class="mt-1 font-mono text-xs text-[var(--color-muted)]">

@@ -6,6 +6,9 @@
   import type { TransactionFilter } from '$lib/app/transaction-view';
   import { accountKeyString, type AccountKey } from '$lib/app/transaction-view';
   import type { TransactionType } from '$lib/adapters/types';
+  import { getDisplayCurrencySymbol } from '$lib/util/money';
+
+  const currencySymbol = getDisplayCurrencySymbol();
 
   interface Props {
     filter: TransactionFilter;
@@ -158,7 +161,7 @@
     </div>
     <div>
       <label for="filter-amount-min" class="block text-xs text-[var(--color-muted)]"
-        >|Amount| min ($)</label
+        >Min amount ({currencySymbol})</label
       >
       <input
         id="filter-amount-min"
@@ -180,7 +183,7 @@
     </div>
     <div>
       <label for="filter-amount-max" class="block text-xs text-[var(--color-muted)]"
-        >|Amount| max ($)</label
+        >Max amount ({currencySymbol})</label
       >
       <input
         id="filter-amount-max"

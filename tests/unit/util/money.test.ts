@@ -12,6 +12,7 @@ import {
   absMoney,
   formatMoney,
   getDisplayCurrency,
+  getDisplayCurrencySymbol,
   parseMoney,
   setDisplayCurrency,
   sumMoney
@@ -229,6 +230,25 @@ describe('display currency (module default)', () => {
     }
     expect(getDisplayCurrency()).toBe('USD');
     expect(formatMoney(123456n)).toBe('$1,234.56');
+  });
+
+  test('getDisplayCurrencySymbol returns the visible glyph for each known code', () => {
+    // Default before any setDisplayCurrency() call must be USD.
+    expect(getDisplayCurrencySymbol()).toBe('$');
+    try {
+      setDisplayCurrency('INR');
+      expect(getDisplayCurrencySymbol()).toBe('₹');
+      setDisplayCurrency('EUR');
+      expect(getDisplayCurrencySymbol()).toBe('€');
+      setDisplayCurrency('GBP');
+      expect(getDisplayCurrencySymbol()).toBe('£');
+      setDisplayCurrency('JPY');
+      expect(getDisplayCurrencySymbol()).toBe('¥');
+      setDisplayCurrency('USD');
+      expect(getDisplayCurrencySymbol()).toBe('$');
+    } finally {
+      setDisplayCurrency('USD');
+    }
   });
 });
 

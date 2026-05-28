@@ -17,7 +17,8 @@
   import { parseAmountToCents } from '$lib/app/csv-import';
   import { centsToDecimal } from '$lib/app/export-csv';
   import { categoryColor } from '$lib/app/category-visuals';
-  import { formatMoney } from '$lib/util/money';
+  import { formatMoney, getDisplayCurrencySymbol } from '$lib/util/money';
+  const currencySymbol = getDisplayCurrencySymbol();
   import type { ImportSuccess } from '$lib/app/import';
   import type { ImportRecord } from '$lib/db/store';
   import ProgressRing from '$components/ProgressRing.svelte';
@@ -284,7 +285,7 @@
                 {/if}
               </div>
               <label class="flex items-center gap-1 text-sm">
-                <span style:color="var(--color-muted)">$</span>
+                <span style:color="var(--color-muted)">{currencySymbol}</span>
                 <input
                   type="text"
                   inputmode="decimal"

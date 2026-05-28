@@ -15,7 +15,8 @@
   import { newManualId } from '$lib/app/manual-entry';
   import { parseAmountToCents } from '$lib/app/csv-import';
   import { centsToDecimal } from '$lib/app/export-csv';
-  import { formatMoney } from '$lib/util/money';
+  import { formatMoney, getDisplayCurrencySymbol } from '$lib/util/money';
+  const currencySymbol = getDisplayCurrencySymbol();
 
   const toN = (m: bigint): number => Number(m) / 100;
 
@@ -209,7 +210,7 @@
               <p class="text-xs text-[var(--color-muted)]">by {g.deadline}</p>
             {/if}
             <label class="mt-2 flex items-center gap-1 text-sm">
-              <span class="text-[var(--color-muted)]">Saved $</span>
+              <span class="text-[var(--color-muted)]">Saved {currencySymbol}</span>
               <input
                 type="text"
                 inputmode="decimal"
