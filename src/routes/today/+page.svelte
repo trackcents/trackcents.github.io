@@ -1,8 +1,11 @@
 <script lang="ts">
-  // "Today" home screen (Rocket-Money cue): this month's spend-vs-income at a
-  // glance — a progress ring, top categories with colour + icon, and recent
-  // transactions. Combines the new visual primitives (rings, icons, colours).
+  // "Today" / Home — the entry-first home screen.  Centerpiece = a tappable
+  // budget hero box wrapped in a MonthSlider, so the user can swipe (or use the
+  // mid-edge chevrons / tap the month label) to view any past or planned month.
+  // Top categories + recent activity follow the active month so the slider
+  // really BROWSES the past, not just the box.
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   import { loadState, addImport } from '$lib/db/store';
   import type { ImportRecord } from '$lib/db/store';
   import { loadCategorization, type CategorizationState } from '$lib/db/categorization-store';
@@ -10,7 +13,6 @@
   import { netByMonth, spendingByCategoryByMonth } from '$lib/app/spending-summary';
   import { today } from '$lib/util/date';
   import { monthOverMonthInsight, topMovers } from '$lib/app/spending-insights';
-  import { monthBudget } from '$lib/app/month-budget';
   import { makeManualImport, newManualId, ManualEntryError } from '$lib/app/manual-entry';
   import { parseAmountToCents, CsvImportError } from '$lib/app/csv-import';
   import { categoryColor, categoryIconName } from '$lib/app/category-visuals';
@@ -18,6 +20,9 @@
   import { loadGoals } from '$lib/db/goals-store';
   import { formatMoney, getDisplayCurrency } from '$lib/util/money';
   import CategoryIcon from '$components/CategoryIcon.svelte';
+  import BudgetBox from '$components/BudgetBox.svelte';
+  import MonthSlider from '$components/MonthSlider.svelte';
+  import MonthPickerSheet from '$components/MonthPickerSheet.svelte';
 
   let loading = $state(true);
   let imports = $state<ImportRecord[]>([]);
@@ -34,8 +39,12 @@
   const todayIso = today(); // device-local date — follows the phone's timezone
   const currentMonth = todayIso.slice(0, 7);
 
-  // Quick "add income" from the budget hero — logs a manual income entry dated
-  // today, so a manual-first user can record salary/bonus and see their budget.
+  // The month currently shown by the slider.  Defaults to the current calendar
+  // month; the user can swipe / tap the label to navigate.
+  let activeMonth = $state(currentMonth);
+  let pickerOpen = $state(false);
+
+  // ── + Income inline form (button lives inside the BudgetBox; form here) ────
   let showIncome = $state(false);
   let incomeAmount = $state('');
   let incomeLabel = $state('');
@@ -76,56 +85,83 @@
     }
   }
 
+  // ── Derived data ───────────────────────────────────────────────────────────
+  const MONTH_NAMES = [
+    '',
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December'
+  ] as const;
+  function monthName(ym: string): string {
+    const [y, m] = ym.split('-');
+    return `${MONTH_NAMES[Number(m)] ?? m} ${y}`;
+  }
   function catName(id: string | null): string {
     if (id === null) return 'Uncategorized';
     return cat.categories.find((c) => c.id === id)?.name ?? id;
   }
-  const monthName = (ym: string): string => {
-    const names = [
-      '',
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December'
-    ];
-    const [y, m] = ym.split('-');
-    return `${names[Number(m)] ?? m} ${y}`;
-  };
 
   const txns = $derived(summaryFromImports(imports, cat.annotations));
   const hasData = $derived(txns.length > 0);
   const nbm = $derived(netByMonth(txns));
-  // Home is anchored to the CURRENT calendar month (from the device clock), so
-  // days-left and daily pace come from today's date — not the latest statement's
-  // month (statements arrive for the prior month, which made days-left always 0).
-  const curFlow = $derived(nbm.get(currentMonth));
-  const budget = $derived(monthBudget(curFlow, currentMonth, todayIso));
+  const sbm = $derived(spendingByCategoryByMonth(txns));
 
-  // Top categories this month, sorted by spend desc.
+  /** Months we can show in the slider — every month with data, plus the
+   *  current calendar month, plus the next month (for forward planning).
+   *  Chronological, oldest → newest. */
+  const monthsAvailable = $derived.by<string[]>(() => {
+    const set = new Set<string>(nbm.keys());
+    set.add(currentMonth);
+    const [yStr, mStr] = currentMonth.split('-');
+    const y = Number(yStr);
+    const m = Number(mStr);
+    const nextM = m === 12 ? 1 : m + 1;
+    const nextY = m === 12 ? y + 1 : y;
+    set.add(`${nextY}-${String(nextM).padStart(2, '0')}`);
+    return [...set].sort();
+  });
+
+  /** Months we have any transaction data for — drives the data-dot in the picker. */
+  const monthsWithDataSet = $derived(new Set<string>(nbm.keys()));
+
+  // If the user lands on an activeMonth that's no longer in the available set
+  // (e.g. data reloaded and the picked month vanished), fall back to current.
+  $effect(() => {
+    if (!monthsAvailable.includes(activeMonth)) {
+      activeMonth = currentMonth;
+    }
+  });
+
+  const activeFlow = $derived(nbm.get(activeMonth));
+  const activeMonthLabel = $derived(monthName(activeMonth));
+
+  // Top categories for the ACTIVE month (so swiping back to April shows
+  // April's top categories, not the current month's).
   const topCats = $derived(
-    [...(spendingByCategoryByMonth(txns).get(currentMonth)?.entries() ?? [])].sort((a, b) =>
-      b[1] > a[1] ? 1 : -1
-    )
+    [...(sbm.get(activeMonth)?.entries() ?? [])].sort((a, b) => (b[1] > a[1] ? 1 : -1))
   );
   const topSpend = $derived(topCats[0]?.[1] ?? 1n);
 
-  // Month-over-month spending insight (US-INSIGHT): where spend moved vs last
-  // month. Only shows once there are ≥2 months of data.
-  const mom = $derived(monthOverMonthInsight(spendingByCategoryByMonth(txns)));
+  // Month-over-month delta — informational, compares the latest two months
+  // in the data (independent of the slider's active month).
+  const mom = $derived(monthOverMonthInsight(sbm));
   const movers = $derived(mom ? topMovers(mom.deltas, 3) : null);
   const absMinor = (m: bigint): bigint => (m < 0n ? -m : m);
 
   const allDetailed = $derived(detailedRowsFromImports(imports, cat.annotations));
+  // Recent rows within the active month (so the slider browses real history).
   const recent = $derived(
     allDetailed
+      .filter((r) => r.posted_date.slice(0, 7) === activeMonth)
       .slice()
       .sort((a, b) => (a.posted_date < b.posted_date ? 1 : -1))
       .slice(0, 6)
@@ -143,16 +179,73 @@
   {#if loading}
     <p class="text-sm" style:color="var(--color-muted)">Loading…</p>
   {:else if !hasData}
-    <div class="card rise p-10 text-center">
+    <!-- Even with zero data we still render the slider so a brand-new user
+         can land directly on "+ Add expense" without seeing an empty banner. -->
+    <MonthSlider
+      months={monthsAvailable}
+      currentMonth={activeMonth}
+      onChange={(m) => (activeMonth = m)}
+    >
+      <BudgetBox
+        monthKey={activeMonth}
+        monthLabel={activeMonthLabel}
+        flow={activeFlow}
+        {todayIso}
+        onLabelClick={() => (pickerOpen = true)}
+        onAddIncome={() => {
+          showIncome = !showIncome;
+          incomeError = null;
+        }}
+        onAddExpense={() => goto('/transactions')}
+      />
+    </MonthSlider>
+
+    {#if showIncome}
+      <section class="card rise mt-4 p-5">
+        <h2 class="mb-3 text-sm font-semibold">Add income</h2>
+        <div class="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+          <label class="block text-sm">
+            <span class="mb-1 block text-xs" style:color="var(--color-muted)">Amount</span>
+            <input
+              type="text"
+              inputmode="decimal"
+              bind:value={incomeAmount}
+              placeholder="50000"
+              class="num w-full rounded-lg border px-3 py-2"
+              style="border-color: var(--color-border); background-color: var(--color-bg);"
+            />
+          </label>
+          <label class="block text-sm">
+            <span class="mb-1 block text-xs" style:color="var(--color-muted)"
+              >Source (optional)</span
+            >
+            <input
+              type="text"
+              bind:value={incomeLabel}
+              placeholder="Salary"
+              class="w-full rounded-lg border px-3 py-2"
+              style="border-color: var(--color-border); background-color: var(--color-bg);"
+            />
+          </label>
+          <div class="flex items-end">
+            <button type="button" class="btn btn-primary w-full sm:w-auto" onclick={submitIncome}>
+              Add
+            </button>
+          </div>
+        </div>
+        {#if incomeError}
+          <p class="mt-2 text-xs" style:color="var(--color-danger)">{incomeError}</p>
+        {/if}
+      </section>
+    {/if}
+
+    <div class="card rise mt-4 p-8 text-center">
       <p class="text-sm" style:color="var(--color-muted)">
-        Nothing to show yet. <a href="/" style:color="var(--color-accent)">Import a statement</a> or load
-        sample data to see your month at a glance.
+        Nothing here yet. Tap <strong>+ Add expense</strong> above to log your first transaction, or
+        <a href="/" style:color="var(--color-accent)">import a statement</a>.
       </p>
     </div>
   {:else}
-    <h1 class="mb-1 text-2xl font-semibold">{monthName(currentMonth)}</h1>
-    <p class="mb-6 text-sm" style:color="var(--color-muted)">Your month at a glance.</p>
-
     {#if needsReview > 0}
       <a
         href="/categories/review"
@@ -171,135 +264,68 @@
       </a>
     {/if}
 
-    <!-- This month — spent vs income, what's left, and a safe daily spend. -->
-    <section class="card rise p-5">
-      <div class="flex items-start justify-between gap-3">
-        <div class="min-w-0">
-          <p class="text-sm" style:color="var(--color-muted)">Spent this month</p>
-          <p class="num mt-1 text-4xl font-semibold tracking-tight">
-            {formatMoney(budget.spent_minor)}
-          </p>
-          {#if budget.income_minor > 0n}
-            <p class="mt-1 text-sm" style:color="var(--color-muted)">
-              of {formatMoney(budget.income_minor)} income
-            </p>
-          {/if}
-        </div>
-        <div class="flex flex-none flex-col items-end gap-2">
-          {#if budget.income_minor > 0n}
-            <span
-              class="num rounded-full px-2.5 py-0.5 text-sm font-semibold"
-              style:color={budget.over_pace ? 'var(--color-danger)' : 'var(--color-success)'}
-              style:background-color={budget.over_pace
-                ? 'color-mix(in oklab, var(--color-danger) 12%, transparent)'
-                : 'color-mix(in oklab, var(--color-success) 14%, transparent)'}
-            >
-              {budget.pct_spent}%
-            </span>
-          {/if}
-          <button
-            type="button"
-            class="btn btn-ghost"
-            style="padding: 0.4rem 0.8rem; font-size: 0.8rem;"
-            onclick={() => {
-              showIncome = !showIncome;
-              incomeError = null;
-            }}
-          >
-            + Income
-          </button>
-        </div>
-      </div>
+    <!-- Month slider + BudgetBox: the centerpiece. -->
+    <MonthSlider
+      months={monthsAvailable}
+      currentMonth={activeMonth}
+      onChange={(m) => (activeMonth = m)}
+    >
+      <BudgetBox
+        monthKey={activeMonth}
+        monthLabel={activeMonthLabel}
+        flow={activeFlow}
+        {todayIso}
+        onLabelClick={() => (pickerOpen = true)}
+        onAddIncome={() => {
+          showIncome = !showIncome;
+          incomeError = null;
+        }}
+        onAddExpense={() => goto('/transactions')}
+      />
+    </MonthSlider>
 
-      {#if budget.income_minor > 0n}
-        <div
-          class="mt-4 h-2 overflow-hidden rounded-full"
-          style="background-color: var(--color-elevated);"
-        >
-          <div
-            class="h-full rounded-full"
-            style:width="{Math.min(100, budget.pct_spent)}%"
-            style:background-color={budget.remaining_minor < 0n
-              ? 'var(--color-danger)'
-              : 'transparent'}
-            style:background-image={budget.remaining_minor < 0n ? 'none' : 'var(--grad-primary)'}
-          ></div>
-        </div>
-        <div class="mt-4 grid grid-cols-3 gap-2 text-center">
-          <div>
-            <p
-              class="num text-base font-semibold"
-              style:color={budget.remaining_minor < 0n
-                ? 'var(--color-danger)'
-                : 'var(--color-text)'}
+    {#if showIncome}
+      <section class="card rise mt-4 p-5">
+        <h2 class="mb-3 text-sm font-semibold">Add income</h2>
+        <div class="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+          <label class="block text-sm">
+            <span class="mb-1 block text-xs" style:color="var(--color-muted)">Amount</span>
+            <input
+              type="text"
+              inputmode="decimal"
+              bind:value={incomeAmount}
+              placeholder="50000"
+              class="num w-full rounded-lg border px-3 py-2"
+              style="border-color: var(--color-border); background-color: var(--color-bg);"
+            />
+          </label>
+          <label class="block text-sm">
+            <span class="mb-1 block text-xs" style:color="var(--color-muted)"
+              >Source (optional)</span
             >
-              {formatMoney(budget.remaining_minor)}
-            </p>
-            <p class="text-xs" style:color="var(--color-muted)">Remaining</p>
-          </div>
-          <div>
-            <p class="num text-base font-semibold">{formatMoney(budget.daily_pace_minor)}</p>
-            <p class="text-xs" style:color="var(--color-muted)">Daily pace</p>
-          </div>
-          <div>
-            <p class="num text-base font-semibold">{budget.days_left}</p>
-            <p class="text-xs" style:color="var(--color-muted)">Days left</p>
+            <input
+              type="text"
+              bind:value={incomeLabel}
+              placeholder="Salary"
+              class="w-full rounded-lg border px-3 py-2"
+              style="border-color: var(--color-border); background-color: var(--color-bg);"
+            />
+          </label>
+          <div class="flex items-end">
+            <button type="button" class="btn btn-primary w-full sm:w-auto" onclick={submitIncome}>
+              Add
+            </button>
           </div>
         </div>
-        {#if budget.over_pace}
-          <p class="mt-3 text-xs" style:color="var(--color-danger)">
-            You're spending faster than your income for the month — ease off to stay on track.
-          </p>
+        {#if incomeError}
+          <p class="mt-2 text-xs" style:color="var(--color-danger)">{incomeError}</p>
         {/if}
-      {:else}
-        <p class="mt-3 text-sm" style:color="var(--color-muted)">
-          Add the income you got this month to see what's left, your safe daily spend, and your
-          pace.
-        </p>
-      {/if}
+      </section>
+    {/if}
 
-      {#if showIncome}
-        <div class="mt-4 border-t pt-4" style="border-color: var(--color-border);">
-          <div class="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
-            <label class="block text-sm">
-              <span class="mb-1 block text-xs" style:color="var(--color-muted)">Amount</span>
-              <input
-                type="text"
-                inputmode="decimal"
-                bind:value={incomeAmount}
-                placeholder="50000"
-                class="num w-full rounded-lg border px-3 py-2"
-                style="border-color: var(--color-border); background-color: var(--color-bg);"
-              />
-            </label>
-            <label class="block text-sm">
-              <span class="mb-1 block text-xs" style:color="var(--color-muted)">
-                Source (optional)
-              </span>
-              <input
-                type="text"
-                bind:value={incomeLabel}
-                placeholder="Salary"
-                class="w-full rounded-lg border px-3 py-2"
-                style="border-color: var(--color-border); background-color: var(--color-bg);"
-              />
-            </label>
-            <div class="flex items-end">
-              <button type="button" class="btn btn-primary w-full sm:w-auto" onclick={submitIncome}>
-                Add
-              </button>
-            </div>
-          </div>
-          {#if incomeError}
-            <p class="mt-2 text-xs" style:color="var(--color-danger)">{incomeError}</p>
-          {/if}
-        </div>
-      {/if}
-    </section>
-
-    <!-- Top categories -->
+    <!-- Top categories — for the ACTIVE month. -->
     <div class="card rise mt-4 p-5" style="animation-delay: 60ms;">
-      <h2 class="mb-3 text-sm font-semibold">Top categories</h2>
+      <h2 class="mb-3 text-sm font-semibold">Top categories · {activeMonthLabel}</h2>
       {#if topCats.length === 0}
         <p class="text-sm" style:color="var(--color-muted)">No spending this month.</p>
       {:else}
@@ -332,7 +358,8 @@
       {/if}
     </div>
 
-    <!-- Spending vs last month (US-INSIGHT) -->
+    <!-- Spending vs last month (US-INSIGHT) — independent of the slider; uses
+         the latest two months in the data. -->
     {#if mom && movers && (movers.increased.length > 0 || movers.decreased.length > 0)}
       <div class="card rise mt-4 p-5" style="animation-delay: 90ms;">
         <h2 class="mb-1 text-sm font-semibold">Spending vs {monthName(mom.previous)}</h2>
@@ -386,35 +413,39 @@
       </div>
     {/if}
 
-    <!-- Recent transactions -->
+    <!-- Recent activity — within the ACTIVE month. -->
     <div class="card rise mt-4 p-5" style="animation-delay: 120ms;">
       <div class="mb-3 flex items-center justify-between">
-        <h2 class="text-sm font-semibold">Recent activity</h2>
+        <h2 class="text-sm font-semibold">Recent · {activeMonthLabel}</h2>
         <a href="/transactions" class="text-xs" style:color="var(--color-accent)">See all →</a>
       </div>
-      <div class="divide-y" style="--tw-divide-opacity: 1;">
-        {#each recent as r (r.key)}
-          {@const color = categoryColor(r.category_id)}
-          <div
-            class="flex items-center gap-3 py-2"
-            style="border-top: 1px solid var(--color-border);"
-          >
-            <CategoryIcon icon={categoryIconName(catName(r.category_id))} {color} tint />
-            <div class="min-w-0 flex-1">
-              <div class="truncate text-sm font-medium">{r.description}</div>
-              <div class="text-xs" style:color="var(--color-muted)">
-                {r.posted_date} · {catName(r.category_id)}
-              </div>
-            </div>
-            <span
-              class="num text-sm font-medium"
-              style:color={r.amount_minor < 0n ? 'var(--color-danger)' : 'var(--color-success)'}
+      {#if recent.length === 0}
+        <p class="text-sm" style:color="var(--color-muted)">No transactions in this month.</p>
+      {:else}
+        <div class="divide-y">
+          {#each recent as r (r.key)}
+            {@const color = categoryColor(r.category_id)}
+            <div
+              class="flex items-center gap-3 py-2"
+              style="border-top: 1px solid var(--color-border);"
             >
-              {formatMoney(r.amount_minor)}
-            </span>
-          </div>
-        {/each}
-      </div>
+              <CategoryIcon icon={categoryIconName(catName(r.category_id))} {color} tint />
+              <div class="min-w-0 flex-1">
+                <div class="truncate text-sm font-medium">{r.description}</div>
+                <div class="text-xs" style:color="var(--color-muted)">
+                  {r.posted_date} · {catName(r.category_id)}
+                </div>
+              </div>
+              <span
+                class="num text-sm font-medium"
+                style:color={r.amount_minor < 0n ? 'var(--color-danger)' : 'var(--color-success)'}
+              >
+                {formatMoney(r.amount_minor)}
+              </span>
+            </div>
+          {/each}
+        </div>
+      {/if}
     </div>
 
     {#if goals.length > 0}
@@ -452,4 +483,13 @@
       </div>
     {/if}
   {/if}
+
+  <!-- Month picker — rendered once at the page level so it overlays everything. -->
+  <MonthPickerSheet
+    open={pickerOpen}
+    currentMonth={activeMonth}
+    monthsWithData={monthsWithDataSet}
+    onSelect={(m) => (activeMonth = m)}
+    onClose={() => (pickerOpen = false)}
+  />
 </main>

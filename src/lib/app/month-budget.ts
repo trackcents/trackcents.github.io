@@ -18,6 +18,13 @@ export interface MonthBudget {
   remaining_minor: bigint;
   /** Display-only spent/income × 100, rounded to a whole percent; 0 when income is 0. */
   pct_spent: number;
+  /**
+   * Display-only headroom %: (income − spent) / income × 100, rounded.
+   * SIGNED — goes NEGATIVE when overspent (e.g. −8 = 8% over budget).
+   * Used by the home-screen "% left" pill, which is intentionally honest about
+   * overspending instead of flooring at 0. 0 when income is 0.
+   */
+  pct_left: number;
   /** Whole calendar days remaining AFTER today (0 on the last day of the month). */
   days_left: number;
   /** Average actual spend per elapsed day (spent / days elapsed); 0 before the month starts. */
@@ -60,6 +67,9 @@ export function monthBudget(
   const pace = daysElapsed > 0 ? spent / BigInt(daysElapsed) : 0n;
 
   const pctSpent = income > 0n ? Math.round(Number((spent * 1000n) / income) / 10) : 0;
+  // Headroom % — signed, can be negative when spent > income.  BigInt division
+  // truncates toward zero, which preserves the sign of `remaining`.
+  const pctLeft = income > 0n ? Math.round(Number((remaining * 1000n) / income) / 10) : 0;
 
   // Even-pace check via cross-multiplication (stays in bigint, no floats):
   // projected = spent * lastDay / elapsed > income  ⇔  spent*lastDay > income*elapsed.
@@ -71,6 +81,7 @@ export function monthBudget(
     spent_minor: spent,
     remaining_minor: remaining,
     pct_spent: pctSpent,
+    pct_left: pctLeft,
     days_left: daysLeft,
     daily_pace_minor: pace,
     over_pace: overPace
