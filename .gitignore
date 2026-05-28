@@ -85,3 +85,8 @@ tests/fixtures/**/*.pdf
 
 # verif-kit is its own published repo (github.com/chitti-learns-ai/verif-kit) — not embedded here
 /verif-kit/
+
+# REAL bank statement text extracted to verify parsers locally; MUST NOT be committed (Constitution Principle I — privacy absolute).
+reports/temp3-survey/
+reports/chef/screenshots/
+reports/chef/

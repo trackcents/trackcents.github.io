@@ -9,7 +9,8 @@
   import { detectPaychecks, type Paycheck } from '$lib/app/paycheck-detector';
   import { groupIntoBudgetWindows, type BudgetAnchor } from '$lib/app/budget-window';
   import { computeBudgetSummaries, type BankTxn } from '$lib/app/budget-summary';
-  import { summaryFromImports } from '$lib/app/categorization-glue';
+  import { summaryFromImports, flowIntentRowsFromImports } from '$lib/app/categorization-glue';
+  import { inferAllFlowIntents } from '$lib/app/flow-intent';
   import { sortedMonths, netByMonth } from '$lib/app/spending-summary';
   import { computeCategoryBudgets, budgetTotals } from '$lib/app/category-budget';
   import { loadCategorization, type CategorizationState } from '$lib/db/categorization-store';
@@ -133,16 +134,50 @@
     persistAnchor();
   }
 
-  const bankTxns = $derived<BankTxn[]>(
-    imports
-      .filter(
-        (imp) =>
-          imp.statement.account_type === 'checking' || imp.statement.account_type === 'savings'
-      )
-      .flatMap((imp) =>
-        imp.transactions.map((t) => ({ posted_date: t.posted_date, amount_minor: t.amount_minor }))
-      )
-  );
+  // REQ-B0.1 + REQ-B0.6: only count real spend in "Spent from bank".
+  // Apply the same flow_intent inference Home uses, then drop CC payments,
+  // transfers, and investments before feeding the budget summary.  This
+  // makes the per-window Spent number honest (no more "-$7,553 left" lies
+  // because the bank-to-Robinhood-Securities transfer was treated as spend).
+  const bankTxns = $derived.by<BankTxn[]>(() => {
+    const eligibleImports = imports.filter(
+      (imp) => imp.statement.account_type === 'checking' || imp.statement.account_type === 'savings'
+    );
+    const rows = flowIntentRowsFromImports(
+      eligibleImports as unknown as ImportRecord[],
+      cat.annotations
+    );
+    const intents = inferAllFlowIntents(rows);
+    const keepKeys = new Set<string>();
+    for (const r of rows) {
+      const i = intents.get(r.key) ?? 'unknown';
+      // Spend-side intents only (purchase / bill / loan / fees / interest /
+      // cash_out / unknown).  Refunds (positive amounts) flow through so they
+      // net.  CC payments + transfers + investments are excluded.
+      if (
+        i === 'purchase' ||
+        i === 'bill_pay' ||
+        i === 'loan_payment' ||
+        i === 'fees' ||
+        i === 'interest_charged' ||
+        i === 'cash_out' ||
+        i === 'unknown' ||
+        i === 'refund'
+      ) {
+        keepKeys.add(r.key);
+      }
+    }
+    const out: BankTxn[] = [];
+    for (const imp of eligibleImports) {
+      imp.transactions.forEach((t, i) => {
+        const key = `${imp.pdf_source_hash}#${i}`;
+        if (keepKeys.has(key)) {
+          out.push({ posted_date: t.posted_date, amount_minor: t.amount_minor });
+        }
+      });
+    }
+    return out;
+  });
 
   const summaries = $derived(
     anchor === null

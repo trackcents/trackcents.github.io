@@ -71,6 +71,14 @@ export interface TransactionAnnotation {
    * means the transaction is NOT split.
    */
   split?: TransactionSplit[];
+  /**
+   * Optional manual override of the inferred flow_intent (REQ-B0.1).  Set this
+   * via the row-edit drawer when the user wants to flip e.g. an "unknown" into
+   * a "transfer_self" so it stops counting toward Spent.  Wins over the
+   * built-in pattern map and the auto-detectors.  Format: one of the
+   * `FlowIntent` literals from `src/lib/app/flow-intent.ts`.
+   */
+  flow_intent?: string;
 }
 
 /** One leg of a split transaction (US-SPLIT). */

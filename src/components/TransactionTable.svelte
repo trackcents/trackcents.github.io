@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ParsedTransaction, TransactionType } from '$lib/adapters/types';
   import { formatMoney } from '$lib/util/money';
+  import { cleanDescription } from '$lib/util/description-clean';
   import type { ReconciliationLink } from '$lib/app/reconciliation';
   import ReconciliationLinkBadge from './ReconciliationLinkBadge.svelte';
 
@@ -66,8 +67,8 @@
           <td class="px-3 py-2 font-mono text-xs whitespace-nowrap text-[var(--color-text)]">
             {txn.posted_date}
           </td>
-          <td class="px-3 py-2 text-[var(--color-text)]">
-            {txn.description}
+          <td class="px-3 py-2 text-[var(--color-text)] desc-cell" title={txn.description}>
+            <span class="desc-text">{cleanDescription(txn.description)}</span>
             {#if link}
               <button
                 type="button"
@@ -127,3 +128,21 @@
   (you paid from your bank) or <em>Refund</em> (a merchant returned money to your card). Hover the Type
   column for details.
 </p>
+
+<style>
+  /* REQ-B1.1 — clamp the Description cell to 2 lines max with right-truncation.
+     The full description survives in the title= tooltip; tap-to-expand is a
+     future affordance. */
+  :global(.desc-cell) {
+    max-width: 240px;
+  }
+  :global(.desc-text) {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-clamp: 2;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    word-break: break-word;
+  }
+</style>

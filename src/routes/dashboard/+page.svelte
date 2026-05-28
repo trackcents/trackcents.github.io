@@ -9,11 +9,17 @@
   import { loadState } from '$lib/db/store';
   import type { ImportRecord } from '$lib/db/store';
   import { loadCategorization, type CategorizationState } from '$lib/db/categorization-store';
-  import { summaryFromImports, detailedRowsFromImports } from '$lib/app/categorization-glue';
+  import {
+    summaryFromImports,
+    detailedRowsFromImports,
+    flowIntentRowsFromImports,
+    summaryByFlowIntent,
+    spendableFlowByMonth
+  } from '$lib/app/categorization-glue';
+  import { inferAllFlowIntents } from '$lib/app/flow-intent';
   import {
     summarize,
     spendingByCategory,
-    netByMonth,
     spendingByCategoryByMonth,
     sortedMonths
   } from '$lib/app/spending-summary';
@@ -58,9 +64,29 @@
   const toDollars = (minor: bigint): number => Number(minor) / 100;
   const money = (v: unknown): string => formatMoney(BigInt(Math.round(Number(v) * 100)));
 
-  const txns = $derived(summaryFromImports(imports, cat.annotations));
-  const totals = $derived(summarize(txns));
-  const hasData = $derived(txns.length > 0);
+  // Flow-intent-aware projections (REQ-B0.1) — Money In / Money Out on the
+  // dashboard hero MUST be the truthful spend/income, not gross outflow that
+  // double-counts CC payments + investments + transfers.
+  const allTxns = $derived(summaryFromImports(imports, cat.annotations));
+  const flowIntents = $derived(
+    inferAllFlowIntents(flowIntentRowsFromImports(imports, cat.annotations))
+  );
+  const projections = $derived(summaryByFlowIntent(imports, cat.annotations, flowIntents));
+  const spendTxns = $derived(projections.spend);
+  const incomeTxns = $derived(projections.income);
+  // Totals computed from the honest projections.
+  const totals = $derived.by(() => {
+    const sIn = summarize(spendTxns); // refunds appear as inflow here
+    const iIn = summarize(incomeTxns); // real income only
+    const outflow = sIn.outflow_minor - sIn.inflow_minor; // net spend (positive)
+    const cleanOutflow = outflow < 0n ? 0n : outflow;
+    return {
+      inflow_minor: iIn.inflow_minor,
+      outflow_minor: cleanOutflow,
+      net_minor: iIn.inflow_minor - cleanOutflow
+    };
+  });
+  const hasData = $derived(allTxns.length > 0);
 
   // Drill-down: clicking a pie slice lists that category's spending below.
   let drillCategory = $state<string | null>(null);
@@ -71,9 +97,11 @@
       : detailed.filter((r) => r.amount_minor < 0n && catName(r.category_id) === drillCategory)
   );
 
-  const byCat = $derived(spendingByCategory(txns));
+  // Spending-by-category uses ONLY the spend projection so CC payments + transfers
+  // don't pollute the pie slices.
+  const byCat = $derived(spendingByCategory(spendTxns));
   const topCat = $derived([...byCat.entries()].sort((a, b) => (b[1] > a[1] ? 1 : -1))[0] ?? null);
-  const nbm = $derived(netByMonth(txns));
+  const nbm = $derived(spendableFlowByMonth(imports, cat.annotations));
   const months = $derived(sortedMonths(nbm));
   const monthLabel = (ym: string): string => ym;
 
@@ -140,7 +168,8 @@
     ]
   });
 
-  const sbcbm = $derived(spendingByCategoryByMonth(txns));
+  // Stacked spending-by-category-by-month uses spend projection only (REQ-B0.1).
+  const sbcbm = $derived(spendingByCategoryByMonth(spendTxns));
   const stackedCatIds = $derived([
     ...new Set([...sbcbm.values()].flatMap((inner) => [...inner.keys()]))
   ]);

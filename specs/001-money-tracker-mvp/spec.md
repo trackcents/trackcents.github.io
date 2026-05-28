@@ -258,3 +258,177 @@ These are captured here so the constitution and architecture stay consistent acr
 
 ### Cost & Hosting (Principle III)
 - This feature introduces no recurring infrastructure cost. App is hosted as static files (free). Sync writes to the user's own Google Drive (free, user's storage quota). No server we operate touches user data.
+
+---
+
+# Appendix B — v1.1 binding requirements (2026-05-28)
+
+> These requirements were agreed across the WhatsApp brainstorm + persona feedback + real-data validation against the user's actual Chase / BofA / Amex / Robinhood statements (specs/001-money-tracker-mvp/temp3-evidence/). They override v1.0 wherever they conflict.
+
+## B.1 The Master-Chef rule (binding for all subsequent work)
+
+Every code-modifying subtask MUST pass the 23-question Chef-Gate defined in `MASTER_CHEF.md` (repo root). The chef-supervisor subagent (`.claude/agents/chef-supervisor.md`) is the enforcer. Subtasks without a `GATE: GO` verdict in `reports/chef/<task-id>.md` are not allowed to ship.
+
+The five highest-leverage gate questions (the supervisor weights these heaviest):
+- **Q10 READ-IT-OUT-LOUD** — load real data, read the headline aloud; does it match real life?
+- **Q11 BEFORE-snapshot** — write one sentence describing what's broken RIGHT NOW.
+- **Q14 LEAF-or-ROOT** — name the N other broken things that heal when this one is fixed.
+- **Q17 ANTI-MAGIC** — name the tempting "auto-do-the-thing" that I explicitly will NOT do.
+- **Q22 MONEY** — integer cents only, no floats, no amount-based classification.
+
+## B.2 New P0 requirements (truth-and-math fixes)
+
+These resolve the central complaint: the app screams the user is broke when the user is saving.
+
+### REQ-B0.1 — `flow_intent` classifier (THE root fix)
+
+Every transaction MUST carry an inferred `flow_intent` tag derived deterministically from its description, account context, and reconciliation data:
+
+| `flow_intent` | Definition | Counted as Spend? | Counted as Income? |
+|---|---|---|---|
+| `purchase` | Real-life spending (groceries, restaurants, gas, etc.) | YES | No |
+| `bill_pay` | Recurring living expense (rent/mortgage, utilities, phone, subscriptions) | YES | No |
+| `loan_payment` | Auto loan, student loan, personal-loan principal+interest | YES | No |
+| `cc_payment` | Money moving from bank to user's own credit card | NO (CC purchases counted on CC side) | No |
+| `transfer_self` | Money moving between two of the user's own accounts | NO | No |
+| `investment_out` | Money to brokerage / IRA / retirement (Robinhood Securities, Fidelity contributions) | NO | No |
+| `salary` | Regular paycheck (detected by recurring cadence) | No | YES |
+| `refund` | Merchant credit reversing an earlier purchase | Reduces YES | No |
+| `interest_earned` | Bank interest, dividend | No | YES |
+| `gift_in` | Zelle / cheque from a person, no matching outflow | No | YES (but flagged as one-off) |
+| `unknown` | Not yet classified | YES by default with warning | No |
+
+The "Spent this month" headline on Home, the "Spent from bank" total on Budget, the Money-Out card on Dashboard, the spending bars on Spending Trends, and every per-category total MUST be computed from `flow_intent in (purchase, bill_pay, loan_payment)` only.
+
+### REQ-B0.2 — Default category seeding on first run
+
+On first onboarding (and via Settings > "Seed default categories" for existing users), the app MUST create:
+
+Categories: Groceries, Eating out, Transport, Gas, Rent/Mortgage, Utilities, Phone and Internet, Insurance, Healthcare, Subscriptions, Shopping, Travel, Entertainment, Income (salary), Income (other), CC Payment, Transfer, Investment, Refund, Fees, Education, Gifts/Family, Cash, Uncategorized.
+
+Pre-seeded rules (substring, case-insensitive, applied at import time):
+
+- COSTCO, WHOLEFOODS, WHOLE FOODS, H-E-B, HEB, KROGER, TRADER JOE, ALDI, WALMART, SAFEWAY, BIGBASKET => Groceries
+- STARBUCKS, CHAI POINT, MCDONALD, CHIPOTLE, DOORDASH, UBER EATS, SWIGGY, ZOMATO, RESTAURANT, CAFE, COFFEE => Eating out
+- UBER, LYFT, OLA => Transport
+- SHELL, CHEVRON, EXXON, MOBIL, BP GAS, INDIAN OIL, GAS STATION => Gas
+- RENT, MORTGAGE, PENNYMAC, ROCKETMTG, HSR LAYOUT => Rent/Mortgage
+- ATT, AT and T, COMCAST, XFINITY, SPECTRUM, T-MOBILE, TMOBILE, VERIZON, JIO, AIRTEL => Phone and Internet
+- GEICO, PROGRESSIVE, STATE FARM, ALLSTATE, AMERICAN GEN LIF, LIC, HDFC LIFE => Insurance
+- AMAZON PRIME, NETFLIX, SPOTIFY, OPENAI, CHATGPT, CLAUDE.AI, ANTHROPIC, ICLOUD, GOOGLE STORAGE => Subscriptions
+- AMAZON.COM, AMAZON MKTPL, AMAZON.IN, FLIPKART, TARGET, BEST BUY, MACYS, ROSS, MARSHALLS => Shopping
+- VW CREDIT, AUTO LOAN, AFFIRM, KLARNA => Loan/Installment
+- PAYMENT TO CHASE CARD, PAYMENT TO BOFA, ROBINHOOD CARD PAYMENT, DISCOVER E-PAYMENT, AMERICAN EXPRESS ACH PMT, BK OF AMER VISA ONLINE PMT, CHASE CC AUTOPAY, CITI AUTOPAY => CC Payment (also sets `flow_intent=cc_payment`)
+- ROBINHOOD SECURITIES, FIDELITY, VANGUARD, SCHWAB, COINBASE => Investment (also sets `flow_intent=investment_out`)
+- KITSAP CU TRANSFER, BANK OF AMERICA PAYMENT (when matched to BofA CC), TRANSFER, ZELLE TRANSFER, XFER => Transfer (also sets `flow_intent=transfer_self` if cross-account-match exists)
+- PAYROLL, SALARY, ALTERA CORPORATI PAYROLL, INFOSYS => Income (salary) (also sets `flow_intent=salary`)
+- INTEREST EARNED, INTEREST PAID, DIVIDEND => Interest earned (sets `flow_intent=interest_earned`)
+- INTEREST CHARGE, LATE FEE, OVERDRAFT FEE, FOREIGN TXN FEE => Fees
+
+User additions / overrides always win over defaults.
+
+### REQ-B0.3 — cleanDescription at the boundary
+
+A single function `cleanDescription(rawDescription: string): string` MUST exist in `src/lib/util/description-clean.ts` and be applied ONCE at parser-output time (in adapter/normalization), then used everywhere downstream (Recurring, Spending Trends, Statement view, Transactions list, Categorization).
+
+Strips:
+- Trailing `Web ID:\s*\d+`
+- Trailing `PPD ID:\s*\d+`
+- Leading `^\d{2}/\d{2}\s+` (MM/DD prefix from descriptions that already have a posted_date)
+- Trailing reference-number tails of 9+ consecutive alphanumerics (e.g. Pwbs8157638769, Ckf148086844POS, 1050187677259)
+- Trailing/leading whitespace
+- Multi-space collapse
+
+Preserves the original in `raw_text` for provenance. Tests required.
+
+### REQ-B0.4 — Recurring detector quality gate
+
+The recurring detector MUST satisfy ALL the following before claiming a cadence:
+- ≥4 occurrences (current code says ≥2 — change).
+- ≥3 gap measurements with max gap deviation ≤ 25% of median gap.
+- Magnitude stability: all amounts within ±35% of median magnitude. If not, the stream is "Variable" — show typical=median but mark visually as "amounts vary".
+- Clean descriptor: uses cleanDescription() for the group key, so "Web ID:…" doesn't split one merchant into N rows.
+
+If conditions fail: no cadence claim (display name + count only, NO predicted-next-due, NO Weekly/Monthly badge).
+
+### REQ-B0.5 — Bulk transfer-pair affordance
+
+The "Likely transfers between your accounts" panel on /transactions MUST offer a single "Exclude all (N pairs)" button that marks every detected pair as `flow_intent=transfer_self` in one tap. The bulk action is reversible from the same panel.
+
+### REQ-B0.6 — Budget anchor: re-window OR remove
+
+Two acceptable options (implementer choice, documented in commit):
+- (a) Make the anchor shifter ACTUALLY re-window (compute different paycheck pairs depending on anchor month). Pro: matches user expectation. Con: complex math, edge cases.
+- (b) Remove the shifter entirely. Show only the canonical windows starting at the first detected paycheck. Document "the budget month is anchored to your earliest paycheck; if that's wrong, drop it from Statements." Simple, honest, no lie.
+
+The current rotates-labels-only behaviour is forbidden — the control lies.
+
+### REQ-B0.7 — Provenance affordance on every aggregate
+
+Every number on every screen that represents an aggregate (Home spend, Budget Spent-from-bank, Top-category totals, Recurring typical amounts, Spending-Trends biggest changes) MUST be either tappable OR have a clear-attribution caption that names what compose it (e.g., "Net of N transactions; excludes K transfers + L CC payments + M investments").
+
+For Home's "Spent $X": tap opens a sheet showing the constituent transactions ranked by amount, grouped by category, with the excluded-non-spend rows shown at the bottom with a "These don't count toward Spent" note.
+
+## B.3 New P1 requirements (UX truth-and-clarity fixes)
+
+### REQ-B1.1 — Statement Card description column: right-truncate, not left
+
+The Description column in StatementCard transaction table MUST use `text-overflow: ellipsis` with `direction: ltr` (default) so the START of the merchant name is preserved. Mobile: column expands to fill available width; tap row to expand full description.
+
+### REQ-B1.2 — Hide developer jargon from end-users
+
+Strings the user must never see: `strategy B+C+D`, `US-SPLIT`, `US-P1-D`, `pdf_source_hash`, internal task IDs, parser version strings (acceptable in a collapsed "Details" expander, never on the main statement card header).
+
+### REQ-B1.3 — Dashboard month picker
+
+The Dashboard view (/dashboard) MUST default to the current calendar month and offer a single-tap month picker matching the one on Home. Defaulting to "all imported history" makes the numbers meaningless.
+
+### REQ-B1.4 — "Other inflows" definition fix
+
+The Home BudgetBox "+$X other inflows" line MUST be computed as `total income for the month MINUS detected_recurring_salary_streams`, NOT `total minus single largest deposit`. If no recurring salary stream is detected, omit the line entirely (don't fabricate a base).
+
+### REQ-B1.5 — Same-screen carry-line wrap, no chevron overlap
+
+The Home BudgetBox carry-forward chip (e.g. `-$384.39 ended April (FYI — not added in)`) MUST wrap on its own visual line; no overlap with the `<` / `>` slider chevrons.
+
+### REQ-B1.6 — Single "Spending vs prior month" card (not duplicated)
+
+The Home page renders ONE "Spending vs <prev>" card. Currently a render bug shows it twice; the second instance is dead code.
+
+### REQ-B1.7 — Drill-through works when both sides are imported
+
+When a Chase CC payment row is clicked and the matching CC statement IS in the database, the "Import the matching CC statement to drill in" message MUST NOT appear; the user MUST land on the linked CC statement drill view.
+
+### REQ-B1.8 — Easier reset / re-onboard
+
+Onboarding MUST be re-runnable from Settings > "Reset and re-onboard". Currently buried as "Clear all data" which sounds destructive and doesn't reset onboarding flags.
+
+## B.4 New P2 requirements (data correctness fixes)
+
+### REQ-B2.1 — Chase CC adapter robustness
+
+Fix the failing-import case "could not find Previous Balance or New Balance in Account Summary box" — extend the matcher to handle the variant Chase CC Account Summary layouts found in temp3 (Statements-9, Statements-11). The chef-gate test plan must include both real PDFs.
+
+### REQ-B2.2 — All money math is over flow_intent-aware projections
+
+Every place that calls `summaryFromImports` MUST get a projection that respects `flow_intent`:
+- `summarySpendableFromImports` — spending only (purchase | bill_pay | loan_payment | unknown)
+- `summaryIncomeFromImports` — income only (salary | interest_earned | gift_in)
+- `summaryTransfersFromImports` — money movement only
+- `summaryAllFromImports` — everything (for filters / Transactions list)
+
+Tests for each projection with the temp3 fixtures.
+
+### REQ-B2.3 — Empty / zero states never lie
+
+If a card has zero data, it shows "No data yet" — not `$0.00` (which looks like a meaningful zero balance).
+
+## B.5 Verification gate
+
+Every B.x requirement MUST be verified against the temp3 real-data fixtures:
+- Playwright at 375x812 viewport
+- Load all 14 successfully-imported PDFs
+- Walk Home > Budget > Transactions > Statements > Dashboard > Recurring > Spending Trends
+- READ-IT-OUT-LOUD test on each headline number
+- Screenshots stored to `reports/chef/screenshots/<task-id>/`
+- Murali (USD power user) + Bhargav (INR monthly-paid user) persona agents both sign off

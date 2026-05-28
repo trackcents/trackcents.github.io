@@ -13,11 +13,16 @@
     saveCategorization,
     type CategorizationState
   } from '$lib/db/categorization-store';
-  import { summaryFromImports, detailedRowsFromImports } from '$lib/app/categorization-glue';
+  import {
+    summaryFromImports,
+    detailedRowsFromImports,
+    spendableFlowByMonth
+  } from '$lib/app/categorization-glue';
   import { runAutoCategorize } from '$lib/app/auto-categorize';
+  import { seedCategoriesAndRules, shouldAutoSeed } from '$lib/app/default-categories';
   import { detectPaychecks } from '$lib/app/paycheck-detector';
   import type { ImportSuccess } from '$lib/app/import';
-  import { netByMonth, spendingByCategoryByMonth } from '$lib/app/spending-summary';
+  import { spendingByCategoryByMonth } from '$lib/app/spending-summary';
   import { getDisplayCurrency } from '$lib/util/money';
   import { today } from '$lib/util/date';
   import { monthOverMonthInsight, topMovers } from '$lib/app/spending-insights';
@@ -41,6 +46,19 @@
     cat = await loadCategorization();
     goals = await loadGoals();
     loading = false;
+    // Auto-seed the starter category + rule set (REQ-B0.2) for users who
+    // have data but zero categories — covers the real-world "I imported 14
+    // statements and everything is Uncategorized" case.  A returning user
+    // who deliberately deleted categories keeps their empty state.
+    if (imports.length > 0 && shouldAutoSeed(cat)) {
+      const seeded = seedCategoriesAndRules();
+      cat = {
+        categories: seeded.categories,
+        rules: seeded.rules,
+        annotations: cat.annotations
+      };
+      await saveCategorization(cat);
+    }
     // Run the three-tier auto-categoriser (user rules → keyword fallback →
     // learned naive-Bayes) on every load.  Catches any newly-imported rows
     // and any descriptions the now-larger training set can finally classify.
@@ -122,7 +140,11 @@
 
   const txns = $derived(summaryFromImports(imports, cat.annotations));
   const hasData = $derived(txns.length > 0);
-  const nbm = $derived(netByMonth(txns));
+  // Flow-intent-aware month flow (REQ-B0.1): "Spent" EXCLUDES CC payments,
+  // inter-account transfers, and investment transfers (which are money
+  // movement, not life cash-flow).  "Income" EXCLUDES money-movement inflows.
+  // This is what the BudgetBox renders as the headline.
+  const nbm = $derived(spendableFlowByMonth(imports, cat.annotations));
   const sbm = $derived(spendingByCategoryByMonth(txns));
 
   /** Months we can show in the slider — every month with data, plus the
