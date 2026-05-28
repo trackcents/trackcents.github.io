@@ -300,12 +300,13 @@
     </div>
 
     <p class="mt-4 text-xs" style:color="var(--color-muted)">
-      "Spent" counts money that left checking/savings in the window (including credit-card
-      payments), so individual card purchases aren't double-counted. Transfers to savings are
-      counted as "spend" by default —
-      <a href="/transactions#transfer-pairs" style:color="var(--color-accent)"
-        >mark them on the transactions page</a
-      > to exclude them and see a truer burn rate.
+      "Spent" is your real spend — credit-card payments to your own cards, transfers between your
+      own accounts, and investment transfers (Robinhood Securities, Fidelity 401k) are automatically <strong
+        >excluded</strong
+      >
+      so this number reflects life-spend, not money movement. If something looks miscategorized,
+      <a href="/transactions" style:color="var(--color-accent)">tap the row in Transactions</a> and override
+      its type.
     </p>
   {/if}
 
