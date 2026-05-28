@@ -20,6 +20,11 @@ export interface Category {
   name: string;
   /** Optional UI color (hex or CSS var); not used by the matching logic. */
   color?: string;
+  /** Optional icon override (IconKey from category-visuals.ts).  When absent
+   *  the icon is auto-mapped by name.  Set by the user via the rename sheet
+   *  in CategoryPicker.  Free-form string so a future emoji-mode doesn't
+   *  require a schema migration. */
+  icon?: string;
 }
 
 export interface CategoryRule {
@@ -255,6 +260,37 @@ export function pruneAnnotation(a: TransactionAnnotation): TransactionAnnotation
     return null;
   }
   return cleaned;
+}
+
+/**
+ * Rename a category and/or set its icon override.  Returns the new
+ * categories list (other entries are unchanged).  Pure.
+ *
+ * - When `newName` is provided + non-empty, the name is updated.
+ * - When `newIcon` is provided (including empty string to clear the
+ *   override), the icon is updated.  Pass `undefined` to leave alone.
+ *
+ * Annotations and rules are NOT touched — they reference the category
+ * by id, which is stable across a rename.
+ */
+export function renameCategory(
+  categories: Category[],
+  id: string,
+  newName?: string,
+  newIcon?: string
+): Category[] {
+  return categories.map((c) => {
+    if (c.id !== id) return c;
+    const next: Category = { ...c };
+    if (newName !== undefined && newName.trim().length > 0) {
+      next.name = newName.trim();
+    }
+    if (newIcon !== undefined) {
+      if (newIcon === '') delete next.icon;
+      else next.icon = newIcon;
+    }
+    return next;
+  });
 }
 
 /**

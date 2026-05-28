@@ -32,6 +32,7 @@
     setAnnotation,
     pruneAnnotation,
     deleteCategory as deleteCategoryPure,
+    renameCategory as renameCategoryPure,
     transactionCategoryKey,
     type Category,
     type CategoryRule,
@@ -180,6 +181,16 @@
     categories = [...categories, { id: newId, name: trimmed }];
     await saveCategorization({ categories, rules, annotations });
     return newId;
+  }
+
+  /** Rename a category from CategoryPicker -> CategoryRenameSheet.  The
+   *  category id is stable so annotations + rules survive the rename. */
+  async function handleRenameCategory(
+    id: string,
+    patch: { name: string; icon: string }
+  ): Promise<void> {
+    categories = renameCategoryPure(categories, id, patch.name, patch.icon);
+    await saveCategorization({ categories, rules, annotations });
   }
 
   /** Delete a category from CategoryPicker edit mode (after the confirm
@@ -431,6 +442,7 @@
     onSaved={refreshAfterSave}
     onCreateCategory={handleCreateCategory}
     onDeleteCategory={handleDeleteCategory}
+    onRenameCategory={handleRenameCategory}
   />
 </main>
 

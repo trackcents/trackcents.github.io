@@ -9,6 +9,7 @@
   import { initSyncIfReady } from '$lib/sync/sync-controller';
   import { initTheme } from '$lib/app/theme.svelte';
   import { applyPrefs } from '$lib/app/prefs';
+  import { installKeyboardInsetTracker } from '$lib/app/keyboard-inset';
   import { page } from '$app/stores';
   import PassphraseUnlock from '$components/PassphraseUnlock.svelte';
   import Nav from '$components/Nav.svelte';
@@ -26,6 +27,10 @@
 
   onMount(async () => {
     initTheme(); // apply persisted light/dark choice ASAP
+    // Bottom-sheet pickers (CategoryPicker / AccountPicker) need to lift
+    // above the soft keyboard.  Installs a global visualViewport listener
+    // that drives --kb-inset-bottom on <html>.  Safe to call multiple times.
+    installKeyboardInsetTracker();
     // Probe storage; loadState sets the locked flag if data is encrypted and no key is loaded.
     const state = await loadState();
     locked = isStoreLocked();

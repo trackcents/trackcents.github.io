@@ -405,3 +405,193 @@ describe('Chase Credit Card adapter — stacked-layout Account Summary regressio
     await expect(chaseCreditCardAdapter.parse(stackedFixture)).resolves.toBeDefined();
   });
 });
+
+// ── REAL-layout regression — Hemanth's Statements-9 / Statements-11 ─────────
+// The previous "stackedFixture" was synthetic: it kept labels and values on
+// DIFFERENT Ys so they collapsed to single-cell rows the primary pass skipped.
+// That passed → got committed → but the live import still failed for the
+// 4th time.
+//
+// Investigation against the real anonymized PDFs (temp3/Statements-9.pdf and
+// Statements-11.pdf) showed the ACTUAL Chase Prime Visa layout is HORIZONTAL:
+// label, value, AND a right-column body-text item all share the SAME Y.  Two
+// bugs followed:
+//   (1) Primary pass: cells.slice(moneyIdx).join('') glued the body text onto
+//       "$931.01", parseMoney threw, the catch swallowed it, previous_balance
+//       stayed null.  Same for Cash Advances and Fees Charged.
+//   (2) Stacked fallback: the "ACCOUNT SUMMARY" header row ALSO carries body
+//       text ("Cardmembers earn unlimited 5% back…"), and /^ACCOUNT SUMMARY$/i
+//       (end-anchored) never matched.  Fallback silently did nothing.
+//
+// This fixture mirrors the real layout (label x=18 + value x≈220 + body x=272,
+// all sharing one Y) so the test fails BEFORE the fix and passes AFTER.
+describe('Chase Credit Card adapter — REAL layout regression (Statements-9 / -11)', () => {
+  function makeItem(text: string, x: number, y: number) {
+    return { text, x, y, width: text.length * 5, height: 10, font_size: 9 };
+  }
+
+  /** Exact layout extracted from Statements-9.pdf via PDF.js. */
+  const realLayoutFixtureStmt9 = {
+    pages: [
+      {
+        page_number: 1,
+        items: [
+          // Header at the top + right-side reward blurb on the SAME Y (the
+          // string "Cardmembers earn unlimited 5% back on Amazon.com, Whole"
+          // bleeds into row 762 of the real PDF — both bugs traced to this).
+          makeItem('ACCOUNT SUMMARY', 18, 762),
+          makeItem('Cardmembers earn unlimited 5% back on Amazon.com, Whole', 272, 762),
+
+          // Account number — clean, no bleed.
+          makeItem('Account Number: XXXX XXXX XXXX 7137', 18, 748),
+
+          // Previous Balance — value AND body bleed share the row.
+          makeItem('Previous Balance', 18, 734),
+          makeItem('$931.01', 220, 734),
+          makeItem('status, sign into the Amazon account where your card is loaded,', 272, 734),
+
+          makeItem('Payment, Credits', 18, 722),
+          makeItem('-$1,453.31', 211, 722),
+
+          makeItem('Purchases', 18, 710),
+          makeItem('+$382.95', 216, 710),
+
+          // Cash Advances — body bleed.
+          makeItem('Cash Advances', 18, 698),
+          makeItem('$0.00', 229, 698),
+          makeItem('Have a question about an Amazon order? Sign in', 272, 698),
+
+          makeItem('Balance Transfers', 18, 686),
+          makeItem('$0.00', 229, 686),
+
+          // Fees Charged — body bleed.
+          makeItem('Fees Charged', 18, 674),
+          makeItem('$0.00', 229, 674),
+          makeItem('Amazon Customer Service at 1-888-283-1190.', 272, 674),
+
+          makeItem('Interest Charged', 18, 662),
+          makeItem('$0.00', 229, 662),
+
+          makeItem('New Balance', 18, 648),
+          makeItem('-$139.35', 217, 648),
+
+          makeItem('Opening/Closing Date', 18, 636),
+          makeItem('04/23/26 - 05/22/26', 181, 636),
+
+          makeItem('Credit Access Line', 18, 624),
+          makeItem('$35,000', 220, 624),
+
+          makeItem('Available Credit', 18, 612),
+          makeItem('$35,000', 220, 612),
+
+          makeItem('Cash Access Line', 18, 600),
+          makeItem('$7,000', 224, 600),
+
+          makeItem('Available for Cash', 18, 588),
+          makeItem('$7,000', 224, 588),
+
+          // Period (also appears via the Opening/Closing row above).
+          makeItem('Payment Due Date: 06/19/26', 18, 350),
+          makeItem('Minimum Payment Due: $0.00', 18, 336)
+        ]
+      }
+    ],
+    total_pages: 1
+  };
+
+  test('Statements-9 layout — Previous Balance NOT polluted by body text', async () => {
+    const r = await chaseCreditCardAdapter.parse(realLayoutFixtureStmt9);
+    expect(r.statement.account_last_4).toBe('7137');
+    expect(r.statement.previous_balance_minor).toBe(93101n); // $931.01
+    expect(r.statement.statement_balance_minor).toBe(-13935n); // -$139.35 (credit balance)
+    expect(r.statement.period_start).toBe('2026-04-23');
+    expect(r.statement.period_end).toBe('2026-05-22');
+  });
+
+  test('Statements-9 layout — Cash Advances + Fees parse to 0 (not null) despite body bleed', async () => {
+    const r = await chaseCreditCardAdapter.parse(realLayoutFixtureStmt9);
+    const find = (label: string) =>
+      r.statement.summary_lines.find((l) => l.label === label)?.amount_minor;
+    // If body text leaked into these values, parseMoney would throw and the
+    // lines would be omitted from summary_lines.  Their presence at 0n
+    // proves the fix.
+    expect(find('Cash Advances')).toBe(0n);
+    expect(find('Fees Charged')).toBe(0n);
+  });
+
+  test('Statements-9 layout — Level C balance equation holds end-to-end', async () => {
+    // 931.01 + 382.95 - 1453.31 = -139.35 ✓ (credit balance scenario)
+    const r = await chaseCreditCardAdapter.parse(realLayoutFixtureStmt9);
+    const prev = r.statement.previous_balance_minor!;
+    const newBal = r.statement.statement_balance_minor!;
+    const find = (label: string) =>
+      r.statement.summary_lines.find((l) => l.label === label)?.amount_minor ?? 0n;
+    const charges = find('Purchases');
+    const payments = find('Payment, Credits'); // already signed negative
+    expect(prev + charges + payments).toBe(newBal);
+  });
+
+  /** Statements-11.pdf — same layout, different numbers.  Locks in the
+   *  fix on a second real sample so a "happened to work on -9 only" regression
+   *  can't sneak in. */
+  const realLayoutFixtureStmt11 = {
+    pages: [
+      {
+        page_number: 1,
+        items: [
+          makeItem('ACCOUNT SUMMARY', 18, 762),
+          makeItem('Cardmembers earn unlimited 5% back on Amazon.com, Whole', 272, 762),
+          makeItem('Account Number: XXXX XXXX XXXX 7137', 18, 748),
+
+          makeItem('Previous Balance', 18, 734),
+          makeItem('$1,272.27', 220, 734),
+          makeItem('status, sign into the Amazon account where your card is loaded,', 272, 734),
+
+          makeItem('Payment, Credits', 18, 722),
+          makeItem('-$1,955.33', 211, 722),
+
+          makeItem('Purchases', 18, 710),
+          makeItem('+$566.68', 216, 710),
+
+          makeItem('Cash Advances', 18, 698),
+          makeItem('$0.00', 229, 698),
+          makeItem('Have a question about an Amazon order? Sign in', 272, 698),
+
+          makeItem('Balance Transfers', 18, 686),
+          makeItem('$0.00', 229, 686),
+
+          makeItem('Fees Charged', 18, 674),
+          makeItem('$0.00', 229, 674),
+          makeItem('Amazon Customer Service at 1-888-283-1190.', 272, 674),
+
+          makeItem('Interest Charged', 18, 662),
+          makeItem('$0.00', 229, 662),
+
+          makeItem('New Balance', 18, 648),
+          makeItem('-$116.38', 217, 648),
+
+          makeItem('Opening/Closing Date', 18, 636),
+          makeItem('02/23/26 - 03/22/26', 181, 636),
+
+          makeItem('Credit Access Line', 18, 624),
+          makeItem('$35,000', 220, 624)
+        ]
+      }
+    ],
+    total_pages: 1
+  };
+
+  test('Statements-11 layout — same structure, different numbers, also parses', async () => {
+    const r = await chaseCreditCardAdapter.parse(realLayoutFixtureStmt11);
+    expect(r.statement.account_last_4).toBe('7137');
+    expect(r.statement.previous_balance_minor).toBe(127227n); // $1,272.27
+    expect(r.statement.statement_balance_minor).toBe(-11638n); // -$116.38
+    expect(r.statement.period_start).toBe('2026-02-23');
+    expect(r.statement.period_end).toBe('2026-03-22');
+    // Balance equation: 1272.27 + 566.68 - 1955.33 = -116.38 ✓
+    const find = (label: string) =>
+      r.statement.summary_lines.find((l) => l.label === label)?.amount_minor ?? 0n;
+    expect(find('Purchases')).toBe(56668n);
+    expect(find('Payment, Credits')).toBe(-195533n);
+  });
+});

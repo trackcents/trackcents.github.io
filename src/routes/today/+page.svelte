@@ -21,7 +21,10 @@
   } from '$lib/app/categorization-glue';
   import { runAutoCategorize } from '$lib/app/auto-categorize';
   import { seedCategoriesAndRules, shouldAutoSeed } from '$lib/app/default-categories';
-  import { deleteCategory as deleteCategoryPure } from '$lib/app/categorization';
+  import {
+    deleteCategory as deleteCategoryPure,
+    renameCategory as renameCategoryPure
+  } from '$lib/app/categorization';
   import { listAllAccounts } from '$lib/app/accounts';
   import { detectPaychecks } from '$lib/app/paycheck-detector';
   import type { ImportSuccess } from '$lib/app/import';
@@ -259,6 +262,20 @@
     };
     await saveCategorization(cat);
     return newId;
+  }
+
+  /** Rename a category (and optionally set a custom icon override).
+   *  Annotations + rules reference category_id, which is stable, so a
+   *  rename leaves everything pointing at the right entry. */
+  async function handleRenameCategory(
+    id: string,
+    patch: { name: string; icon: string }
+  ): Promise<void> {
+    cat = {
+      ...cat,
+      categories: renameCategoryPure(cat.categories, id, patch.name, patch.icon)
+    };
+    await saveCategorization(cat);
   }
 
   /** Delete a category (called from CategoryPicker edit mode AFTER the
@@ -703,6 +720,7 @@
     onSaved={refreshAfterSave}
     onCreateCategory={handleCreateCategory}
     onDeleteCategory={handleDeleteCategory}
+    onRenameCategory={handleRenameCategory}
   />
 
   <!-- Save-confirmation toast — shows briefly after a manual transaction is

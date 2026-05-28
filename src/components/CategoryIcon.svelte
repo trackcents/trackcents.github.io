@@ -52,6 +52,79 @@
     },
     plane: { p: ['M2 16l20-7-20-7v6l13 1-13 1z'] },
     bolt: { p: ['M13 2 3 14h7l-1 8 10-12h-7z'] },
+    // ── Batch B: new icons so Entertainment / Education / Gifts / etc.
+    //    don't all fall through to 'tag' ──────────────────────────────────
+    film: {
+      // Film reel with sprocket holes — modern outlined.
+      p: ['M3 3h18v18H3z', 'M3 8h18', 'M3 16h18', 'M8 3v18', 'M16 3v18'],
+      c: [
+        [5.5, 5.5, 0.6],
+        [18.5, 5.5, 0.6],
+        [5.5, 18.5, 0.6],
+        [18.5, 18.5, 0.6]
+      ]
+    },
+    book: {
+      // Open book.
+      p: [
+        'M3 4h6a3 3 0 0 1 3 3v13',
+        'M21 4h-6a3 3 0 0 0-3 3v13',
+        'M3 4v15a1 1 0 0 0 1 1h7',
+        'M21 4v15a1 1 0 0 0-1 1h-7'
+      ]
+    },
+    gift: {
+      // Wrapped gift box with ribbon.
+      p: [
+        'M3 8h18v4H3z',
+        'M5 12v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9',
+        'M12 8v14',
+        'M12 8c-2-3-6-3-6 0 0 2 6 0 6 0z',
+        'M12 8c2-3 6-3 6 0 0 2-6 0-6 0z'
+      ]
+    },
+    shield: {
+      // Shield with check.
+      p: ['M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z', 'M9 12l2 2 4-4']
+    },
+    card: {
+      // Credit card.
+      p: [
+        'M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
+        'M3 10h18',
+        'M7 15h4'
+      ]
+    },
+    'chart-up': {
+      // Bar chart trending up.
+      p: ['M4 4v16h16', 'M8 16v-4', 'M12 16v-8', 'M16 16v-6', 'M9 8l3-3 3 3 4-4']
+    },
+    undo: {
+      // Curved arrow back (refund).
+      p: ['M9 14l-4-4 4-4', 'M5 10h9a5 5 0 0 1 0 10h-1']
+    },
+    percent: {
+      // Percent symbol.
+      p: ['M5 19L19 5'],
+      c: [
+        [7, 7, 2],
+        [17, 17, 2]
+      ]
+    },
+    banknote: {
+      // Stylised banknote.
+      p: ['M3 6h18v12H3z', 'M6 9v6', 'M18 9v6'],
+      c: [[12, 12, 2.5]]
+    },
+    piggy: {
+      // Piggy bank.
+      p: [
+        'M19 11c0-4-3-7-7-7s-7 3-7 7v1a3 3 0 0 0 3 3v2h3v-2h2v2h3v-2a3 3 0 0 0 3-3v-1z',
+        'M5 12h-1',
+        'M15 9h1'
+      ],
+      c: [[8, 10, 0.6]]
+    },
     tag: { p: ['M20.6 13.4 12 22l-9-9V4a1 1 0 0 1 1-1h9z'], c: [[7.5, 7.5, 1.5]] }
   };
 </script>

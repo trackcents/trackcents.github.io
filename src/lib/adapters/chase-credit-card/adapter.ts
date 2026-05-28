@@ -95,7 +95,16 @@ function extractSummary(rows: LayoutRow[]): ParsedSummary {
     if (moneyIdx < 1) continue;
 
     const label = cells.slice(0, moneyIdx).join(' ').replace(/\s+/g, ' ').trim();
-    const moneyText = cells.slice(moneyIdx).join('').replace(/\s+/g, '');
+    // Take ONLY the matched money cell.  The previous slice+join glued the
+    // right-column body text on (e.g. "Cardmembers earn unlimited 5% back…"
+    // on the same Y as Previous Balance / Cash Advances / Fees Charged in
+    // Chase Prime Visa statements), turning "$931.01" into
+    // "$931.01status,signintotheAmazonaccount…" which parseMoney throws on
+    // and left those fields null → Account Summary refused → import refused.
+    // PDF.js already represents the value as a single item; concatenation
+    // was never needed.  Investigation showed Statements-9 and -11 both fail
+    // here, never in the stacked fallback below.
+    const moneyText = cells[moneyIdx]!.replace(/\s+/g, '');
 
     for (const key of Object.keys(SUMMARY_LABELS) as Array<keyof ParsedSummary>) {
       if (!SUMMARY_LABELS[key].test(label)) continue;
@@ -140,7 +149,12 @@ function extractSummary(rows: LayoutRow[]): ParsedSummary {
     let headerIdx = -1;
     for (let i = 0; i < rows.length; i++) {
       const t = rowText(rows[i]!).trim();
-      if (/^ACCOUNT\s+SUMMARY$/i.test(t)) {
+      // Word-boundary not end-anchor: real Chase statements lay body text
+      // alongside the "ACCOUNT SUMMARY" header on the SAME Y, so the row's
+      // joined text ends up "ACCOUNT SUMMARY Cardmembers earn unlimited…".
+      // The previous /^ACCOUNT\s+SUMMARY$/i never matched and the fallback
+      // silently did nothing — the real PDFs failed both passes.
+      if (/^ACCOUNT\s+SUMMARY\b/i.test(t)) {
         headerIdx = i;
         break;
       }

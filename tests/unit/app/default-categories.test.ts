@@ -16,7 +16,7 @@ describe('seedCategoriesAndRules', () => {
     // Spot-check required categories per REQ-B0.2.
     [
       'Groceries',
-      'Eating out',
+      'Food',
       'Rent/Mortgage',
       'Phone & Internet',
       'Insurance',
@@ -64,7 +64,7 @@ describe('seedCategoriesAndRules', () => {
     expect(next.get('k5')?.category_id).toBe(idByName('Phone & Internet'));
     expect(next.get('k6')?.category_id).toBe(idByName('Groceries'));
     expect(next.get('k7')?.category_id).toBe(idByName('Subscriptions'));
-    expect(next.get('k8')?.category_id).toBe(idByName('Eating out'));
+    expect(next.get('k8')?.category_id).toBe(idByName('Food'));
     expect(next.get('k9')?.category_id).toBe(idByName('Refund'));
     expect(next.get('k10')?.category_id).toBe(idByName('Loan/Installment'));
   });

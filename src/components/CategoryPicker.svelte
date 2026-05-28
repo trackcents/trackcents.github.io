@@ -13,10 +13,12 @@
   //   • Delete is guarded behind the explicit toggle, so a normal pick
   //     can never drop a category by mistake.
 
+  import { tick } from 'svelte';
   import type { Category } from '$lib/app/categorization';
   import { loadFavoriteCategoryIds, toggleFavoriteCategory } from '$lib/app/favorites';
-  import { categoryColor, categoryIconName } from '$lib/app/category-visuals';
+  import { categoryColor, categoryIconName, type IconKey } from '$lib/app/category-visuals';
   import CategoryIcon from '$components/CategoryIcon.svelte';
+  import CategoryRenameSheet from '$components/CategoryRenameSheet.svelte';
 
   interface Props {
     open: boolean;
@@ -30,6 +32,9 @@
     /** Delete a category; caller persists.  Picker only calls this after
      *  the user confirms in the sub-sheet. */
     onDelete?: ((id: string) => void) | undefined;
+    /** Rename / re-icon a category; caller persists.  Picker opens the
+     *  CategoryRenameSheet to collect the new values. */
+    onRename?: ((id: string, patch: { name: string; icon: string }) => void) | undefined;
     onClose: () => void;
   }
 
@@ -41,6 +46,7 @@
     onSelect,
     onCreate,
     onDelete,
+    onRename,
     onClose
   }: Props = $props();
 
@@ -52,6 +58,13 @@
   let editMode = $state(false);
   /** When non-null, render the confirm-delete sub-sheet. */
   let confirmDeleteId = $state<string | null>(null);
+  /** When non-null, render the rename / icon-edit sub-sheet. */
+  let renameId = $state<string | null>(null);
+  /** Ref for the search field so we can auto-focus when the picker opens —
+   *  Hemanth's ask: "when I want to search or add new category if I type
+   *  there".  Without auto-focus, mobile users must tap twice (open the
+   *  sheet, then tap the input). */
+  let searchInputEl = $state<HTMLInputElement | null>(null);
 
   $effect(() => {
     if (open) {
@@ -59,6 +72,16 @@
       query = '';
       editMode = false;
       confirmDeleteId = null;
+      renameId = null;
+      // Tick first so the input is mounted; then focus.  Wrapped in try
+      // so an old browser without focus() doesn't break the picker.
+      tick().then(() => {
+        try {
+          searchInputEl?.focus();
+        } catch {
+          /* noop */
+        }
+      });
     }
   });
 
@@ -99,6 +122,24 @@
   function startDelete(id: string, ev: MouseEvent): void {
     ev.stopPropagation();
     confirmDeleteId = id;
+  }
+  function startRename(id: string, ev: MouseEvent): void {
+    ev.stopPropagation();
+    renameId = id;
+  }
+  const renameTarget = $derived(
+    renameId === null ? null : (categories.find((c) => c.id === renameId) ?? null)
+  );
+  function handleRenameSave(patch: { name: string; icon: string }): void {
+    if (renameId === null || onRename === undefined) return;
+    onRename(renameId, patch);
+    renameId = null;
+  }
+  /** Resolve a category's display icon: respect explicit override; else
+   *  auto-map by name.  Single source of truth used by every row + the
+   *  rename preview. */
+  function iconFor(c: Category): IconKey {
+    return c.icon && c.icon.length > 0 ? (c.icon as IconKey) : categoryIconName(c.name);
   }
   function cancelDelete(): void {
     confirmDeleteId = null;
@@ -148,6 +189,7 @@
         placeholder={onCreate !== undefined ? 'Search or add new…' : 'Search category…'}
         class="search"
         bind:value={query}
+        bind:this={searchInputEl}
         aria-label="Search categories"
       />
     </div>
@@ -159,11 +201,21 @@
           <div class="row" class:selected={c.id === selectedId}>
             <button type="button" class="row-main" onclick={() => pick(c.id)} disabled={editMode}>
               <span class="icon">
-                <CategoryIcon icon={categoryIconName(c.name)} color={categoryColor(c.id)} tint />
+                <CategoryIcon icon={iconFor(c)} color={categoryColor(c.id)} tint />
               </span>
               <span class="name">{c.name}</span>
             </button>
             {#if editMode}
+              {#if onRename !== undefined}
+                <button
+                  type="button"
+                  class="pencil"
+                  aria-label="Rename {c.name}"
+                  onclick={(ev) => startRename(c.id, ev)}
+                >
+                  ✏
+                </button>
+              {/if}
               <button
                 type="button"
                 class="trash"
@@ -206,11 +258,21 @@
         <div class="row" class:selected={c.id === selectedId}>
           <button type="button" class="row-main" onclick={() => pick(c.id)} disabled={editMode}>
             <span class="icon">
-              <CategoryIcon icon={categoryIconName(c.name)} color={categoryColor(c.id)} tint />
+              <CategoryIcon icon={iconFor(c)} color={categoryColor(c.id)} tint />
             </span>
             <span class="name">{c.name}</span>
           </button>
           {#if editMode}
+            {#if onRename !== undefined}
+              <button
+                type="button"
+                class="pencil"
+                aria-label="Rename {c.name}"
+                onclick={(ev) => startRename(c.id, ev)}
+              >
+                ✏
+              </button>
+            {/if}
             <button
               type="button"
               class="trash"
@@ -244,6 +306,14 @@
       {/if}
     </div>
   </div>
+
+  <!-- Rename + icon-edit sub-sheet (stacks ABOVE the picker) -->
+  <CategoryRenameSheet
+    open={renameTarget !== null}
+    category={renameTarget}
+    onSave={handleRenameSave}
+    onClose={() => (renameId = null)}
+  />
 
   <!-- Confirm-delete sub-sheet (stacks ABOVE the picker sheet) -->
   {#if confirmTarget !== null}
@@ -290,7 +360,13 @@
   .sheet {
     position: fixed;
     inset-inline: 0;
-    bottom: 0;
+    /* Keyboard-avoid: bottom edge lifts up by the soft-keyboard height
+       (--kb-inset-bottom is set by src/lib/app/keyboard-inset.ts on
+       <html> via the visualViewport API).  When no keyboard is open
+       the variable falls back to 0px so the sheet sits at the bottom
+       as usual.  This is the standard mobile-web pattern (Slack,
+       WhatsApp web, Notion) so the search input is never hidden. */
+    bottom: var(--kb-inset-bottom, 0px);
     z-index: 80;
     background: var(--color-surface);
     border-top-left-radius: 22px;
@@ -298,7 +374,7 @@
     padding: 0.5rem 0 calc(0.8rem + env(safe-area-inset-bottom));
     box-shadow: var(--shadow-md);
     animation: rise 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
-    max-height: 80dvh;
+    max-height: calc(80dvh - var(--kb-inset-bottom, 0px));
     display: flex;
     flex-direction: column;
   }
@@ -459,7 +535,8 @@
 
   .star,
   .star-placeholder,
-  .trash {
+  .trash,
+  .pencil {
     width: 30px;
     height: 30px;
     display: inline-flex;
@@ -477,9 +554,13 @@
       color 0.14s ease;
   }
   .star:hover,
-  .trash:hover {
+  .trash:hover,
+  .pencil:hover {
     background: var(--color-surface-hover);
     color: var(--color-text);
+  }
+  .pencil {
+    color: var(--color-accent);
   }
   .star.starred {
     color: var(--color-accent);

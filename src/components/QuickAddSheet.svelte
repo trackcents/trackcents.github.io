@@ -36,7 +36,8 @@
     rememberManualAccount,
     saveLastUsedAccount
   } from '$lib/app/accounts';
-  import { categoryColor, categoryIconName } from '$lib/app/category-visuals';
+  import { accountDisplayName } from '$lib/app/account-nicknames';
+  import { categoryColor, categoryIconName, type IconKey } from '$lib/app/category-visuals';
   import CategoryIcon from '$components/CategoryIcon.svelte';
   import CategoryPicker from '$components/CategoryPicker.svelte';
   import AccountPicker from '$components/AccountPicker.svelte';
@@ -65,6 +66,10 @@
     onCreateCategory?: ((name: string) => Promise<string> | string) | undefined;
     /** Delete a category (parent persists). */
     onDeleteCategory?: ((id: string) => Promise<void> | void) | undefined;
+    /** Rename + re-icon a category (parent persists). */
+    onRenameCategory?:
+      | ((id: string, patch: { name: string; icon: string }) => Promise<void> | void)
+      | undefined;
   }
 
   const {
@@ -77,7 +82,8 @@
     onClose,
     onSaved,
     onCreateCategory,
-    onDeleteCategory
+    onDeleteCategory,
+    onRenameCategory
   }: Props = $props();
 
   // ── Form state ─────────────────────────────────────────────────────────────
@@ -205,13 +211,25 @@
     });
   });
 
-  const selectedCategoryName = $derived.by(() => {
-    if (categoryId === null) return 'Uncategorized';
-    return categories.find((c) => c.id === categoryId)?.name ?? 'Uncategorized';
-  });
+  const selectedCategory = $derived(
+    categoryId === null ? null : (categories.find((c) => c.id === categoryId) ?? null)
+  );
+  const selectedCategoryName = $derived(selectedCategory?.name ?? 'Uncategorized');
   const selectedCategoryColor = $derived.by(() =>
     categoryId === null ? 'var(--color-muted)' : categoryColor(categoryId)
   );
+  /** Selected category's icon — honours the user's override when set,
+   *  else auto-maps from the name. */
+  const selectedCategoryIcon = $derived<IconKey>(
+    selectedCategory
+      ? selectedCategory.icon && selectedCategory.icon.length > 0
+        ? (selectedCategory.icon as IconKey)
+        : categoryIconName(selectedCategory.name)
+      : 'tag'
+  );
+
+  /** Account display name = nickname when set, else raw. */
+  const accountLabel = $derived(accountDisplayName(account));
 
   /** Tx-count map keyed by category_id — drives the confirm-delete message
    *  in CategoryPicker so "Delete Food?" cites "12 transactions affected". */
@@ -233,6 +251,13 @@
     await onDeleteCategory(id);
     // If the deleted category was the one selected, clear the selection.
     if (categoryId === id) categoryId = null;
+  }
+  async function handleRenameCategoryInner(
+    id: string,
+    patch: { name: string; icon: string }
+  ): Promise<void> {
+    if (onRenameCategory === undefined) return;
+    await onRenameCategory(id, patch);
   }
 
   function pickAccount(name: string): void {
@@ -404,11 +429,7 @@
           {#if categoryId === null}
             <span class="dot" style:background-color={selectedCategoryColor}></span>
           {:else}
-            <CategoryIcon
-              icon={categoryIconName(selectedCategoryName)}
-              color={selectedCategoryColor}
-              tint
-            />
+            <CategoryIcon icon={selectedCategoryIcon} color={selectedCategoryColor} tint />
           {/if}
         </span>
         <span class="qas-dd-label">
@@ -422,7 +443,7 @@
         <span class="qas-dd-icon">💳</span>
         <span class="qas-dd-label">
           <span class="qas-lbl">Account</span>
-          <span class="qas-dd-value">{account}</span>
+          <span class="qas-dd-value">{accountLabel}</span>
         </span>
         <span class="qas-dd-chev" aria-hidden="true">▾</span>
       </button>
@@ -440,11 +461,29 @@
           type="text"
           inputmode="text"
           bind:value={time}
-          placeholder="optional"
+          placeholder="e.g. 10:30 PM"
           class="qas-field"
           autocomplete="off"
           spellcheck="false"
-          oninput={() => (userTouchedTime = true)}
+          maxlength="9"
+          onkeydown={(e) => {
+            // Only treat REAL keystrokes (not programmatic bind:value
+            // assignments) as user intent.  oninput fires for both, which
+            // briefly flipped userTouchedTime=true on the first parse and
+            // pinned the field empty even when the description carried a
+            // time -- Hemanth: "time is still not autopopulating while I
+            // type".  onkeydown is dispatched only for keyboard events,
+            // never for el.value=..., so the flag is correctly preserved.
+            if (
+              e.key.length === 1 ||
+              e.key === 'Backspace' ||
+              e.key === 'Delete' ||
+              e.key === 'Enter'
+            ) {
+              userTouchedTime = true;
+            }
+          }}
+          onfocus={() => (userTouchedTime = true)}
         />
       </label>
     </div>
@@ -480,6 +519,7 @@
     onSelect={pickCategory}
     onCreate={onCreateCategory !== undefined ? handleCreateCategory : undefined}
     onDelete={onDeleteCategory !== undefined ? handleDeleteCategory : undefined}
+    onRename={onRenameCategory !== undefined ? handleRenameCategoryInner : undefined}
     onClose={() => (pickerOpen = false)}
   />
 
