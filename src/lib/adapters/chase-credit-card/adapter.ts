@@ -86,6 +86,7 @@ function extractSummary(rows: LayoutRow[]): ParsedSummary {
     available_credit: null
   };
 
+  // ── Primary pass: label and value on the SAME layout row ─────────────────
   for (const row of rows) {
     const cells = row.items.map((i) => i.text.trim()).filter((s) => s.length > 0);
     if (cells.length < 2) continue;
@@ -119,6 +120,65 @@ function extractSummary(rows: LayoutRow[]): ParsedSummary {
         // leave as null; gate flags the gap
       }
       break;
+    }
+  }
+
+  // ── Fallback pass: the "stacked" Account Summary layout (REQ-B2.1) ──────
+  //
+  // Some Chase Prime Visa statement variants (e.g. Statements-9 / Statements-11
+  // from temp3) lay the Account Summary out as a vertical LABEL column followed
+  // by a vertical VALUE column.  PDF.js then groups each label and each value
+  // on its OWN layout row — every row has only ONE cell, so the primary pass
+  // skips them all (`cells.length < 2`) and we end up with Previous Balance =
+  // New Balance = null and the import fails.
+  //
+  // To recover: walk the rows after the "ACCOUNT SUMMARY" header, classify
+  // each one as either a label match (against SUMMARY_LABELS), a money-shaped
+  // value, or neither (date / blank).  Then pair labels[i] with values[i] in
+  // source order.  Anything the primary pass already filled is left alone.
+  if (summary.previous_balance === null || summary.new_balance === null) {
+    let headerIdx = -1;
+    for (let i = 0; i < rows.length; i++) {
+      const t = rowText(rows[i]!).trim();
+      if (/^ACCOUNT\s+SUMMARY$/i.test(t)) {
+        headerIdx = i;
+        break;
+      }
+    }
+    if (headerIdx >= 0) {
+      const labelsSeq: Array<keyof ParsedSummary> = [];
+      const valuesSeq: string[] = [];
+      // Money-shaped: optional sign, optional $, at least one digit.
+      // We accept "$931.01", "-$1,453.31", "+$382.95", "$35,000", "$0.00", ".50".
+      const MONEY_LIKE = /^[-+]?\s*\$\s*-?\s*[0-9.,]+$|^[-+]?\s*\.\d{1,2}$|^-\s*\$\s*[0-9.,]+$/;
+      for (let i = headerIdx + 1; i < rows.length; i++) {
+        const t = rowText(rows[i]!).trim().replace(/\s+/g, ' ');
+        if (t === '') continue;
+        let matched = false;
+        for (const key of Object.keys(SUMMARY_LABELS) as Array<keyof ParsedSummary>) {
+          if (SUMMARY_LABELS[key].test(t)) {
+            labelsSeq.push(key);
+            matched = true;
+            break;
+          }
+        }
+        if (matched) continue;
+        if (MONEY_LIKE.test(t.replace(/\s+/g, ''))) {
+          valuesSeq.push(t.replace(/\s+/g, ''));
+        }
+      }
+      for (let i = 0; i < Math.min(labelsSeq.length, valuesSeq.length); i++) {
+        const key = labelsSeq[i]!;
+        if (summary[key] !== null) continue;
+        try {
+          const cleaned = valuesSeq[i]!.replace(/^\+\s*/, '');
+          const signed = parseMoney(cleaned);
+          const signPreserving = key === 'previous_balance' || key === 'new_balance';
+          summary[key] = signPreserving ? signed : signed < 0n ? -signed : signed;
+        } catch {
+          /* skip */
+        }
+      }
     }
   }
 

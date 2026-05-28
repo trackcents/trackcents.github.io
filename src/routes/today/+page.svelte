@@ -33,7 +33,6 @@
   import { formatMoney } from '$lib/util/money';
   import CategoryIcon from '$components/CategoryIcon.svelte';
   import BudgetBox from '$components/BudgetBox.svelte';
-  import MonthSlider from '$components/MonthSlider.svelte';
   import MonthPickerSheet from '$components/MonthPickerSheet.svelte';
   import QuickAddSheet from '$components/QuickAddSheet.svelte';
 
@@ -172,18 +171,15 @@
   const nbm = $derived(spendableFlowByMonth(imports, cat.annotations));
   const sbm = $derived(spendingByCategoryByMonth(txns));
 
-  /** Months we can show in the slider — every month with data, plus the
-   *  current calendar month, plus the next month (for forward planning).
-   *  Chronological, oldest → newest. */
+  /** Months the BudgetBox nav widget can step through.  Strictly months WITH
+   *  imported transaction data, plus the device's current month so a brand-new
+   *  user lands on Home with the current month rendered.  We do NOT auto-add
+   *  "next month for planning" any more — the user complained the ▶ chevron
+   *  let them step into June even with no June data, and the picker then
+   *  surfaced an empty future month. */
   const monthsAvailable = $derived.by<string[]>(() => {
     const set = new Set<string>(nbm.keys());
     set.add(currentMonth);
-    const [yStr, mStr] = currentMonth.split('-');
-    const y = Number(yStr);
-    const m = Number(mStr);
-    const nextM = m === 12 ? 1 : m + 1;
-    const nextY = m === 12 ? y + 1 : y;
-    set.add(`${nextY}-${String(nextM).padStart(2, '0')}`);
     return [...set].sort();
   });
 
@@ -353,27 +349,22 @@
   {#if loading}
     <p class="text-sm" style:color="var(--color-muted)">Loading…</p>
   {:else if !hasData}
-    <!-- Even with zero data we still render the slider so a brand-new user
-         can land directly on "+ Add expense" without seeing an empty banner. -->
-    <MonthSlider
-      months={monthsAvailable}
-      currentMonth={activeMonth}
-      onChange={(m) => (activeMonth = m)}
-    >
-      <BudgetBox
-        monthKey={activeMonth}
-        monthLabel={activeMonthLabel}
-        flow={activeFlow}
-        {todayIso}
-        extraIncomeMinor={activeExtraIncomeMinor}
-        onPrevMonth={prevMonth}
-        onNextMonth={nextMonth}
-        canPrev={canPrevMonth}
-        canNext={canNextMonth}
-        onLabelClick={() => (pickerOpen = true)}
-        onManageIncome={() => goto(`/transactions?month=${activeMonth}`)}
-      />
-    </MonthSlider>
+    <!-- BudgetBox carries its own ◀ pill ▶ widget — no outer MonthSlider needed.
+         (The MonthSlider was the OLD swipe wrapper that re-introduced the
+         left/right chevron buttons we deliberately killed in v1.) -->
+    <BudgetBox
+      monthKey={activeMonth}
+      monthLabel={activeMonthLabel}
+      flow={activeFlow}
+      {todayIso}
+      extraIncomeMinor={activeExtraIncomeMinor}
+      onPrevMonth={prevMonth}
+      onNextMonth={nextMonth}
+      canPrev={canPrevMonth}
+      canNext={canNextMonth}
+      onLabelClick={() => (pickerOpen = true)}
+      onManageIncome={() => goto(`/transactions?month=${activeMonth}`)}
+    />
 
     <div class="card rise mt-4 p-8 text-center">
       <p class="text-sm" style:color="var(--color-muted)">
@@ -435,26 +426,20 @@
       </div>
     {/if}
 
-    <!-- Month slider + BudgetBox: the centerpiece. -->
-    <MonthSlider
-      months={monthsAvailable}
-      currentMonth={activeMonth}
-      onChange={(m) => (activeMonth = m)}
-    >
-      <BudgetBox
-        monthKey={activeMonth}
-        monthLabel={activeMonthLabel}
-        flow={activeFlow}
-        {todayIso}
-        extraIncomeMinor={activeExtraIncomeMinor}
-        onPrevMonth={prevMonth}
-        onNextMonth={nextMonth}
-        canPrev={canPrevMonth}
-        canNext={canNextMonth}
-        onLabelClick={() => (pickerOpen = true)}
-        onManageIncome={() => goto(`/transactions?month=${activeMonth}`)}
-      />
-    </MonthSlider>
+    <!-- BudgetBox carries its own ◀ pill ▶ widget — no outer MonthSlider needed. -->
+    <BudgetBox
+      monthKey={activeMonth}
+      monthLabel={activeMonthLabel}
+      flow={activeFlow}
+      {todayIso}
+      extraIncomeMinor={activeExtraIncomeMinor}
+      onPrevMonth={prevMonth}
+      onNextMonth={nextMonth}
+      canPrev={canPrevMonth}
+      canNext={canNextMonth}
+      onLabelClick={() => (pickerOpen = true)}
+      onManageIncome={() => goto(`/transactions?month=${activeMonth}`)}
+    />
 
     {#if spentTodayMinor > 0n}
       <!-- "Spent today so far" — current-day burn chip.  Shown only on the

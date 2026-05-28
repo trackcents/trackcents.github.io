@@ -309,3 +309,99 @@ describe('Chase Credit Card adapter — credit-balance scenario regression', () 
     expect(gate.ok, gate.ok ? '' : gate.reason).toBe(true);
   });
 });
+
+// REQ-B2.1 — Stacked-layout Account Summary regression.
+//
+// Some Chase Prime Visa statement variants (Statements-9 / Statements-11 in
+// the user's temp3 set) lay the Account Summary out as a LABEL COLUMN above
+// a VALUE COLUMN, each cell on its own row.  PDF.js's groupItemsByRow then
+// puts every label and every value on a SINGLE-CELL row, so the primary
+// matcher (label + value on the same row) skips everything and the import
+// fails with "could not find Previous Balance or New Balance".  The fallback
+// in extractSummary pairs labels[i] with values[i] in source order.
+describe('Chase Credit Card adapter — stacked-layout Account Summary regression', () => {
+  function makeItem(text: string, x: number, y: number) {
+    return { text, x, y, width: text.length * 5, height: 10, font_size: 9 };
+  }
+
+  // Mirrors Statements-9.pdf's variant: each Account Summary label and value
+  // lands on a DIFFERENT Y so they end up as separate single-cell rows.
+  const stackedFixture = {
+    pages: [
+      {
+        page_number: 1,
+        items: [
+          makeItem('Chase Card Services', 18, 760),
+          makeItem('www.chase.com/amazon', 189, 740),
+          makeItem('Account Number:  XXXX XXXX XXXX 7137', 18, 720),
+          makeItem('ACCOUNT SUMMARY', 18, 700),
+
+          // Labels in one column (left), each on its own Y
+          makeItem('Previous Balance', 18, 680),
+          makeItem('Payment, Credits', 18, 666),
+          makeItem('Purchases', 18, 652),
+          makeItem('Cash Advances', 18, 638),
+          makeItem('Balance Transfers', 18, 624),
+          makeItem('Fees Charged', 18, 610),
+          makeItem('Interest Charged', 18, 596),
+          makeItem('New Balance', 18, 582),
+          makeItem('Opening/Closing Date', 18, 568),
+          makeItem('Credit Access Line', 18, 554),
+          makeItem('Available Credit', 18, 540),
+
+          // Values in another column (right), each on its own Y, stacked
+          // below the labels so they appear LATER in source order.
+          makeItem('$931.01', 220, 520),
+          makeItem('-$1,453.31', 220, 506),
+          makeItem('+$382.95', 220, 492),
+          makeItem('$0.00', 220, 478),
+          makeItem('$0.00', 220, 464),
+          makeItem('$0.00', 220, 450),
+          makeItem('$0.00', 220, 436),
+          makeItem('-$139.35', 220, 422),
+          makeItem('04/23/26 - 05/22/26', 220, 408),
+          makeItem('$35,000', 220, 394),
+          makeItem('$35,000', 220, 380),
+
+          // Payment info section
+          makeItem('Payment Due Date: 06/19/26', 18, 350),
+          makeItem('Minimum Payment Due: $0.00', 18, 336),
+
+          // Period (also matches the inline regex via the date value above)
+          makeItem('Opening/Closing Date 04/23/26 - 05/22/26', 18, 300)
+        ]
+      }
+    ],
+    total_pages: 1
+  };
+
+  test('extracts Previous Balance, New Balance, and account from stacked layout', async () => {
+    const r = await chaseCreditCardAdapter.parse(stackedFixture);
+    expect(r.statement.account_last_4).toBe('7137');
+    expect(r.statement.previous_balance_minor).toBe(93101n);
+    expect(r.statement.statement_balance_minor).toBe(-13935n); // negative = credit balance
+    expect(r.statement.period_start).toBe('2026-04-23');
+    expect(r.statement.period_end).toBe('2026-05-22');
+  });
+
+  test('Level C balance equation holds on summary alone (credit balance survives)', async () => {
+    // Fixture carries no transactions, so Level B aggregates stay null.  We
+    // reconstruct Level C from the preserved summary_lines:
+    //   previous + purchases - payments = new
+    //   931.01  + 382.95   - 1453.31   = -139.35 ✓ (credit balance)
+    const r = await chaseCreditCardAdapter.parse(stackedFixture);
+    const prev = r.statement.previous_balance_minor!;
+    const newBal = r.statement.statement_balance_minor!;
+    const find = (label: string) =>
+      r.statement.summary_lines.find((l) => l.label === label)?.amount_minor ?? 0n;
+    const charges = find('Purchases');
+    const payments = find('Payment, Credits'); // already signed negative
+    expect(prev + charges + payments).toBe(newBal);
+  });
+
+  test('does NOT refuse with "could not find Previous Balance or New Balance"', async () => {
+    // The user-visible failure was the import being REFUSED.  Just verifying
+    // parse() returns without throwing covers the regression.
+    await expect(chaseCreditCardAdapter.parse(stackedFixture)).resolves.toBeDefined();
+  });
+});
