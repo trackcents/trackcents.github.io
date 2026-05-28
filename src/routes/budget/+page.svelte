@@ -179,23 +179,29 @@
       {/if}
     </div>
   {:else if anchor !== null}
-    <div class="card rise mb-4 flex flex-wrap items-center gap-3 p-3 text-sm">
-      <span style:color="var(--color-muted)">Your first paycheck funds</span>
-      <div class="flex items-center gap-2">
-        <button
-          type="button"
-          class="btn btn-ghost px-2 py-1"
-          onclick={() => shiftAnchor(-1)}
-          aria-label="Earlier month">◀</button
-        >
-        <strong>{monthLabel(`${anchor.year}-${String(anchor.month).padStart(2, '0')}`)}</strong>
-        <button
-          type="button"
-          class="btn btn-ghost px-2 py-1"
-          onclick={() => shiftAnchor(1)}
-          aria-label="Later month">▶</button
-        >
+    <div class="card rise mb-4 p-3 text-sm">
+      <div class="flex flex-wrap items-center gap-3">
+        <span style:color="var(--color-muted)">Your first paycheck funds</span>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            class="btn btn-ghost px-2 py-1"
+            onclick={() => shiftAnchor(-1)}
+            aria-label="Earlier month">◀</button
+          >
+          <strong>{monthLabel(`${anchor.year}-${String(anchor.month).padStart(2, '0')}`)}</strong>
+          <button
+            type="button"
+            class="btn btn-ghost px-2 py-1"
+            onclick={() => shiftAnchor(1)}
+            aria-label="Later month">▶</button
+          >
+        </div>
       </div>
+      <p class="mt-2 text-xs" style:color="var(--color-muted)">
+        Which budget month is the earliest detected paycheck funding? Shift it if our guess is off
+        (e.g. the Dec&nbsp;19 paycheck was actually for January).
+      </p>
     </div>
 
     <div class="space-y-4">

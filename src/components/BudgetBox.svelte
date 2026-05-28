@@ -124,11 +124,12 @@
             class="extra-income"
             onclick={onManageIncome}
             disabled={onManageIncome === undefined}
+            aria-label="Review other inflow transactions for this month"
           >
             <span class="num font-medium">+{formatMoney(extraIncomeMinor)}</span>
             <span>other inflows</span>
             {#if onManageIncome !== undefined}
-              <span class="extra-manage">· tap to review</span>
+              <span class="extra-arrow" aria-hidden="true">→</span>
             {/if}
           </button>
         {/if}
@@ -301,13 +302,35 @@
     color: var(--color-muted);
     font-size: 0.78rem;
   }
+  /* Small affordance arrow so the "other inflows" row reads as tappable on
+     mobile (Murali round-5: green text without an obvious arrow looks like a
+     stat, not a button). */
+  .extra-arrow {
+    color: var(--color-muted);
+    font-size: 0.85rem;
+    margin-left: 0.15rem;
+    transition: transform 0.16s ease;
+  }
+  .extra-income:not(:disabled):hover .extra-arrow {
+    transform: translateX(2px);
+    color: var(--color-success);
+  }
   .carry-line {
     margin-top: 0.3rem;
     font-size: 0.82rem;
     color: var(--color-success);
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
+    /* Block layout so the "(FYI — not added in)" tail wraps onto its own line
+       on narrow phones rather than orphaning awkwardly between amount + month
+       (Murali round-5). */
+    display: block;
+    line-height: 1.35;
+  }
+  .carry-line .num {
+    margin-right: 0.35rem;
+  }
+  .carry-line .extra-manage {
+    display: inline-block;
+    margin-left: 0.2rem;
   }
   .carry-line.carry-negative {
     color: var(--color-danger);
