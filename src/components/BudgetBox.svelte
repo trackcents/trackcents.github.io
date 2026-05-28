@@ -24,6 +24,15 @@
      * a small green "+$X extra income · tap to manage" line under the total.
      */
     extraIncomeMinor?: bigint;
+    /**
+     * Signed leftover from the PREVIOUS month (its income − spent).  Positive
+     * means money rolled in, negative means an overspend rolled forward.  0n =
+     * no prior data or exactly zero leftover; the line stays hidden.  Computed
+     * by the parent; this component is pure display.
+     */
+    carryForwardMinor?: bigint;
+    /** Human-readable label of the previous month ("April 2026") for the chip. */
+    carryForwardFromLabel?: string;
     /** Tap-to-open the month picker. */
     onLabelClick: () => void;
     /** Reveal the + Income inline form (only shown on current/future months). */
@@ -38,6 +47,8 @@
     flow,
     todayIso,
     extraIncomeMinor = 0n,
+    carryForwardMinor = 0n,
+    carryForwardFromLabel,
     onLabelClick,
     onAddIncome,
     onManageIncome
@@ -120,6 +131,21 @@
               <span class="extra-manage">· tap to manage</span>
             {/if}
           </button>
+        {/if}
+        {#if carryForwardMinor !== 0n}
+          <!-- Carry-forward line: last month's leftover (+ green) or overspend
+               (− red) rolls forward.  Display-only for v1; informational so the
+               user sees the trend without the engine doing magic math behind
+               their back. -->
+          {@const carryPositive = carryForwardMinor > 0n}
+          <p class="carry-line" class:carry-negative={!carryPositive}>
+            <span class="num font-medium">
+              {carryPositive ? '+' : '−'}{formatMoney(
+                carryForwardMinor < 0n ? -carryForwardMinor : carryForwardMinor
+              )}
+            </span>
+            <span>from {carryForwardFromLabel ?? 'last month'}</span>
+          </p>
         {/if}
       {/if}
     </div>
@@ -267,6 +293,17 @@
   .extra-manage {
     color: var(--color-muted);
     font-size: 0.78rem;
+  }
+  .carry-line {
+    margin-top: 0.3rem;
+    font-size: 0.82rem;
+    color: var(--color-success);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .carry-line.carry-negative {
+    color: var(--color-danger);
   }
   /* ── Stat row hierarchy: Remaining leads, the other two play support. ── */
   .stat {

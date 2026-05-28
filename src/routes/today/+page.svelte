@@ -8,8 +8,13 @@
   import { goto } from '$app/navigation';
   import { loadState } from '$lib/db/store';
   import type { ImportRecord } from '$lib/db/store';
-  import { loadCategorization, type CategorizationState } from '$lib/db/categorization-store';
+  import {
+    loadCategorization,
+    saveCategorization,
+    type CategorizationState
+  } from '$lib/db/categorization-store';
   import { summaryFromImports, detailedRowsFromImports } from '$lib/app/categorization-glue';
+  import { runAutoCategorize } from '$lib/app/auto-categorize';
   import { netByMonth, spendingByCategoryByMonth } from '$lib/app/spending-summary';
   import { today } from '$lib/util/date';
   import { monthOverMonthInsight, topMovers } from '$lib/app/spending-insights';
@@ -33,6 +38,15 @@
     cat = await loadCategorization();
     goals = await loadGoals();
     loading = false;
+    // Run the three-tier auto-categoriser (user rules → keyword fallback →
+    // learned naive-Bayes) on every load.  Catches any newly-imported rows
+    // and any descriptions the now-larger training set can finally classify.
+    // Manual annotations stay sticky; nothing user-pinned is overwritten.
+    const updated = runAutoCategorize(imports, cat);
+    if (updated !== null) {
+      cat = updated;
+      await saveCategorization(updated);
+    }
   });
 
   const todayIso = today(); // device-local date — follows the phone's timezone
@@ -129,6 +143,28 @@
   const activeFlow = $derived(nbm.get(activeMonth));
   const activeMonthLabel = $derived(monthName(activeMonth));
 
+  /** Previous month's leftover (income − spent), signed.  Drives the small
+   *  "+₹X from April" / "−₹X from April" carry-forward line under the income
+   *  sub-line on the box.  Returns 0n when there's no data for the prior month
+   *  (or its income/spend net is exactly zero) so the line stays hidden. */
+  function prevMonthOf(ym: string): string {
+    const [yStr, mStr] = ym.split('-');
+    const y = Number(yStr);
+    const m = Number(mStr);
+    const py = m === 1 ? y - 1 : y;
+    const pm = m === 1 ? 12 : m - 1;
+    return `${py}-${String(pm).padStart(2, '0')}`;
+  }
+  const activeCarryForwardMinor = $derived.by<bigint>(() => {
+    const prev = prevMonthOf(activeMonth);
+    const prevFlow = nbm.get(prev);
+    if (prevFlow === undefined) return 0n;
+    return prevFlow.inflow_minor - prevFlow.outflow_minor;
+  });
+  const activeCarryFromLabel = $derived(
+    monthName(prevMonthOf(activeMonth)).split(' ')[0] ?? 'last month'
+  );
+
   // Top categories for the ACTIVE month (so swiping back to April shows
   // April's top categories, not the current month's).
   const topCats = $derived(
@@ -199,6 +235,8 @@
         flow={activeFlow}
         {todayIso}
         extraIncomeMinor={activeExtraIncomeMinor}
+        carryForwardMinor={activeCarryForwardMinor}
+        carryForwardFromLabel={activeCarryFromLabel}
         onLabelClick={() => (pickerOpen = true)}
         onAddIncome={() => openQuickAdd('income')}
         onManageIncome={() => goto(`/transactions?month=${activeMonth}`)}
@@ -242,6 +280,8 @@
         flow={activeFlow}
         {todayIso}
         extraIncomeMinor={activeExtraIncomeMinor}
+        carryForwardMinor={activeCarryForwardMinor}
+        carryForwardFromLabel={activeCarryFromLabel}
         onLabelClick={() => (pickerOpen = true)}
         onAddIncome={() => openQuickAdd('income')}
         onManageIncome={() => goto(`/transactions?month=${activeMonth}`)}

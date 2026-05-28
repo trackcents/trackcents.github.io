@@ -41,6 +41,7 @@
     "tailwind-merge": "^2.6.0",
     "tailwind-variants": "^0.3.0",
     "wa-sqlite": "^1.0.0",
+    "wink-naive-bayes-text-classifier": "^2.2.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {

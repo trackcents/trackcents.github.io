@@ -52,6 +52,10 @@
   let nlText = $state('');
   let parsed = $state<ParsedQuickAdd | null>(null);
   let date = $state(today());
+  /** Optional HH:MM — when set, gets prefixed to the description on save so
+   *  the time travels with the transaction without a schema change.  Empty
+   *  string = no time recorded (the common case). */
+  let time = $state('');
   let desc = $state('');
   let amount = $state('');
   let direction = $state<'expense' | 'income'>('expense');
@@ -89,6 +93,7 @@
         nlText = '';
         parsed = null;
         date = today();
+        time = '';
         desc = '';
         amount = '';
         direction = initialType;
@@ -139,10 +144,15 @@
         return;
       }
       const signed = direction === 'expense' ? -abs : abs;
+      // When the user fills the optional Time field, prepend "HH:MM · " to the
+      // description so the time travels with the transaction without a schema
+      // change.  Skipped when empty (the common case).
+      const baseDesc = desc.trim() || (direction === 'income' ? 'Income' : 'Expense');
+      const finalDesc = time && /^\d{2}:\d{2}$/.test(time) ? `${time} · ${baseDesc}` : baseDesc;
       const rec = makeManualImport(
         {
           posted_date: date,
-          description: desc.trim() || (direction === 'income' ? 'Income' : 'Expense'),
+          description: finalDesc,
           amount_minor: signed,
           account_nickname: account || (direction === 'income' ? 'Income' : 'Cash'),
           currency: getDisplayCurrency()
@@ -233,10 +243,18 @@
     </label>
 
     <div class="grid">
-      <label class="block">
-        <span class="label-text">Date</span>
-        <input type="date" bind:value={date} class="field" />
-      </label>
+      <div class="block">
+        <span class="label-text">Date · Time <span class="optional">(time optional)</span></span>
+        <div class="date-time-row">
+          <input type="date" bind:value={date} class="field" aria-label="Date" />
+          <input
+            type="time"
+            bind:value={time}
+            class="field time-field"
+            aria-label="Time (optional)"
+          />
+        </div>
+      </div>
       <label class="block">
         <span class="label-text">Account</span>
         <input
@@ -526,6 +544,23 @@
   .field:focus {
     outline: none;
     border-color: var(--color-accent);
+  }
+  .date-time-row {
+    display: flex;
+    gap: 0.4rem;
+  }
+  .date-time-row .field {
+    flex: 1;
+    min-width: 0;
+  }
+  .time-field {
+    max-width: 9rem;
+  }
+  .optional {
+    color: var(--color-muted);
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: 0;
   }
   .type-toggle {
     display: flex;
