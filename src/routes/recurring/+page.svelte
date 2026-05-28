@@ -12,6 +12,7 @@
   } from '$lib/app/recurring-detector';
   import { categoryColor, categoryIconName } from '$lib/app/category-visuals';
   import { formatMoney } from '$lib/util/money';
+  import { today } from '$lib/util/date';
   import CategoryIcon from '$components/CategoryIcon.svelte';
 
   let loading = $state(true);
@@ -47,12 +48,14 @@
   }
   const billsPerYear = $derived(bills.reduce((acc, s) => acc + yearly(s), 0n));
 
-  // "today" for the next-due countdown.
-  const today = new Date().toISOString().slice(0, 10);
+  // "today" for the next-due countdown.  Use the LOCAL-time helper, not
+  // toISOString() (which would tip into UTC's next day late in the evening
+  // for users west of UTC — that was the date bug Hemanth reported).
+  const todayIso = today();
   function inDays(due: string | null): string {
     if (due === null) return 'irregular';
     const d = Math.round(
-      (Date.parse(due + 'T00:00:00Z') - Date.parse(today + 'T00:00:00Z')) / 86_400_000
+      (Date.parse(due + 'T00:00:00Z') - Date.parse(todayIso + 'T00:00:00Z')) / 86_400_000
     );
     if (d < 0) return 'overdue';
     if (d === 0) return 'today';

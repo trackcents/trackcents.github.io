@@ -17,6 +17,7 @@
   import { parseAmountToCents, CsvImportError } from '$lib/app/csv-import';
   import { detectTransfers, type TransferTxn } from '$lib/app/transfer-detector';
   import { formatMoney, getDisplayCurrency } from '$lib/util/money';
+  import { today } from '$lib/util/date';
   import {
     toUnifiedRows,
     listAccounts,
@@ -84,14 +85,18 @@
   // ── Manual transaction entry (US-P3-B) ──
   let showAdd = $state(false);
   let addError = $state<string | null>(null);
-  let mDate = $state(new Date().toISOString().slice(0, 10));
+  // CRITICAL: use `today()` (local time), NOT `new Date().toISOString()` (UTC).
+  // Late evening in a west-of-UTC zone, toISOString rolls into TOMORROW's date,
+  // which is exactly the bug Hemanth screenshotted (form defaulting to 05/28
+  // while it was still 05/27 local).  `today()` is timezone-aware.
+  let mDate = $state(today());
   let mDesc = $state('');
   let mAmount = $state('');
   let mDirection = $state<'expense' | 'income'>('expense');
   let mAccount = $state('Cash');
 
   function resetAdd(): void {
-    mDate = new Date().toISOString().slice(0, 10);
+    mDate = today();
     mDesc = '';
     mAmount = '';
     mDirection = 'expense';
@@ -150,6 +155,26 @@
   // Derived: flatten all imports into rows once per imports change.
   let allRows = $derived(toUnifiedRows(imports));
   let accounts = $derived(listAccounts(allRows));
+
+  // Datalist suggestions for the manual-add form.  For manual entries the
+  // account name the user typed lands in `bank_name` (see manual-entry.ts:
+  // `bank_name: nickname`), so `imp.bank_name` gives both past manual nicknames
+  // and real bank names from imported statements.  "Cash" is always first so
+  // cash spends are one tap away.
+  const accountSuggestions = $derived.by<string[]>(() => {
+    const set = new Set<string>(['Cash']);
+    for (const imp of imports) {
+      const name = imp.bank_name;
+      if (name && name.trim().length > 0) set.add(name.trim());
+    }
+    return ['Cash', ...[...set].filter((a) => a !== 'Cash').sort()];
+  });
+  const descriptionSuggestions = $derived.by<string[]>(() => {
+    const set = new Set<string>();
+    for (const r of allRows) if (r.description.trim().length > 0) set.add(r.description.trim());
+    // Cap at 200 to keep the datalist responsive.
+    return [...set].sort().slice(0, 200);
+  });
 
   // Apply filter then sort — both are pure functions, so re-running on
   // every keystroke is fine at this dataset size.
@@ -272,23 +297,38 @@
         </label>
         <label class="block text-sm">
           <span class="mb-1 block text-[var(--color-muted)]">Account</span>
+          <!-- Combobox: pick from known accounts (datalist) OR type a new one. -->
           <input
             type="text"
+            list="manual-account-suggestions"
             bind:value={mAccount}
             placeholder="Cash"
             class="w-full rounded-lg border px-3 py-2"
             style="border-color: var(--color-border); background-color: var(--color-bg);"
           />
+          <datalist id="manual-account-suggestions">
+            {#each accountSuggestions as a (a)}
+              <option value={a}></option>
+            {/each}
+          </datalist>
         </label>
         <label class="block text-sm sm:col-span-2">
           <span class="mb-1 block text-[var(--color-muted)]">Description</span>
+          <!-- Combobox: pick from past descriptions (datalist) OR type a new one.
+               Native HTML5 datalist works on iOS / Android / desktop. -->
           <input
             type="text"
+            list="manual-description-suggestions"
             bind:value={mDesc}
             placeholder="e.g. Coffee with a friend"
             class="w-full rounded-lg border px-3 py-2"
             style="border-color: var(--color-border); background-color: var(--color-bg);"
           />
+          <datalist id="manual-description-suggestions">
+            {#each descriptionSuggestions as d (d)}
+              <option value={d}></option>
+            {/each}
+          </datalist>
         </label>
         <label class="block text-sm">
           <span class="mb-1 block text-[var(--color-muted)]">Amount</span>

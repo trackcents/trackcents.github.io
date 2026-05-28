@@ -17,16 +17,34 @@
     flow: { inflow_minor: bigint; outflow_minor: bigint } | undefined;
     /** ISO YYYY-MM-DD device-local today date. */
     todayIso: string;
+    /**
+     * Sum of "extra" income for the month: total income MINUS the single
+     * largest income transaction (treated as the base / recurring source).
+     * 0n if there's only one income source (or none); when > 0 the box shows
+     * a small green "+$X extra income · tap to manage" line under the total.
+     */
+    extraIncomeMinor?: bigint;
     /** Tap-to-open the month picker. */
     onLabelClick: () => void;
     /** Reveal the + Income inline form (only shown on current/future months). */
     onAddIncome: () => void;
     /** Navigate / open the + Add expense flow. */
     onAddExpense: () => void;
+    /** Tap-to-jump to a filtered income view (for "tap to manage"). */
+    onManageIncome?: () => void;
   }
 
-  const { monthKey, monthLabel, flow, todayIso, onLabelClick, onAddIncome, onAddExpense }: Props =
-    $props();
+  const {
+    monthKey,
+    monthLabel,
+    flow,
+    todayIso,
+    extraIncomeMinor = 0n,
+    onLabelClick,
+    onAddIncome,
+    onAddExpense,
+    onManageIncome
+  }: Props = $props();
 
   // Props are reactive only when read inside `$derived`/`$effect`/the template —
   // bare top-level slicing would freeze on the initial value.
@@ -88,6 +106,24 @@
         <p class="mt-1 text-sm" style:color="var(--color-muted)">
           of {formatMoney(budget.income_minor)} income
         </p>
+        {#if extraIncomeMinor > 0n}
+          <!-- "Extra income" breakdown line — green, slightly smaller, tappable
+               to jump to the income transactions of this month.  Shown only
+               when there's more than one income source (largest = base, the
+               rest sum into `extraIncomeMinor`). -->
+          <button
+            type="button"
+            class="extra-income"
+            onclick={onManageIncome}
+            disabled={onManageIncome === undefined}
+          >
+            <span class="num font-medium">+{formatMoney(extraIncomeMinor)}</span>
+            <span>extra income</span>
+            {#if onManageIncome !== undefined}
+              <span class="extra-manage">· tap to manage</span>
+            {/if}
+          </button>
+        {/if}
       {/if}
     </div>
     {#if isCurrent}
@@ -209,6 +245,31 @@
   .headroom-pill.over {
     color: var(--color-danger);
     background-color: color-mix(in oklab, var(--color-danger) 14%, transparent);
+  }
+  .extra-income {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.35rem;
+    padding: 0;
+    background: none;
+    border: 0;
+    color: var(--color-success);
+    font-size: 0.85rem;
+    cursor: pointer;
+    text-align: left;
+  }
+  .extra-income:disabled {
+    cursor: default;
+  }
+  .extra-income:not(:disabled):hover {
+    text-decoration: underline;
+    text-decoration-color: color-mix(in oklab, var(--color-success) 40%, transparent);
+    text-underline-offset: 3px;
+  }
+  .extra-manage {
+    color: var(--color-muted);
+    font-size: 0.78rem;
   }
   .add-expense-btn {
     width: 100%;

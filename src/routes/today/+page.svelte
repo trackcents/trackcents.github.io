@@ -6,23 +6,22 @@
   // really BROWSES the past, not just the box.
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { loadState, addImport } from '$lib/db/store';
+  import { loadState } from '$lib/db/store';
   import type { ImportRecord } from '$lib/db/store';
   import { loadCategorization, type CategorizationState } from '$lib/db/categorization-store';
   import { summaryFromImports, detailedRowsFromImports } from '$lib/app/categorization-glue';
   import { netByMonth, spendingByCategoryByMonth } from '$lib/app/spending-summary';
   import { today } from '$lib/util/date';
   import { monthOverMonthInsight, topMovers } from '$lib/app/spending-insights';
-  import { makeManualImport, newManualId, ManualEntryError } from '$lib/app/manual-entry';
-  import { parseAmountToCents, CsvImportError } from '$lib/app/csv-import';
   import { categoryColor, categoryIconName } from '$lib/app/category-visuals';
   import { goalProgress, type SavingsGoal } from '$lib/app/savings-goal';
   import { loadGoals } from '$lib/db/goals-store';
-  import { formatMoney, getDisplayCurrency } from '$lib/util/money';
+  import { formatMoney } from '$lib/util/money';
   import CategoryIcon from '$components/CategoryIcon.svelte';
   import BudgetBox from '$components/BudgetBox.svelte';
   import MonthSlider from '$components/MonthSlider.svelte';
   import MonthPickerSheet from '$components/MonthPickerSheet.svelte';
+  import QuickAddSheet from '$components/QuickAddSheet.svelte';
 
   let loading = $state(true);
   let imports = $state<ImportRecord[]>([]);
@@ -44,45 +43,21 @@
   let activeMonth = $state(currentMonth);
   let pickerOpen = $state(false);
 
-  // ── + Income inline form (button lives inside the BudgetBox; form here) ────
-  let showIncome = $state(false);
-  let incomeAmount = $state('');
-  let incomeLabel = $state('');
-  let incomeError = $state<string | null>(null);
+  // ── Quick-add sheet (smart NL "type-it" entry) ────────────────────────────
+  // Replaces the old inline +Income form AND the old "navigate to /transactions"
+  // for +Add expense.  One sheet, both flows, with a natural-language parser at
+  // the top — Hemanth's entry-first design promise.
+  let quickAddOpen = $state(false);
+  let quickAddType = $state<'expense' | 'income'>('expense');
 
-  async function submitIncome(): Promise<void> {
-    incomeError = null;
-    try {
-      const mag = parseAmountToCents(incomeAmount, 1);
-      const abs = mag < 0n ? -mag : mag;
-      if (abs === 0n) {
-        incomeError = 'Enter an amount.';
-        return;
-      }
-      const rec = makeManualImport(
-        {
-          posted_date: todayIso,
-          description: incomeLabel.trim() || 'Income',
-          amount_minor: abs,
-          account_nickname: 'Income',
-          currency: getDisplayCurrency()
-        },
-        newManualId(),
-        new Date().toISOString()
-      );
-      await addImport(rec);
-      imports = (await loadState()).imports;
-      showIncome = false;
-      incomeAmount = '';
-      incomeLabel = '';
-    } catch (e) {
-      incomeError =
-        e instanceof ManualEntryError || e instanceof CsvImportError
-          ? e.message
-          : e instanceof Error
-            ? e.message
-            : String(e);
-    }
+  function openQuickAdd(type: 'expense' | 'income'): void {
+    quickAddType = type;
+    quickAddOpen = true;
+  }
+
+  async function refreshAfterSave(): Promise<void> {
+    imports = (await loadState()).imports;
+    cat = await loadCategorization();
   }
 
   // ── Derived data ───────────────────────────────────────────────────────────
@@ -133,6 +108,16 @@
   /** Months we have any transaction data for — drives the data-dot in the picker. */
   const monthsWithDataSet = $derived(new Set<string>(nbm.keys()));
 
+  /** Account-name suggestions for the quick-add sheet — manual nicknames land
+   *  in `bank_name` (see manual-entry.ts), so this also surfaces past manuals. */
+  const accountSuggestions = $derived.by<string[]>(() => {
+    const set = new Set<string>(['Cash']);
+    for (const imp of imports) {
+      if (imp.bank_name && imp.bank_name.trim().length > 0) set.add(imp.bank_name.trim());
+    }
+    return ['Cash', ...[...set].filter((a) => a !== 'Cash').sort()];
+  });
+
   // If the user lands on an activeMonth that's no longer in the available set
   // (e.g. data reloaded and the picked month vanished), fall back to current.
   $effect(() => {
@@ -158,6 +143,28 @@
   const absMinor = (m: bigint): bigint => (m < 0n ? -m : m);
 
   const allDetailed = $derived(detailedRowsFromImports(imports, cat.annotations));
+
+  /**
+   * "Extra income" for the ACTIVE month: every inflow transaction in this
+   * month MINUS the single largest (the inferred base / recurring income).
+   * 0n when there's only 1 inflow.  Drives the green "+$X extra income · tap
+   * to manage" line on the BudgetBox (Hemanth's design spec: total income at
+   * top, extras broken out below).  Ignored transactions are excluded.
+   */
+  const activeExtraIncomeMinor = $derived.by<bigint>(() => {
+    const inflows: bigint[] = [];
+    for (const r of allDetailed) {
+      if (r.posted_date.slice(0, 7) === activeMonth && r.amount_minor > 0n && !r.ignored) {
+        inflows.push(r.amount_minor);
+      }
+    }
+    if (inflows.length < 2) return 0n;
+    inflows.sort((a, b) => (a > b ? -1 : a < b ? 1 : 0));
+    let extra = 0n;
+    for (let i = 1; i < inflows.length; i++) extra += inflows[i]!;
+    return extra;
+  });
+
   // Recent rows within the active month (so the slider browses real history).
   const recent = $derived(
     allDetailed
@@ -191,53 +198,13 @@
         monthLabel={activeMonthLabel}
         flow={activeFlow}
         {todayIso}
+        extraIncomeMinor={activeExtraIncomeMinor}
         onLabelClick={() => (pickerOpen = true)}
-        onAddIncome={() => {
-          showIncome = !showIncome;
-          incomeError = null;
-        }}
-        onAddExpense={() => goto('/transactions')}
+        onAddIncome={() => openQuickAdd('income')}
+        onAddExpense={() => openQuickAdd('expense')}
+        onManageIncome={() => goto('/transactions')}
       />
     </MonthSlider>
-
-    {#if showIncome}
-      <section class="card rise mt-4 p-5">
-        <h2 class="mb-3 text-sm font-semibold">Add income</h2>
-        <div class="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
-          <label class="block text-sm">
-            <span class="mb-1 block text-xs" style:color="var(--color-muted)">Amount</span>
-            <input
-              type="text"
-              inputmode="decimal"
-              bind:value={incomeAmount}
-              placeholder="50000"
-              class="num w-full rounded-lg border px-3 py-2"
-              style="border-color: var(--color-border); background-color: var(--color-bg);"
-            />
-          </label>
-          <label class="block text-sm">
-            <span class="mb-1 block text-xs" style:color="var(--color-muted)"
-              >Source (optional)</span
-            >
-            <input
-              type="text"
-              bind:value={incomeLabel}
-              placeholder="Salary"
-              class="w-full rounded-lg border px-3 py-2"
-              style="border-color: var(--color-border); background-color: var(--color-bg);"
-            />
-          </label>
-          <div class="flex items-end">
-            <button type="button" class="btn btn-primary w-full sm:w-auto" onclick={submitIncome}>
-              Add
-            </button>
-          </div>
-        </div>
-        {#if incomeError}
-          <p class="mt-2 text-xs" style:color="var(--color-danger)">{incomeError}</p>
-        {/if}
-      </section>
-    {/if}
 
     <div class="card rise mt-4 p-8 text-center">
       <p class="text-sm" style:color="var(--color-muted)">
@@ -275,53 +242,13 @@
         monthLabel={activeMonthLabel}
         flow={activeFlow}
         {todayIso}
+        extraIncomeMinor={activeExtraIncomeMinor}
         onLabelClick={() => (pickerOpen = true)}
-        onAddIncome={() => {
-          showIncome = !showIncome;
-          incomeError = null;
-        }}
-        onAddExpense={() => goto('/transactions')}
+        onAddIncome={() => openQuickAdd('income')}
+        onAddExpense={() => openQuickAdd('expense')}
+        onManageIncome={() => goto('/transactions')}
       />
     </MonthSlider>
-
-    {#if showIncome}
-      <section class="card rise mt-4 p-5">
-        <h2 class="mb-3 text-sm font-semibold">Add income</h2>
-        <div class="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
-          <label class="block text-sm">
-            <span class="mb-1 block text-xs" style:color="var(--color-muted)">Amount</span>
-            <input
-              type="text"
-              inputmode="decimal"
-              bind:value={incomeAmount}
-              placeholder="50000"
-              class="num w-full rounded-lg border px-3 py-2"
-              style="border-color: var(--color-border); background-color: var(--color-bg);"
-            />
-          </label>
-          <label class="block text-sm">
-            <span class="mb-1 block text-xs" style:color="var(--color-muted)"
-              >Source (optional)</span
-            >
-            <input
-              type="text"
-              bind:value={incomeLabel}
-              placeholder="Salary"
-              class="w-full rounded-lg border px-3 py-2"
-              style="border-color: var(--color-border); background-color: var(--color-bg);"
-            />
-          </label>
-          <div class="flex items-end">
-            <button type="button" class="btn btn-primary w-full sm:w-auto" onclick={submitIncome}>
-              Add
-            </button>
-          </div>
-        </div>
-        {#if incomeError}
-          <p class="mt-2 text-xs" style:color="var(--color-danger)">{incomeError}</p>
-        {/if}
-      </section>
-    {/if}
 
     <!-- Top categories — for the ACTIVE month. -->
     <div class="card rise mt-4 p-5" style="animation-delay: 60ms;">
@@ -491,5 +418,18 @@
     monthsWithData={monthsWithDataSet}
     onSelect={(m) => (activeMonth = m)}
     onClose={() => (pickerOpen = false)}
+  />
+
+  <!-- Quick-add sheet — opens from the BudgetBox's +Add expense / +Income.  One
+       UI for both, with a natural-language "type-it" field at the top. -->
+  <QuickAddSheet
+    open={quickAddOpen}
+    initialType={quickAddType}
+    categories={cat.categories}
+    rules={cat.rules}
+    annotations={cat.annotations}
+    {accountSuggestions}
+    onClose={() => (quickAddOpen = false)}
+    onSaved={refreshAfterSave}
   />
 </main>
