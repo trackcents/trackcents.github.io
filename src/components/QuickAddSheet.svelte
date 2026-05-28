@@ -8,7 +8,7 @@
   // Category lives behind a "▾" button that opens CategoryPicker (popover
   // with search + ★ favorites + full list).  Account is a native datalist.
 
-  import { tick, untrack } from 'svelte';
+  import { untrack } from 'svelte';
   import { parseQuickAddText, type ParsedQuickAdd } from '$lib/app/nl-quick-add';
   import { guessCategoryId } from '$lib/app/category-guess';
   import { makeManualImport, newManualId, ManualEntryError } from '$lib/app/manual-entry';
@@ -78,11 +78,13 @@
     userTouchedCategory = true;
   }
 
-  let descInputEl = $state<HTMLInputElement | null>(null);
   let amountInputEl = $state<HTMLInputElement | null>(null);
 
-  // Reset every time the sheet opens.  Auto-focus the Description field so
-  // the smart NL parser is one tap away.
+  // Reset every time the sheet opens.  Deliberately DO NOT auto-focus any
+  // input — auto-focus pops the soft keyboard on mobile, which covers half
+  // the form and makes the "compact one-page" promise impossible to keep
+  // (Hemanth's complaint: "by default keyboard should not pop-up").  Users
+  // tap into the Amount or Description field themselves when ready.
   $effect(() => {
     if (open) {
       untrack(() => {
@@ -98,7 +100,6 @@
         saving = false;
         error = null;
       });
-      void tick().then(() => descInputEl?.focus());
     }
   });
 
@@ -218,22 +219,22 @@
 </script>
 
 {#if open}
-  <button type="button" class="backdrop" aria-label="Close" onclick={onClose}></button>
-  <div class="sheet" role="dialog" aria-modal="true" aria-label={title}>
-    <div class="grab"></div>
+  <button type="button" class="qas-backdrop" aria-label="Close" onclick={onClose}></button>
+  <div class="qas-sheet" role="dialog" aria-modal="true" aria-label={title}>
+    <div class="qas-grab"></div>
 
-    <div class="header">
-      <h2 class="title">{title}</h2>
-      <button type="button" class="close-btn" onclick={onClose} aria-label="Close">✕</button>
+    <div class="qas-header">
+      <h2 class="qas-title">{title}</h2>
+      <button type="button" class="qas-close-btn" onclick={onClose} aria-label="Close">✕</button>
     </div>
 
     <!-- Type toggle -->
-    <div class="type-toggle">
+    <div class="qas-type-toggle">
       {#each [{ v: 'expense', l: 'Expense' }, { v: 'income', l: 'Income' }, { v: 'transfer', l: 'Transfer' }] as opt (opt.v)}
         {@const active = direction === opt.v}
         <button
           type="button"
-          class="type-opt"
+          class="qas-type-opt"
           class:active
           onclick={() => (direction = opt.v as Direction)}
         >
@@ -243,28 +244,27 @@
     </div>
 
     <!-- Amount (big & prominent) -->
-    <div class="amount-row">
-      <span class="cur">{currencySymbol}</span>
+    <div class="qas-amount-row">
+      <span class="qas-cur">{currencySymbol}</span>
       <input
         type="text"
         inputmode="decimal"
         bind:value={amount}
         bind:this={amountInputEl}
         placeholder={amountPlaceholder}
-        class="amount num"
+        class="qas-amount num"
         aria-label="Amount"
       />
     </div>
 
     <!-- Description with smart NL parsing -->
-    <label class="block">
-      <span class="lbl">Description</span>
+    <label class="qas-block">
+      <span class="qas-lbl">Description</span>
       <input
         type="text"
         bind:value={desc}
-        bind:this={descInputEl}
         placeholder={descPlaceholder}
-        class="field"
+        class="qas-field"
         autocomplete="off"
         spellcheck="false"
         onkeydown={onDescKey}
@@ -272,9 +272,9 @@
     </label>
 
     <!-- Category dropdown trigger (opens CategoryPicker popover) -->
-    <div class="row-2col">
-      <button type="button" class="dd-btn" onclick={() => (pickerOpen = true)}>
-        <span class="dd-icon">
+    <div class="qas-row-2col">
+      <button type="button" class="qas-dd-btn" onclick={() => (pickerOpen = true)}>
+        <span class="qas-dd-icon">
           {#if categoryId === null}
             <span class="dot" style:background-color={selectedCategoryColor}></span>
           {:else}
@@ -285,22 +285,22 @@
             />
           {/if}
         </span>
-        <span class="dd-label">
-          <span class="lbl">Category</span>
-          <span class="dd-value">{selectedCategoryName}</span>
+        <span class="qas-dd-label">
+          <span class="qas-lbl">Category</span>
+          <span class="qas-dd-value">{selectedCategoryName}</span>
         </span>
-        <span class="dd-chev" aria-hidden="true">▾</span>
+        <span class="qas-dd-chev" aria-hidden="true">▾</span>
       </button>
 
-      <label class="dd-btn dd-account">
-        <span class="dd-icon">💳</span>
-        <span class="dd-label">
-          <span class="lbl">Account</span>
+      <label class="qas-dd-btn qas-dd-account">
+        <span class="qas-dd-icon">💳</span>
+        <span class="qas-dd-label">
+          <span class="qas-lbl">Account</span>
           <input
             type="text"
             list="qa-account-list"
             bind:value={account}
-            class="dd-input"
+            class="qas-dd-input"
             placeholder={direction === 'income'
               ? 'Income'
               : direction === 'transfer'
@@ -317,22 +317,22 @@
     </div>
 
     <!-- Date + Time -->
-    <div class="row-2col">
-      <label class="block">
-        <span class="lbl">Date</span>
-        <input type="date" bind:value={date} class="field" />
+    <div class="qas-row-2col">
+      <label class="qas-block">
+        <span class="qas-lbl">Date</span>
+        <input type="date" bind:value={date} class="qas-field" />
       </label>
-      <label class="block">
-        <span class="lbl">Time <span class="opt">(optional)</span></span>
-        <input type="time" bind:value={time} class="field" />
+      <label class="qas-block">
+        <span class="qas-lbl">Time <span class="qas-opt">(optional)</span></span>
+        <input type="time" bind:value={time} class="qas-field" />
       </label>
     </div>
 
     {#if error}
-      <p class="error">{error}</p>
+      <p class="qas-error">{error}</p>
     {/if}
 
-    <button type="button" class="save-btn" onclick={save} disabled={saving}>
+    <button type="button" class="qas-save-btn" onclick={save} disabled={saving}>
       {saving ? 'Saving…' : 'Save'}
     </button>
   </div>
@@ -348,7 +348,7 @@
 {/if}
 
 <style>
-  .backdrop {
+  .qas-backdrop {
     position: fixed;
     inset: 0;
     z-index: 40;
@@ -365,7 +365,7 @@
       opacity: 1;
     }
   }
-  .sheet {
+  .qas-sheet {
     position: fixed;
     inset-inline: 0;
     bottom: 0;
@@ -391,24 +391,24 @@
     }
   }
 
-  .grab {
+  .qas-grab {
     width: 38px;
     height: 4px;
     border-radius: 999px;
     background: var(--color-border);
     margin: 0.2rem auto 0.2rem;
   }
-  .header {
+  .qas-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
   }
-  .title {
+  .qas-title {
     font-size: 1.05rem;
     font-weight: 700;
     color: var(--color-text);
   }
-  .close-btn {
+  .qas-close-btn {
     width: 30px;
     height: 30px;
     border-radius: 999px;
@@ -418,13 +418,13 @@
     cursor: pointer;
     font-size: 0.85rem;
   }
-  .close-btn:hover {
+  .qas-close-btn:hover {
     color: var(--color-text);
     background: var(--color-surface-hover);
   }
 
   /* ── Type toggle (segmented control) ─────────────────────────── */
-  .type-toggle {
+  .qas-type-toggle {
     display: flex;
     gap: 0.2rem;
     border: 1px solid var(--color-border);
@@ -432,7 +432,7 @@
     padding: 0.2rem;
     background: var(--color-bg);
   }
-  .type-opt {
+  .qas-type-opt {
     flex: 1;
     border-radius: 9px;
     padding: 0.45rem 0.4rem;
@@ -446,13 +446,13 @@
       background-color 0.16s ease,
       color 0.16s ease;
   }
-  .type-opt.active {
+  .qas-type-opt.active {
     background-image: var(--grad-primary);
     color: var(--color-accent-fg);
   }
 
   /* ── Amount (big & prominent) ────────────────────────────────── */
-  .amount-row {
+  .qas-amount-row {
     display: flex;
     align-items: baseline;
     gap: 0.4rem;
@@ -461,13 +461,13 @@
     border-radius: 14px;
     padding: 0.6rem 1rem;
   }
-  .cur {
+  .qas-cur {
     color: var(--color-muted);
     font-size: 1.4rem;
     font-weight: 600;
     line-height: 1;
   }
-  .amount {
+  .qas-amount {
     flex: 1;
     border: 0;
     background: transparent;
@@ -479,18 +479,18 @@
     outline: none;
     min-width: 0;
   }
-  .amount::placeholder {
+  .qas-amount::placeholder {
     color: var(--color-muted);
     opacity: 0.5;
     font-weight: 600;
   }
 
   /* ── Generic labelled block + field ───────────────────────────── */
-  .block {
+  .qas-block {
     display: flex;
     flex-direction: column;
   }
-  .lbl {
+  .qas-lbl {
     font-size: 0.65rem;
     font-weight: 600;
     color: var(--color-muted);
@@ -498,12 +498,12 @@
     text-transform: uppercase;
     margin-bottom: 0.25rem;
   }
-  .opt {
+  .qas-opt {
     font-weight: 500;
     text-transform: none;
     letter-spacing: 0;
   }
-  .field {
+  .qas-field {
     width: 100%;
     border: 1px solid var(--color-border);
     background: var(--color-bg);
@@ -512,19 +512,19 @@
     padding: 0.55rem 0.7rem;
     font-size: 0.93rem;
   }
-  .field:focus {
+  .qas-field:focus {
     outline: none;
     border-color: var(--color-accent);
   }
 
-  .row-2col {
+  .qas-row-2col {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0.55rem;
   }
 
   /* ── Dropdown-style trigger button (Category / Account) ──────── */
-  .dd-btn {
+  .qas-dd-btn {
     display: flex;
     align-items: center;
     gap: 0.55rem;
@@ -539,10 +539,10 @@
       border-color 0.14s ease;
     min-width: 0;
   }
-  .dd-btn:hover {
+  .qas-dd-btn:hover {
     background: var(--color-surface-hover);
   }
-  .dd-icon {
+  .qas-dd-icon {
     width: 26px;
     height: 26px;
     display: inline-flex;
@@ -551,23 +551,23 @@
     flex-shrink: 0;
     font-size: 0.95rem;
   }
-  .dd-icon .dot {
+  .qas-dd-icon .dot {
     width: 12px;
     height: 12px;
     border-radius: 999px;
     display: inline-block;
   }
-  .dd-label {
+  .qas-dd-label {
     flex: 1;
     display: flex;
     flex-direction: column;
     min-width: 0;
   }
-  .dd-label .lbl {
+  .qas-dd-label .qas-lbl {
     margin-bottom: 0;
     font-size: 0.6rem;
   }
-  .dd-value {
+  .qas-dd-value {
     font-size: 0.92rem;
     font-weight: 600;
     color: var(--color-text);
@@ -576,7 +576,7 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .dd-input {
+  .qas-dd-input {
     border: 0;
     background: transparent;
     padding: 0;
@@ -586,26 +586,26 @@
     width: 100%;
     outline: none;
   }
-  .dd-input::placeholder {
+  .qas-dd-input::placeholder {
     color: var(--color-muted);
     font-weight: 500;
   }
-  .dd-chev {
+  .qas-dd-chev {
     color: var(--color-muted);
     font-size: 0.8rem;
     flex-shrink: 0;
   }
-  .dd-account {
+  .qas-dd-account {
     cursor: text;
   }
 
-  .error {
+  .qas-error {
     color: var(--color-danger);
     font-size: 0.82rem;
     margin: 0;
   }
 
-  .save-btn {
+  .qas-save-btn {
     margin-top: 0.25rem;
     width: 100%;
     padding: 0.85rem;
@@ -620,13 +620,13 @@
       filter 0.16s ease,
       transform 0.12s ease;
   }
-  .save-btn:hover:not(:disabled) {
+  .qas-save-btn:hover:not(:disabled) {
     filter: brightness(1.05);
   }
-  .save-btn:active:not(:disabled) {
+  .qas-save-btn:active:not(:disabled) {
     transform: scale(0.98);
   }
-  .save-btn:disabled {
+  .qas-save-btn:disabled {
     opacity: 0.6;
     cursor: default;
   }

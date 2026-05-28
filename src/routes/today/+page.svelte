@@ -368,7 +368,7 @@
 
     <div class="card rise mt-4 p-8 text-center">
       <p class="text-sm" style:color="var(--color-muted)">
-        Nothing here yet. Tap the floating <strong>+</strong> button to log your first expense, or
+        Nothing here yet. Tap the <strong>+</strong> tab below to log your first expense, or
         <a href="/" style:color="var(--color-accent)">drop a PDF</a> if you have a statement.
       </p>
     </div>
