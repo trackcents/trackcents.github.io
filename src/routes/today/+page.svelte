@@ -201,7 +201,6 @@
         extraIncomeMinor={activeExtraIncomeMinor}
         onLabelClick={() => (pickerOpen = true)}
         onAddIncome={() => openQuickAdd('income')}
-        onAddExpense={() => openQuickAdd('expense')}
         onManageIncome={() => goto(`/transactions?month=${activeMonth}`)}
       />
     </MonthSlider>
@@ -245,7 +244,6 @@
         extraIncomeMinor={activeExtraIncomeMinor}
         onLabelClick={() => (pickerOpen = true)}
         onAddIncome={() => openQuickAdd('income')}
-        onAddExpense={() => openQuickAdd('expense')}
         onManageIncome={() => goto(`/transactions?month=${activeMonth}`)}
       />
     </MonthSlider>

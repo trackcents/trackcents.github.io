@@ -28,8 +28,6 @@
     onLabelClick: () => void;
     /** Reveal the + Income inline form (only shown on current/future months). */
     onAddIncome: () => void;
-    /** Navigate / open the + Add expense flow. */
-    onAddExpense: () => void;
     /** Tap-to-jump to a filtered income view (for "tap to manage"). */
     onManageIncome?: () => void;
   }
@@ -42,7 +40,6 @@
     extraIncomeMinor = 0n,
     onLabelClick,
     onAddIncome,
-    onAddExpense,
     onManageIncome
   }: Props = $props();
 
@@ -196,13 +193,11 @@
     </p>
   {/if}
 
-  {#if isCurrent}
-    <div class="mt-5">
-      <button type="button" class="btn btn-primary add-expense-btn" onclick={onAddExpense}>
-        + Add expense
-      </button>
-    </div>
-  {/if}
+  <!-- The "+ Add expense" affordance lives on a floating FAB on the page; we
+       deliberately removed the duplicate bottom button from inside the box per
+       both personas' round-2 feedback (Bhargav: "now I have the FAB AND the
+       old button doing the exact same thing"; Murali: "pick one front door
+       per action"). -->
 </section>
 
 <style>
@@ -301,13 +296,5 @@
   }
   .stat-primary .stat-label {
     color: var(--color-accent);
-  }
-  .add-expense-btn {
-    width: 100%;
-  }
-  @media (min-width: 640px) {
-    .add-expense-btn {
-      width: auto;
-    }
   }
 </style>

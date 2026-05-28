@@ -12,13 +12,10 @@
   import { slide } from 'svelte/transition';
   import FilterBar from '$components/FilterBar.svelte';
   import UnifiedTransactionTable from '$components/UnifiedTransactionTable.svelte';
+  import QuickAddSheet from '$components/QuickAddSheet.svelte';
   import { loadImports } from '$lib/app/load-store';
-  import { addImport } from '$lib/db/store';
-  import { makeManualImport, newManualId, ManualEntryError } from '$lib/app/manual-entry';
-  import { parseAmountToCents, CsvImportError } from '$lib/app/csv-import';
   import { detectTransfers, type TransferTxn } from '$lib/app/transfer-detector';
-  import { formatMoney, getDisplayCurrency } from '$lib/util/money';
-  import { today } from '$lib/util/date';
+  import { formatMoney } from '$lib/util/money';
   import {
     toUnifiedRows,
     listAccounts,
@@ -83,54 +80,18 @@
     await saveCategorization({ categories, rules, annotations });
   }
 
-  // ── Manual transaction entry (US-P3-B) ──
-  let showAdd = $state(false);
-  let addError = $state<string | null>(null);
-  // CRITICAL: use `today()` (local time), NOT `new Date().toISOString()` (UTC).
-  // Late evening in a west-of-UTC zone, toISOString rolls into TOMORROW's date,
-  // which is exactly the bug Hemanth screenshotted (form defaulting to 05/28
-  // while it was still 05/27 local).  `today()` is timezone-aware.
-  let mDate = $state(today());
-  let mDesc = $state('');
-  let mAmount = $state('');
-  let mDirection = $state<'expense' | 'income'>('expense');
-  let mAccount = $state('Cash');
+  // ── Manual transaction entry — uses the same QuickAddSheet as Home, so the
+  // experience is consistent (chips, NL parser, AUTO badge, category at entry).
+  // Both personas in round-2 review flagged the duplicate inline form here.
+  let quickAddOpen = $state(false);
 
-  function resetAdd(): void {
-    mDate = today();
-    mDesc = '';
-    mAmount = '';
-    mDirection = 'expense';
-    mAccount = 'Cash';
-    addError = null;
-  }
-
-  async function submitManual(): Promise<void> {
-    addError = null;
-    try {
-      const magnitude = parseAmountToCents(mAmount, 1); // reuse the validated decimal→cents parser
-      const abs = magnitude < 0n ? -magnitude : magnitude;
-      const signed = mDirection === 'expense' ? -abs : abs;
-      const rec = makeManualImport(
-        {
-          posted_date: mDate,
-          description: mDesc,
-          amount_minor: signed,
-          account_nickname: mAccount,
-          currency: getDisplayCurrency()
-        },
-        newManualId(),
-        new Date().toISOString()
-      );
-      await addImport(rec);
-      const loaded = await loadImports();
-      imports = loaded.imports;
-      showAdd = false;
-      resetAdd();
-    } catch (err) {
-      if (err instanceof ManualEntryError || err instanceof CsvImportError) addError = err.message;
-      else addError = err instanceof Error ? err.message : String(err);
-    }
+  async function refreshAfterSave(): Promise<void> {
+    const loaded = await loadImports();
+    imports = loaded.imports;
+    const c = await loadCategorization();
+    categories = c.categories;
+    rules = c.rules;
+    annotations = c.annotations;
   }
 
   // Filter + sort state.  Filter starts empty (show everything); sort
@@ -190,13 +151,6 @@
     }
     return ['Cash', ...[...set].filter((a) => a !== 'Cash').sort()];
   });
-  const descriptionSuggestions = $derived.by<string[]>(() => {
-    const set = new Set<string>();
-    for (const r of allRows) if (r.description.trim().length > 0) set.add(r.description.trim());
-    // Cap at 200 to keep the datalist responsive.
-    return [...set].sort().slice(0, 200);
-  });
-
   // Apply filter then sort — both are pure functions, so re-running on
   // every keystroke is fine at this dataset size.
   let filteredRows = $derived(applyFilter(allRows, filter));
@@ -287,117 +241,10 @@
         statement.
       </p>
     </div>
-    <button
-      type="button"
-      class="btn btn-primary"
-      onclick={() => {
-        showAdd = !showAdd;
-        addError = null;
-      }}
-    >
-      {showAdd ? 'Close' : '+ Add transaction'}
+    <button type="button" class="btn btn-primary" onclick={() => (quickAddOpen = true)}>
+      + Add transaction
     </button>
   </header>
-
-  {#if showAdd}
-    <section class="card rise mb-5 p-5">
-      <h2 class="mb-1 text-base font-semibold">Add a manual transaction</h2>
-      <p class="mb-4 text-xs text-[var(--color-muted)]">
-        For cash spends or anything not on a statement. It's filed under a “{mAccount}” account and
-        counts everywhere like a parsed one.
-      </p>
-      <div class="grid gap-3 sm:grid-cols-2">
-        <label class="block text-sm">
-          <span class="mb-1 block text-[var(--color-muted)]">Date</span>
-          <input
-            type="date"
-            bind:value={mDate}
-            class="w-full rounded-lg border px-3 py-2"
-            style="border-color: var(--color-border); background-color: var(--color-bg);"
-          />
-        </label>
-        <label class="block text-sm">
-          <span class="mb-1 block text-[var(--color-muted)]">Account</span>
-          <!-- Combobox: pick from known accounts (datalist) OR type a new one. -->
-          <input
-            type="text"
-            list="manual-account-suggestions"
-            bind:value={mAccount}
-            placeholder="Cash"
-            class="w-full rounded-lg border px-3 py-2"
-            style="border-color: var(--color-border); background-color: var(--color-bg);"
-          />
-          <datalist id="manual-account-suggestions">
-            {#each accountSuggestions as a (a)}
-              <option value={a}></option>
-            {/each}
-          </datalist>
-        </label>
-        <label class="block text-sm sm:col-span-2">
-          <span class="mb-1 block text-[var(--color-muted)]">Description</span>
-          <!-- Combobox: pick from past descriptions (datalist) OR type a new one.
-               Native HTML5 datalist works on iOS / Android / desktop. -->
-          <input
-            type="text"
-            list="manual-description-suggestions"
-            bind:value={mDesc}
-            placeholder="e.g. Coffee with a friend"
-            class="w-full rounded-lg border px-3 py-2"
-            style="border-color: var(--color-border); background-color: var(--color-bg);"
-          />
-          <datalist id="manual-description-suggestions">
-            {#each descriptionSuggestions as d (d)}
-              <option value={d}></option>
-            {/each}
-          </datalist>
-        </label>
-        <label class="block text-sm">
-          <span class="mb-1 block text-[var(--color-muted)]">Amount</span>
-          <input
-            type="text"
-            inputmode="decimal"
-            bind:value={mAmount}
-            placeholder="12.34"
-            class="num w-full rounded-lg border px-3 py-2"
-            style="border-color: var(--color-border); background-color: var(--color-bg);"
-          />
-        </label>
-        <div class="block text-sm">
-          <span class="mb-1 block text-[var(--color-muted)]">Type</span>
-          <div class="flex gap-1 rounded-lg border p-1" style="border-color: var(--color-border);">
-            {#each [{ v: 'expense', l: 'Expense' }, { v: 'income', l: 'Income' }] as opt (opt.v)}
-              {@const active = mDirection === opt.v}
-              <button
-                type="button"
-                class="flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors"
-                style:color={active ? 'var(--color-accent-fg)' : 'var(--color-muted)'}
-                style:background-image={active ? 'var(--grad-primary)' : 'none'}
-                onclick={() => (mDirection = opt.v as 'expense' | 'income')}
-              >
-                {opt.l}
-              </button>
-            {/each}
-          </div>
-        </div>
-      </div>
-      {#if addError}
-        <p class="mt-3 text-sm text-[var(--color-danger)]">{addError}</p>
-      {/if}
-      <div class="mt-4 flex gap-3">
-        <button type="button" class="btn btn-primary" onclick={submitManual}
-          >Save transaction</button
-        >
-        <button
-          type="button"
-          class="btn btn-ghost"
-          onclick={() => {
-            showAdd = false;
-            resetAdd();
-          }}>Cancel</button
-        >
-      </div>
-    </section>
-  {/if}
 
   {#if hydrating}
     <p class="text-sm text-[var(--color-muted)]">Loading…</p>
@@ -529,6 +376,20 @@
       {refundCandidates}
     />
   {/if}
+
+  <!-- Same smart entry experience as Home — NL "Type it" + category chips +
+       AUTO badge.  Replaces the old inline form (both personas flagged it as
+       a duplicate, inferior copy of the home sheet). -->
+  <QuickAddSheet
+    open={quickAddOpen}
+    initialType="expense"
+    {categories}
+    {rules}
+    {annotations}
+    {accountSuggestions}
+    onClose={() => (quickAddOpen = false)}
+    onSaved={refreshAfterSave}
+  />
 </main>
 
 <style>
