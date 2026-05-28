@@ -118,4 +118,30 @@ describe('parseQuickAddText', () => {
     const p = parseQuickAddText('rent in 3 days', '2026-05-28');
     expect(p.date_iso).toBe('2026-05-31');
   });
+
+  // ── Time extraction (Hemanth feedback: "time is not being autopopulated") ─
+  it('extracts time from "ate biryani on 23rd may 03:40 PM"', () => {
+    const p = parseQuickAddText('ate biryani on 23rd may 03:40 PM for 450.56', '2026-05-28');
+    expect(p.date_iso).toBe('2026-05-23');
+    expect(p.time_hhmm).toBe('15:40');
+    expect(p.amount_minor).toBe(45056n);
+  });
+
+  it('extracts time from bare "10am chai" — no AM/PM ambiguity', () => {
+    const p = parseQuickAddText('10am chai', TODAY);
+    expect(p.time_hhmm).toBe('10:00');
+  });
+
+  it('extracts 24-hour times: "22:30 dinner"', () => {
+    const p = parseQuickAddText('22:30 dinner 450', TODAY);
+    expect(p.time_hhmm).toBe('22:30');
+  });
+
+  it('returns null time when the user did NOT type one', () => {
+    // "may 23" by itself has only a date — chrono will default to noon, but
+    // isCertain('hour') is false, so we leave time_hhmm null and let the
+    // user keep their existing time field value.
+    const p = parseQuickAddText('biryani on may 23 worth 450', '2026-05-28');
+    expect(p.time_hhmm).toBeNull();
+  });
 });

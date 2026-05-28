@@ -10,7 +10,6 @@
   import BrandMark from '$components/BrandMark.svelte';
   import SyncStatusIndicator from '$components/SyncStatusIndicator.svelte';
   import ThemeToggle from '$components/ThemeToggle.svelte';
-  import AddSheet, { type AddKind } from '$components/AddSheet.svelte';
 
   interface Item {
     href: string;
@@ -44,13 +43,13 @@
   );
 
   let moreOpen = $state(false);
-  let addOpen = $state(false);
 
-  /** Handle a pick from the AddSheet — route to Home with a query param the
-   *  Today page reads to open QuickAddSheet preset to the chosen direction. */
-  async function handleAddPick(kind: AddKind): Promise<void> {
-    // expense / income / transfer → ?add=...  Today page picks it up.
-    await goto(`${base}/today?add=${kind}`);
+  /** "+" tab handler — the intermediate AddSheet (Expense/Income/Transfer
+   *  chooser) was killed in Batch A per Hemanth: "remove that layer
+   *  directly open it and I will select which I want to add in that
+   *  menu".  QuickAddSheet's segmented control at the top is enough. */
+  async function openQuickAdd(): Promise<void> {
+    await goto(`${base}/today?add=expense`);
   }
 
   function isActive(href: string, path: string): boolean {
@@ -154,12 +153,7 @@
   <!-- Center "+" — the universal Add affordance.  Larger, accent-coloured,
        slightly raised so it reads as the visual anchor of the tab bar
        (Instagram / Cash App / Robinhood pattern). -->
-  <button
-    type="button"
-    class="add-tab"
-    onclick={() => (addOpen = true)}
-    aria-label="Add a transaction"
-  >
+  <button type="button" class="add-tab" onclick={openQuickAdd} aria-label="Add a transaction">
     <span class="add-disc">
       <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
         <path
@@ -185,9 +179,6 @@
     <span>More</span>
   </button>
 </nav>
-
-<!-- The Add sheet (opened by the center "+") -->
-<AddSheet open={addOpen} onPick={handleAddPick} onClose={() => (addOpen = false)} />
 
 <!-- Phone: "More" bottom sheet -->
 {#if moreOpen}

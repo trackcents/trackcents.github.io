@@ -21,6 +21,8 @@
   } from '$lib/app/categorization-glue';
   import { runAutoCategorize } from '$lib/app/auto-categorize';
   import { seedCategoriesAndRules, shouldAutoSeed } from '$lib/app/default-categories';
+  import { deleteCategory as deleteCategoryPure } from '$lib/app/categorization';
+  import { listAllAccounts } from '$lib/app/accounts';
   import { detectPaychecks } from '$lib/app/paycheck-detector';
   import type { ImportSuccess } from '$lib/app/import';
   import { spendingByCategoryByMonth } from '$lib/app/spending-summary';
@@ -46,11 +48,18 @@
     cat = await loadCategorization();
     goals = await loadGoals();
     loading = false;
-    // Auto-seed the starter category + rule set (REQ-B0.2) for users who
-    // have data but zero categories — covers the real-world "I imported 14
-    // statements and everything is Uncategorized" case.  A returning user
-    // who deliberately deleted categories keeps their empty state.
-    if (imports.length > 0 && shouldAutoSeed(cat)) {
+    // Auto-seed the starter category + rule set (REQ-B0.2) whenever the
+    // user has ZERO categories.  Originally gated on imports.length > 0
+    // but that broke the Bhargav case: a manual-only user opened the
+    // Quick Add sheet, tapped Category, and saw NOTHING (because no
+    // imports → no seeding fired → empty category list).  Now the seed
+    // runs as soon as we know the user has nothing — they'll see the
+    // starter set on their first tap.  A returning user who deliberately
+    // deleted categories ends up here too on next load; the trade-off is
+    // worth it (better cold-start than perfect "I emptied this on
+    // purpose" memory).  Bhargav-style users can prune in CategoryPicker
+    // edit mode (Batch A safe-delete) once seeded.
+    if (shouldAutoSeed(cat)) {
       const seeded = seedCategoriesAndRules();
       cat = {
         categories: seeded.categories,
@@ -224,15 +233,50 @@
     }
   }
 
-  /** Account-name suggestions for the quick-add sheet — manual nicknames land
-   *  in `bank_name` (see manual-entry.ts), so this also surfaces past manuals. */
-  const accountSuggestions = $derived.by<string[]>(() => {
-    const set = new Set<string>(['Cash']);
-    for (const imp of imports) {
-      if (imp.bank_name && imp.bank_name.trim().length > 0) set.add(imp.bank_name.trim());
-    }
-    return ['Cash', ...[...set].filter((a) => a !== 'Cash').sort()];
-  });
+  /** Account list for the quick-add sheet — combines imported accounts
+   *  (with bank + last-4 distinguished), manually-added accounts (Bhargav
+   *  case), and "Cash" as the always-available fallback.  Owned by
+   *  src/lib/app/accounts.ts so it's reusable from other forms. */
+  const accountList = $derived<string[]>(listAllAccounts(imports));
+
+  /** Create a new category from the QuickAddSheet -> CategoryPicker flow.
+   *  Generates a stable id, persists, returns the new id so the form can
+   *  select it immediately. */
+  async function handleCreateCategory(name: string): Promise<string> {
+    const trimmed = name.trim();
+    if (trimmed.length === 0) throw new Error('category name is empty');
+    // Avoid silent collisions — if a category with this name (case-
+    // insensitive) already exists, just return its id.
+    const existing = cat.categories.find((c) => c.name.toLowerCase() === trimmed.toLowerCase());
+    if (existing) return existing.id;
+    const newId =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? `cat-${crypto.randomUUID()}`
+        : `cat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    cat = {
+      ...cat,
+      categories: [...cat.categories, { id: newId, name: trimmed }]
+    };
+    await saveCategorization(cat);
+    return newId;
+  }
+
+  /** Delete a category (called from CategoryPicker edit mode AFTER the
+   *  confirm sub-sheet).  Uses the pure deleteCategory() from
+   *  categorization.ts which also clears the now-orphaned annotations. */
+  async function handleDeleteCategory(id: string): Promise<void> {
+    const { categories, annotations } = deleteCategoryPure(
+      cat.categories,
+      new Map(Object.entries(cat.annotations)),
+      id
+    );
+    cat = {
+      categories,
+      rules: cat.rules.filter((r) => r.category_id !== id),
+      annotations: Object.fromEntries(annotations)
+    };
+    await saveCategorization(cat);
+  }
 
   // If the user lands on an activeMonth that's no longer in the available set
   // (e.g. data reloaded and the picked month vanished), fall back to current.
@@ -654,9 +698,11 @@
     categories={cat.categories}
     rules={cat.rules}
     annotations={cat.annotations}
-    {accountSuggestions}
+    accounts={accountList}
     onClose={() => (quickAddOpen = false)}
     onSaved={refreshAfterSave}
+    onCreateCategory={handleCreateCategory}
+    onDeleteCategory={handleDeleteCategory}
   />
 
   <!-- Save-confirmation toast — shows briefly after a manual transaction is

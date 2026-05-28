@@ -31,11 +31,13 @@
     setManualCategory,
     setAnnotation,
     pruneAnnotation,
+    deleteCategory as deleteCategoryPure,
     transactionCategoryKey,
     type Category,
     type CategoryRule,
     type TransactionAnnotation
   } from '$lib/app/categorization';
+  import { listAllAccounts } from '$lib/app/accounts';
 
   let imports = $state<ImportSuccess[]>([]);
   let hydrating = $state(true);
@@ -157,19 +159,39 @@
   let allRows = $derived(toUnifiedRows(imports));
   let accounts = $derived(listAccounts(allRows));
 
-  // Datalist suggestions for the manual-add form.  For manual entries the
-  // account name the user typed lands in `bank_name` (see manual-entry.ts:
-  // `bank_name: nickname`), so `imp.bank_name` gives both past manual nicknames
-  // and real bank names from imported statements.  "Cash" is always first so
-  // cash spends are one tap away.
-  const accountSuggestions = $derived.by<string[]>(() => {
-    const set = new Set<string>(['Cash']);
-    for (const imp of imports) {
-      const name = imp.bank_name;
-      if (name && name.trim().length > 0) set.add(name.trim());
-    }
-    return ['Cash', ...[...set].filter((a) => a !== 'Cash').sort()];
-  });
+  // Account list for the manual-add form — single source of truth in
+  // src/lib/app/accounts.ts (Batch A).  Combines imported accounts (with
+  // bank + last-4 distinguished), manually-added accounts (persisted in
+  // localStorage), and "Cash" as the always-available fallback.
+  const accountList = $derived<string[]>(listAllAccounts(imports));
+
+  /** Create a new category from QuickAddSheet -> CategoryPicker.  Mirrors
+   *  the implementation on the Today page.  Returns the new id so the
+   *  form can select it immediately. */
+  async function handleCreateCategory(name: string): Promise<string> {
+    const trimmed = name.trim();
+    if (trimmed.length === 0) throw new Error('category name is empty');
+    const existing = categories.find((c) => c.name.toLowerCase() === trimmed.toLowerCase());
+    if (existing) return existing.id;
+    const newId =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? `cat-${crypto.randomUUID()}`
+        : `cat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    categories = [...categories, { id: newId, name: trimmed }];
+    await saveCategorization({ categories, rules, annotations });
+    return newId;
+  }
+
+  /** Delete a category from CategoryPicker edit mode (after the confirm
+   *  sub-sheet).  Uses the pure deleteCategory() helper which clears the
+   *  now-orphaned annotations too. */
+  async function handleDeleteCategory(id: string): Promise<void> {
+    const result = deleteCategoryPure(categories, new Map(Object.entries(annotations)), id);
+    categories = result.categories;
+    rules = rules.filter((r) => r.category_id !== id);
+    annotations = Object.fromEntries(result.annotations);
+    await saveCategorization({ categories, rules, annotations });
+  }
   // Apply filter then sort — both are pure functions, so re-running on
   // every keystroke is fine at this dataset size.
   let filteredRows = $derived(applyFilter(allRows, filter));
@@ -404,9 +426,11 @@
     {categories}
     {rules}
     {annotations}
-    {accountSuggestions}
+    accounts={accountList}
     onClose={() => (quickAddOpen = false)}
     onSaved={refreshAfterSave}
+    onCreateCategory={handleCreateCategory}
+    onDeleteCategory={handleDeleteCategory}
   />
 </main>
 

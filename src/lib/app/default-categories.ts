@@ -158,6 +158,7 @@ const SEED_RULES: ReadonlyArray<{ contains: string; category: string }> = [
   { contains: 'BIGBASKET', category: 'Groceries' },
 
   // ── Eating out ──────────────────────────────────────────────────────────
+  // Merchant-name matches (most-specific first).
   { contains: 'STARBUCKS', category: 'Eating out' },
   { contains: 'CHAI POINT', category: 'Eating out' },
   { contains: 'MCDONALD', category: 'Eating out' },
@@ -166,8 +167,41 @@ const SEED_RULES: ReadonlyArray<{ contains: string; category: string }> = [
   { contains: 'UBER EATS', category: 'Eating out' },
   { contains: 'SWIGGY', category: 'Eating out' },
   { contains: 'ZOMATO', category: 'Eating out' },
+  { contains: 'DUNKIN', category: 'Eating out' },
+  { contains: 'SUBWAY', category: 'Eating out' },
+  { contains: 'TACO BELL', category: 'Eating out' },
+  { contains: 'PANERA', category: 'Eating out' },
   { contains: 'CINEMARK', category: 'Entertainment' },
   { contains: 'TST*', category: 'Eating out' },
+  // Generic food-word fallback (catches Bhargav-style manual entries like
+  // "ate biryani worth 450" / "pizza with friends" / "tiffin near office").
+  // Last in this section so a merchant-name match always wins first.
+  { contains: 'BIRYANI', category: 'Eating out' },
+  { contains: 'PIZZA', category: 'Eating out' },
+  { contains: 'BURGER', category: 'Eating out' },
+  { contains: 'TIFFIN', category: 'Eating out' },
+  { contains: 'IDLI', category: 'Eating out' },
+  { contains: 'DOSA', category: 'Eating out' },
+  { contains: 'SAMOSA', category: 'Eating out' },
+  { contains: 'KEBAB', category: 'Eating out' },
+  { contains: 'KABAB', category: 'Eating out' },
+  { contains: 'MOMO', category: 'Eating out' },
+  { contains: 'NOODLES', category: 'Eating out' },
+  { contains: 'RAMEN', category: 'Eating out' },
+  { contains: 'SUSHI', category: 'Eating out' },
+  { contains: 'BURRITO', category: 'Eating out' },
+  { contains: 'PARATHA', category: 'Eating out' },
+  { contains: 'THALI', category: 'Eating out' },
+  { contains: 'CURRY', category: 'Eating out' },
+  { contains: 'CHAI', category: 'Eating out' },
+  { contains: 'COFFEE', category: 'Eating out' },
+  { contains: 'LUNCH', category: 'Eating out' },
+  { contains: 'DINNER', category: 'Eating out' },
+  { contains: 'BREAKFAST', category: 'Eating out' },
+  { contains: 'BRUNCH', category: 'Eating out' },
+  { contains: 'SNACKS', category: 'Eating out' },
+  { contains: 'RESTAURANT', category: 'Eating out' },
+  { contains: 'CAFE', category: 'Eating out' },
 
   // ── Transport ───────────────────────────────────────────────────────────
   { contains: 'UBER', category: 'Transport' },

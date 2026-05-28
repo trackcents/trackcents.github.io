@@ -23,6 +23,9 @@ export interface ParsedQuickAdd {
   amount_minor: bigint | null;
   /** ISO YYYY-MM-DD; falls back to `defaultDateIso` when no date phrase found. */
   date_iso: string;
+  /** 24-hour "HH:MM" when the user typed a time (e.g. "03:40 PM" / "10am");
+   *  null when the parsed date phrase didn't include a time. */
+  time_hhmm: string | null;
   /** Original text with the matched amount + date phrases stripped, trimmed. */
   description: string;
   /** `income` when income-leaning keywords appear; `expense` is the default. */
@@ -76,6 +79,7 @@ export function parseQuickAddText(text: string, defaultDateIso: string): ParsedQ
   let dateIso = defaultDateIso;
   let dateStart = -1;
   let dateEnd = -1;
+  let timeHhmm: string | null = null;
   if (chronoResults.length > 0) {
     const r = chronoResults[0]!;
     let d = r.date();
@@ -96,6 +100,21 @@ export function parseQuickAddText(text: string, defaultDateIso: string): ParsedQ
     dateIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     dateStart = r.index;
     dateEnd = r.index + r.text.length;
+
+    // Time extraction — chrono's ParsedComponents flags whether the user
+    // explicitly typed a time ("03:40 PM") vs the parser inferring noon as
+    // a default.  Only treat it as a real time when isCertain('hour') is
+    // true, otherwise the form gets "12:00" populated for every "may 23"
+    // entry which is wrong.  Hemanth's feedback: "time is not being
+    // autopopulated though I type" — "ate biryani on 23rd may 03:40 PM"
+    // should fill the time field with 15:40.
+    if (r.start.isCertain('hour')) {
+      const hh = r.start.get('hour');
+      const mm = r.start.get('minute') ?? 0;
+      if (hh !== null && hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) {
+        timeHhmm = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+      }
+    }
   }
 
   // Pick the largest amount that doesn't overlap the date phrase (so "June 4"
@@ -137,6 +156,7 @@ export function parseQuickAddText(text: string, defaultDateIso: string): ParsedQ
   return {
     amount_minor: amountMinor,
     date_iso: dateIso,
+    time_hhmm: timeHhmm,
     description: desc,
     direction
   };

@@ -1,12 +1,18 @@
 <script lang="ts">
-  // Quick-add bottom sheet — compact one-page form (locked design v1.1).
-  // Opens from the bottom-tab "+ Add" → AddSheet → here, presets to expense /
-  // income / transfer.  The entire form fits inside the sheet without
-  // scrolling.  Smart NL parsing lives on the Description field — typing
-  // "₹40 chai today" still auto-fills amount + date + category.
+  // Quick-add bottom sheet — compact one-page form (locked design v1.2).
+  // Opens from the bottom-tab "+" directly (the intermediate AddSheet was
+  // killed in Batch A — the user's segmented Expense/Income/Transfer
+  // control at the top is enough).  The entire form fits inside the sheet
+  // without scrolling.  Smart NL parsing lives on the Description field —
+  // typing "ate biryani on 23rd may 03:40 PM for 450" still auto-fills
+  // amount + date + TIME + category.
   //
-  // Category lives behind a "▾" button that opens CategoryPicker (popover
-  // with search + ★ favorites + full list).  Account is a native datalist.
+  // Batch A additions:
+  //   • Account is now a full combobox (AccountPicker) — typed names get
+  //     created + remembered, default = last used.
+  //   • Notes textarea below Description so future you can find out why.
+  //   • Time autofills from the NL parser when the user typed one.
+  //   • Category picker can create + delete categories inline.
 
   import { untrack } from 'svelte';
   import { parseQuickAddText, type ParsedQuickAdd } from '$lib/app/nl-quick-add';
@@ -17,6 +23,7 @@
   import { saveCategorization } from '$lib/db/categorization-store';
   import {
     setManualCategory,
+    setAnnotation,
     transactionCategoryKey,
     type Category,
     type CategoryRule,
@@ -24,9 +31,15 @@
   } from '$lib/app/categorization';
   import { getDisplayCurrency, getDisplayCurrencySymbol } from '$lib/util/money';
   import { today } from '$lib/util/date';
+  import {
+    loadLastUsedAccount,
+    rememberManualAccount,
+    saveLastUsedAccount
+  } from '$lib/app/accounts';
   import { categoryColor, categoryIconName } from '$lib/app/category-visuals';
   import CategoryIcon from '$components/CategoryIcon.svelte';
   import CategoryPicker from '$components/CategoryPicker.svelte';
+  import AccountPicker from '$components/AccountPicker.svelte';
 
   const currencySymbol = getDisplayCurrencySymbol();
   const isInr = currencySymbol === '₹';
@@ -38,15 +51,20 @@
 
   interface Props {
     open: boolean;
-    /** 'expense' | 'income' | 'transfer' — preset from the AddSheet pick. */
+    /** 'expense' | 'income' | 'transfer' — preset from the "+" tab. */
     initialType: Direction;
     categories: Category[];
     rules: CategoryRule[];
     annotations: Record<string, TransactionAnnotation>;
-    accountSuggestions: string[];
+    /** All known accounts (Cash + imported + manually added). */
+    accounts: string[];
     onClose: () => void;
     /** `learned` is true when a category annotation was saved. */
     onSaved: (info: { learned: boolean }) => void;
+    /** Create a new category (parent persists). */
+    onCreateCategory?: ((name: string) => Promise<string> | string) | undefined;
+    /** Delete a category (parent persists). */
+    onDeleteCategory?: ((id: string) => Promise<void> | void) | undefined;
   }
 
   const {
@@ -55,9 +73,11 @@
     categories,
     rules,
     annotations,
-    accountSuggestions,
+    accounts,
     onClose,
-    onSaved
+    onSaved,
+    onCreateCategory,
+    onDeleteCategory
   }: Props = $props();
 
   // ── Form state ─────────────────────────────────────────────────────────────
@@ -67,20 +87,21 @@
    *  parseFreeFormTime). */
   let time = $state('');
   let desc = $state('');
+  let note = $state('');
   let amount = $state('');
   let direction = $state<Direction>('expense');
   let account = $state('Cash');
   let categoryId = $state<string | null>(null);
   let userTouchedCategory = $state(false);
+  let userTouchedTime = $state(false);
+  let userTouchedAccount = $state(false);
   /** Did the user manually edit the amount field?  Once true, the NL parser
-   *  in the description no longer overrides what they typed.  Until true,
-   *  the parser keeps updating the amount as the user keeps typing — fixes
-   *  the bug where typing "2" first locked the amount at $2.00 and the
-   *  later "$46" in "biryani worth $46" never made it through. */
+   *  in the description no longer overrides what they typed. */
   let userTouchedAmount = $state(false);
   let saving = $state(false);
   let error = $state<string | null>(null);
   let pickerOpen = $state(false);
+  let accountPickerOpen = $state(false);
 
   function pickCategory(id: string | null): void {
     categoryId = id;
@@ -120,37 +141,52 @@
 
   let amountInputEl = $state<HTMLInputElement | null>(null);
 
+  /** Defaults to use whenever the sheet opens.  Direction-aware:
+   *    expense  → last-used real account (or "Cash")
+   *    income   → "Income"   (so transfers/income don't pollute "last used")
+   *    transfer → "Transfer" */
+  function defaultAccount(d: Direction): string {
+    if (d === 'income') return 'Income';
+    if (d === 'transfer') return 'Transfer';
+    return loadLastUsedAccount() ?? 'Cash';
+  }
+
   // Reset every time the sheet opens.  Deliberately DO NOT auto-focus any
   // input — auto-focus pops the soft keyboard on mobile, which covers half
-  // the form and makes the "compact one-page" promise impossible to keep
-  // (Hemanth's complaint: "by default keyboard should not pop-up").  Users
-  // tap into the Amount or Description field themselves when ready.
+  // the form and makes the "compact one-page" promise impossible to keep.
   $effect(() => {
     if (open) {
       untrack(() => {
         date = today();
         time = '';
         desc = '';
+        note = '';
         amount = '';
         direction = initialType;
-        account =
-          initialType === 'income' ? 'Income' : initialType === 'transfer' ? 'Transfer' : 'Cash';
+        account = defaultAccount(initialType);
         categoryId = null;
         userTouchedCategory = false;
         userTouchedAmount = false;
+        userTouchedTime = false;
+        userTouchedAccount = false;
         saving = false;
         error = null;
       });
     }
   });
 
-  // Live parse the Description as the user types — pulls amount + date out of
-  // "₹40 chai today" and auto-suggests a category.  The previous lock-in
-  // ("only set amount if currently empty") was wrong: typing "ate biryani on
-  // 24th may 2026 worth $46" produced $2 instead of $46 because the first
-  // digit landed in amount and then the field was no longer empty.  Now we
-  // track `userTouchedAmount` separately — until the user clicks INTO the
-  // amount field, the NL parser keeps it in sync with the description.
+  // When the user switches direction (Expense / Income / Transfer), update
+  // the default account label unless they've already typed something.
+  $effect(() => {
+    const d = direction;
+    untrack(() => {
+      if (!userTouchedAccount) account = defaultAccount(d);
+    });
+  });
+
+  // Live parse the Description as the user types — pulls amount + date +
+  // TIME + auto-suggests a category.  Until the user touches a field, the
+  // NL parser keeps the form in sync with the description.
   $effect(() => {
     const trimmed = desc.trim();
     if (trimmed.length === 0) return;
@@ -160,6 +196,9 @@
       if (p.date_iso !== today()) date = p.date_iso;
       if (p.amount_minor !== null && !userTouchedAmount) {
         amount = (Number(p.amount_minor) / 100).toFixed(isInr ? 0 : 2);
+      }
+      if (p.time_hhmm !== null && !userTouchedTime) {
+        time = p.time_hhmm;
       }
       if (p.direction === 'income' && direction === 'expense') direction = 'income';
       if (!userTouchedCategory && guess !== null) categoryId = guess;
@@ -174,6 +213,38 @@
     categoryId === null ? 'var(--color-muted)' : categoryColor(categoryId)
   );
 
+  /** Tx-count map keyed by category_id — drives the confirm-delete message
+   *  in CategoryPicker so "Delete Food?" cites "12 transactions affected". */
+  const txCountByCategoryId = $derived.by<Map<string, number>>(() => {
+    const m = new Map<string, number>();
+    for (const a of Object.values(annotations)) {
+      if (a.category_id !== null) m.set(a.category_id, (m.get(a.category_id) ?? 0) + 1);
+    }
+    return m;
+  });
+
+  async function handleCreateCategory(name: string): Promise<void> {
+    if (onCreateCategory === undefined) return;
+    const newId = await onCreateCategory(name);
+    pickCategory(newId);
+  }
+  async function handleDeleteCategory(id: string): Promise<void> {
+    if (onDeleteCategory === undefined) return;
+    await onDeleteCategory(id);
+    // If the deleted category was the one selected, clear the selection.
+    if (categoryId === id) categoryId = null;
+  }
+
+  function pickAccount(name: string): void {
+    account = name;
+    userTouchedAccount = true;
+  }
+  function createAccount(name: string): void {
+    rememberManualAccount(name);
+    account = name;
+    userTouchedAccount = true;
+  }
+
   async function save(): Promise<void> {
     error = null;
     saving = true;
@@ -185,17 +256,18 @@
         saving = false;
         return;
       }
-      // Expense / Transfer = outflow (negative); Income = inflow.
       const signed = direction === 'income' ? abs : -abs;
       const baseDesc = desc.trim() || direction.charAt(0).toUpperCase() + direction.slice(1);
-      // Time is free-form ("10:30 PM" / "10pm" / "22:30").  Normalize to
-      // 24-hour HH:MM for the description prefix.  Unparseable times are
-      // silently dropped (form save still succeeds — time was optional).
       const parsedTime = parseFreeFormTime(time);
       const finalDesc = parsedTime && parsedTime !== '' ? `${parsedTime} · ${baseDesc}` : baseDesc;
-      const accountFinal =
-        account ||
-        (direction === 'income' ? 'Income' : direction === 'transfer' ? 'Transfer' : 'Cash');
+      const accountFinal = account || defaultAccount(direction);
+      // Remember real accounts (not the synthetic "Income"/"Transfer" labels)
+      // so they appear in the picker + as the next default.  Bhargav adds
+      // "HDFC UPI" once → next time it's the default.
+      if (direction === 'expense') {
+        rememberManualAccount(accountFinal);
+        saveLastUsedAccount(accountFinal);
+      }
       const rec = makeManualImport(
         {
           posted_date: date,
@@ -208,15 +280,20 @@
         new Date().toISOString()
       );
       await addImport(rec);
-      // Persist category + (when transfer) flow_intent override.
+      // Persist category + (when transfer) flow_intent override + note.
       const key = transactionCategoryKey(rec.pdf_source_hash, 0);
-      if (categoryId !== null || direction === 'transfer') {
+      const trimmedNote = note.trim();
+      const needsAnnotationSave =
+        categoryId !== null || direction === 'transfer' || trimmedNote.length > 0;
+      if (needsAnnotationSave) {
         let map = new Map(Object.entries(annotations));
         if (categoryId !== null) {
           map = setManualCategory(map, key, categoryId);
         }
+        if (trimmedNote.length > 0) {
+          map = setAnnotation(map, key, { note: trimmedNote });
+        }
         if (direction === 'transfer') {
-          // Tag the saved row so spendableFlowByMonth excludes it from Spent.
           const prior = map.get(key) ?? { category_id: null, source: 'manual' as const };
           map.set(key, { ...prior, flow_intent: 'transfer_self' });
         }
@@ -237,7 +314,6 @@
   }
 
   function onDescKey(e: KeyboardEvent): void {
-    // Enter in the description field jumps to amount if empty, else saves.
     if (e.key === 'Enter') {
       if (amount.trim() === '') {
         e.preventDefault();
@@ -291,9 +367,7 @@
       {/each}
     </div>
 
-    <!-- Amount (big & prominent).  Tapping into the field marks it touched
-         so the NL-parse in the description stops overriding what the user
-         typed. -->
+    <!-- Amount (big & prominent). -->
     <div class="qas-amount-row">
       <span class="qas-cur">{currencySymbol}</span>
       <input
@@ -323,7 +397,7 @@
       />
     </label>
 
-    <!-- Category dropdown trigger (opens CategoryPicker popover) -->
+    <!-- Category + Account triggers -->
     <div class="qas-row-2col">
       <button type="button" class="qas-dd-btn" onclick={() => (pickerOpen = true)}>
         <span class="qas-dd-icon">
@@ -344,35 +418,17 @@
         <span class="qas-dd-chev" aria-hidden="true">▾</span>
       </button>
 
-      <label class="qas-dd-btn qas-dd-account">
+      <button type="button" class="qas-dd-btn" onclick={() => (accountPickerOpen = true)}>
         <span class="qas-dd-icon">💳</span>
         <span class="qas-dd-label">
           <span class="qas-lbl">Account</span>
-          <input
-            type="text"
-            list="qa-account-list"
-            bind:value={account}
-            class="qas-dd-input"
-            placeholder={direction === 'income'
-              ? 'Income'
-              : direction === 'transfer'
-                ? 'Transfer'
-                : 'Cash'}
-          />
+          <span class="qas-dd-value">{account}</span>
         </span>
-        <datalist id="qa-account-list">
-          {#each accountSuggestions as a (a)}
-            <option value={a}></option>
-          {/each}
-        </datalist>
-      </label>
+        <span class="qas-dd-chev" aria-hidden="true">▾</span>
+      </button>
     </div>
 
-    <!-- Date + Time.  Time is a free-form text input so the user can pick
-         their own 12h vs 24h: "10:30 PM", "10pm", "22:30", "noon" all
-         parse correctly via parseFreeFormTime on save.  This fixes the
-         "no AM/PM" complaint on Android where native <input type="time">
-         renders 24-hour only on most locales. -->
+    <!-- Date + Time. -->
     <div class="qas-row-2col">
       <label class="qas-block">
         <span class="qas-lbl">Date</span>
@@ -388,9 +444,23 @@
           class="qas-field"
           autocomplete="off"
           spellcheck="false"
+          oninput={() => (userTouchedTime = true)}
         />
       </label>
     </div>
+
+    <!-- Notes — free-form, persisted as an annotation so you can find out
+         later WHY this transaction matters. -->
+    <label class="qas-block">
+      <span class="qas-lbl">Notes <span class="qas-opt">(optional — for future you)</span></span>
+      <textarea
+        bind:value={note}
+        placeholder="e.g. with Murali, paid for everyone"
+        class="qas-field qas-notes"
+        rows="2"
+        autocomplete="off"
+      ></textarea>
+    </label>
 
     {#if error}
       <p class="qas-error">{error}</p>
@@ -401,13 +471,26 @@
     </button>
   </div>
 
-  <!-- Category picker popover (mounted on top of this sheet) -->
+  <!-- Category picker popover -->
   <CategoryPicker
     open={pickerOpen}
     {categories}
     selectedId={categoryId}
+    {txCountByCategoryId}
     onSelect={pickCategory}
+    onCreate={onCreateCategory !== undefined ? handleCreateCategory : undefined}
+    onDelete={onDeleteCategory !== undefined ? handleDeleteCategory : undefined}
     onClose={() => (pickerOpen = false)}
+  />
+
+  <!-- Account picker popover -->
+  <AccountPicker
+    open={accountPickerOpen}
+    {accounts}
+    selected={account}
+    onSelect={pickAccount}
+    onCreate={createAccount}
+    onClose={() => (accountPickerOpen = false)}
   />
 {/if}
 
@@ -444,7 +527,9 @@
     animation: rise 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
     display: flex;
     flex-direction: column;
-    gap: 0.55rem;
+    gap: 0.5rem;
+    max-height: 95dvh;
+    overflow-y: auto;
   }
   @keyframes rise {
     from {
@@ -487,7 +572,6 @@
     background: var(--color-surface-hover);
   }
 
-  /* ── Type toggle (segmented control) ─────────────────────────── */
   .qas-type-toggle {
     display: flex;
     gap: 0.2rem;
@@ -515,7 +599,6 @@
     color: var(--color-accent-fg);
   }
 
-  /* ── Amount (big & prominent) ────────────────────────────────── */
   .qas-amount-row {
     display: flex;
     align-items: baseline;
@@ -549,7 +632,6 @@
     font-weight: 600;
   }
 
-  /* ── Generic labelled block + field ───────────────────────────── */
   .qas-block {
     display: flex;
     flex-direction: column;
@@ -575,10 +657,17 @@
     border-radius: 10px;
     padding: 0.55rem 0.7rem;
     font-size: 0.93rem;
+    font-family: inherit;
   }
   .qas-field:focus {
     outline: none;
     border-color: var(--color-accent);
+  }
+  .qas-notes {
+    resize: vertical;
+    min-height: 2.4rem;
+    max-height: 6rem;
+    line-height: 1.4;
   }
 
   .qas-row-2col {
@@ -587,7 +676,6 @@
     gap: 0.55rem;
   }
 
-  /* ── Dropdown-style trigger button (Category / Account) ──────── */
   .qas-dd-btn {
     display: flex;
     align-items: center;
@@ -640,27 +728,10 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .qas-dd-input {
-    border: 0;
-    background: transparent;
-    padding: 0;
-    font-size: 0.92rem;
-    font-weight: 600;
-    color: var(--color-text);
-    width: 100%;
-    outline: none;
-  }
-  .qas-dd-input::placeholder {
-    color: var(--color-muted);
-    font-weight: 500;
-  }
   .qas-dd-chev {
     color: var(--color-muted);
     font-size: 0.8rem;
     flex-shrink: 0;
-  }
-  .qas-dd-account {
-    cursor: text;
   }
 
   .qas-error {

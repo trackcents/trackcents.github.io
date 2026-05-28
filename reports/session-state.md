@@ -1,6 +1,6 @@
 # Session state snapshot
 
-Written by `scripts/hook-precompact.mjs` at **2026-05-28T06:03:53.981Z** just before Claude's context was compacted.
+Written by `scripts/hook-precompact.mjs` at **2026-05-28T22:34:37.384Z** just before Claude's context was compacted.
 
 The NEXT Claude session can read this file to reconstruct what was in flight.
 
@@ -9,23 +9,12 @@ auto
 
 ## Git state at compaction
 ```
-M reports/session-state.md
- M src/components/BudgetBox.svelte
- M src/components/FilterBar.svelte
- M src/components/QuickAddSheet.svelte
- M src/components/StatementCard.svelte
- M src/components/UnifiedTransactionTable.svelte
- M src/lib/util/money.ts
- M src/routes/budget/+page.svelte
- M src/routes/goals/+page.svelte
- M src/routes/onboarding/+page.svelte
- M src/routes/today/+page.svelte
- M src/routes/transactions/+page.svelte
+M src/lib/app/nl-quick-add.ts
 ?? .agents/
 ?? skills-lock.json
 ```
 
-Last commit: d0db270 feat(home): "I'll remember this" save toast closes the Bayes feedback loop (14 minutes ago)
+Last commit: dcc0551 fix(quickadd): amount tracks description live + AM/PM time + smart year heuristic (11 minutes ago)
 
 ## Latest validation report
 (no validation report on disk)
