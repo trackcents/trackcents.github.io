@@ -126,6 +126,9 @@
   let saving = $state(false);
   let error = $state<string | null>(null);
   let pickerOpen = $state(false);
+  /** When opened with a restrictToParent, the picker shows only that
+   *  parent's children.  Drives the Sub-category button. */
+  let subPickerOpen = $state(false);
   let accountPickerOpen = $state(false);
 
   function pickCategory(id: string | null): void {
@@ -271,18 +274,57 @@
   const selectedCategory = $derived(
     categoryId === null ? null : (categories.find((c) => c.id === categoryId) ?? null)
   );
-  const selectedCategoryName = $derived(selectedCategory?.name ?? 'Uncategorized');
-  const selectedCategoryColor = $derived.by(() =>
-    categoryId === null ? 'var(--color-muted)' : categoryColor(categoryId)
+  /** The PARENT of the form's effective categoryId.  When the user has
+   *  picked a sub-category, the parent is selectedCategory.parent_id.
+   *  When they've picked a top-level category, the parent IS that
+   *  category.  When nothing is picked, null.  Drives the "Category"
+   *  button's display name and the Sub-category button's parent-filter. */
+  const effectiveParentId = $derived.by<string | null>(() => {
+    if (selectedCategory === null) return null;
+    if (selectedCategory.parent_id !== undefined && selectedCategory.parent_id.length > 0) {
+      return selectedCategory.parent_id;
+    }
+    return selectedCategory.id;
+  });
+  const effectiveParent = $derived(
+    effectiveParentId === null ? null : (categories.find((c) => c.id === effectiveParentId) ?? null)
   );
-  /** Selected category's icon — honours the user's override when set,
-   *  else auto-maps from the name. */
+  /** When the form's categoryId points at a SUB, this is that sub.
+   *  Otherwise null.  Drives the Sub-category button's label. */
+  const effectiveSub = $derived.by(() => {
+    if (
+      selectedCategory === null ||
+      selectedCategory.parent_id === undefined ||
+      selectedCategory.parent_id.length === 0
+    ) {
+      return null;
+    }
+    return selectedCategory;
+  });
+  const selectedCategoryName = $derived(effectiveParent?.name ?? 'Uncategorized');
+  const selectedCategoryColor = $derived.by(() =>
+    effectiveParentId === null ? 'var(--color-muted)' : categoryColor(effectiveParentId)
+  );
+  /** Parent category's icon — drives the "Category" button.  When the
+   *  user has picked a sub, the button still shows the PARENT icon
+   *  (the sub identity is on the sub-button beside it). */
   const selectedCategoryIcon = $derived<IconKey>(
-    selectedCategory
-      ? selectedCategory.icon && selectedCategory.icon.length > 0
-        ? (selectedCategory.icon as IconKey)
-        : categoryIconName(selectedCategory.name)
+    effectiveParent
+      ? effectiveParent.icon && effectiveParent.icon.length > 0
+        ? (effectiveParent.icon as IconKey)
+        : categoryIconName(effectiveParent.name)
       : 'tag'
+  );
+  /** The Sub-category button's icon — only shown when a sub is picked. */
+  const selectedSubIcon = $derived<IconKey>(
+    effectiveSub
+      ? effectiveSub.icon && effectiveSub.icon.length > 0
+        ? (effectiveSub.icon as IconKey)
+        : categoryIconName(effectiveSub.name)
+      : 'tag'
+  );
+  const selectedSubColor = $derived.by(() =>
+    effectiveSub === null ? 'var(--color-muted)' : categoryColor(effectiveSub.id)
   );
 
   /** Account display name = nickname when set, else raw. */
@@ -541,6 +583,39 @@
       </button>
     </div>
 
+    <!-- Sub-category — separate field, DISABLED until a Category is
+         picked (Hemanth: "until then it has to be disabled"). Enabled
+         once a parent exists; tap opens a picker filtered to that
+         parent's children. -->
+    <button
+      type="button"
+      class="qas-dd-btn qas-sub-row"
+      class:disabled={effectiveParentId === null}
+      disabled={effectiveParentId === null}
+      onclick={() => (subPickerOpen = true)}
+    >
+      <span class="qas-dd-icon">
+        {#if effectiveSub !== null}
+          <CategoryIcon icon={selectedSubIcon} color={selectedSubColor} tint />
+        {:else}
+          <span class="dot" style:background-color="var(--color-muted)"></span>
+        {/if}
+      </span>
+      <span class="qas-dd-label">
+        <span class="qas-lbl">Sub-category</span>
+        <span class="qas-dd-value">
+          {#if effectiveParentId === null}
+            (pick a category first)
+          {:else if effectiveSub !== null}
+            {effectiveSub.name}
+          {:else}
+            (none — optional)
+          {/if}
+        </span>
+      </span>
+      <span class="qas-dd-chev" aria-hidden="true">▾</span>
+    </button>
+
     <!-- Date + Time. -->
     <div class="qas-row-2col">
       <label class="qas-block">
@@ -583,7 +658,7 @@
     </button>
   </div>
 
-  <!-- Category picker popover -->
+  <!-- Category picker popover (top-level + nested view) -->
   <CategoryPicker
     open={pickerOpen}
     {categories}
@@ -595,6 +670,32 @@
     onRename={onRenameCategory !== undefined ? handleRenameCategoryInner : undefined}
     onClose={() => (pickerOpen = false)}
   />
+
+  <!-- Sub-category picker — same component, restricted to the active
+       parent's children.  Picking a child sets categoryId to that
+       child id; picking "(no sub-category)" resets to the parent. -->
+  {#if effectiveParentId !== null}
+    <CategoryPicker
+      open={subPickerOpen}
+      {categories}
+      selectedId={effectiveSub?.id ?? null}
+      {txCountByCategoryId}
+      restrictToParent={effectiveParentId}
+      onSelect={(id) => {
+        // null = clear sub (keep parent), non-null = pick that sub.
+        if (id === null) {
+          categoryId = effectiveParentId;
+        } else {
+          categoryId = id;
+        }
+        userPickedCategory = true;
+      }}
+      onCreate={onCreateCategory !== undefined ? handleCreateCategory : undefined}
+      onDelete={onDeleteCategory !== undefined ? handleDeleteCategory : undefined}
+      onRename={onRenameCategory !== undefined ? handleRenameCategoryInner : undefined}
+      onClose={() => (subPickerOpen = false)}
+    />
+  {/if}
 
   <!-- Account picker popover -->
   <AccountPicker
@@ -806,6 +907,21 @@
   }
   .qas-dd-btn:hover {
     background: var(--color-surface-hover);
+  }
+  /* Sub-category row spans the full sheet width and lives directly under
+     the Category | Payment-method row so the two reads as a pair. */
+  .qas-sub-row {
+    width: 100%;
+  }
+  .qas-dd-btn.disabled,
+  .qas-dd-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    background: var(--color-bg);
+  }
+  .qas-dd-btn.disabled:hover,
+  .qas-dd-btn:disabled:hover {
+    background: var(--color-bg);
   }
   .qas-dd-icon {
     width: 26px;

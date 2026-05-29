@@ -51,6 +51,20 @@ export type IconKey =
   | 'percent'
   | 'banknote'
   | 'piggy'
+  // ── New food / drink icons (Hemanth's "I need lots of logos") ──
+  | 'pizza'
+  | 'coffee'
+  | 'icecream'
+  | 'bowl'
+  | 'salad'
+  | 'sushi'
+  | 'cake'
+  | 'donut'
+  | 'cup'
+  // Other "lots and lots of" requests.
+  | 'bus'
+  | 'train'
+  | 'medical'
   | 'tag';
 
 /** Every IconKey + a friendly label.  Used by the IconPicker (Batch B —
@@ -59,15 +73,29 @@ export type IconKey =
 export const ICON_OPTIONS: ReadonlyArray<{ key: IconKey; label: string }> = [
   { key: 'cart', label: 'Cart' },
   { key: 'utensils', label: 'Food' },
+  // Food sub-category-friendly options.
+  { key: 'pizza', label: 'Pizza' },
+  { key: 'bowl', label: 'Bowl' },
+  { key: 'salad', label: 'Salad' },
+  { key: 'sushi', label: 'Sushi' },
+  { key: 'icecream', label: 'Ice cream' },
+  { key: 'cake', label: 'Cake' },
+  { key: 'donut', label: 'Donut' },
+  { key: 'coffee', label: 'Coffee' },
+  { key: 'cup', label: 'Drink' },
+  // Non-food.
   { key: 'home', label: 'Home' },
   { key: 'fuel', label: 'Fuel' },
   { key: 'car', label: 'Car' },
+  { key: 'bus', label: 'Bus' },
+  { key: 'train', label: 'Train' },
   { key: 'plane', label: 'Travel' },
   { key: 'bag', label: 'Shopping' },
   { key: 'film', label: 'Movie' },
   { key: 'book', label: 'Education' },
   { key: 'gift', label: 'Gift' },
   { key: 'heart', label: 'Health' },
+  { key: 'medical', label: 'Medicine' },
   { key: 'bolt', label: 'Utility' },
   { key: 'shield', label: 'Insurance' },
   { key: 'wallet', label: 'Salary' },
@@ -92,11 +120,45 @@ export function categoryIconName(name: string): IconKey {
   if (has('rent', 'mortgage', 'housing')) return 'home';
   if (has('gas', 'fuel', 'shell', 'chevron')) return 'fuel';
   if (has('subscription', 'netflix', 'spotify', 'membership')) return 'repeat';
-  if (has('dining', 'restaurant', 'food', 'eating', 'coffee', 'cafe', 'tiffin')) return 'utensils';
+  // Specific food sub-categories first — more specific than the
+  // generic "food/utensils" fallback that catches "Food" itself.
+  if (has('pizza')) return 'pizza';
+  if (has('coffee', 'espresso', 'cappuccino', 'latte', 'mocha', 'chai', ' tea')) return 'coffee';
+  if (has('milkshake', 'shake', 'smoothie', 'lassi', 'juice', 'soda', 'coke', 'pepsi'))
+    return 'cup';
+  if (has('ice cream', 'icecream', 'gelato', 'kulfi', 'sundae')) return 'icecream';
+  if (has('cake', 'pastry', 'muffin', 'cupcake', 'tart')) return 'cake';
+  if (has('donut', 'doughnut', 'vada')) return 'donut';
+  if (has('sushi', 'sashimi', 'maki')) return 'sushi';
+  if (has('salad', 'wrap', 'sandwich')) return 'salad';
+  if (
+    has(
+      'biryani',
+      'curry',
+      'dal',
+      'sambar',
+      'rasam',
+      'soup',
+      'ramen',
+      'pho',
+      'pasta',
+      'noodle',
+      'idli',
+      'dosa',
+      'rice'
+    )
+  )
+    return 'bowl';
+  if (has('dining', 'restaurant', 'food', 'eating', 'cafe', 'tiffin', 'breakfast', 'lunch'))
+    return 'utensils';
   if (has('shopping', 'amazon', 'retail', 'clothes')) return 'bag';
-  if (has('transport', 'uber', 'lyft', 'car', 'transit', 'parking')) return 'car';
+  if (has(' bus ', 'busfare')) return 'bus';
+  if (has('train', 'metro', 'subway', 'rail', 'irctc')) return 'train';
+  if (has('transport', 'uber', 'lyft', 'car', 'cab', 'taxi', 'transit', 'parking', 'toll'))
+    return 'car';
   if (has('salary', 'income', 'payroll', 'paycheck')) return 'wallet';
-  if (has('health', 'medical', 'pharmacy', 'gym', 'fitness', 'doctor')) return 'heart';
+  if (has('pharmacy', 'medicine', 'pills', 'tablet')) return 'medical';
+  if (has('health', 'medical', 'gym', 'fitness', 'doctor', 'hospital', 'clinic')) return 'heart';
   if (has('travel', 'flight', 'hotel', 'airbnb')) return 'plane';
   if (has('phone', 'internet', 'mobile', 'jio', 'airtel')) return 'bolt';
   if (has('utilit', 'electric', 'water')) return 'bolt';

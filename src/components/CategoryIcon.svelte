@@ -125,7 +125,101 @@
       ],
       c: [[8, 10, 0.6]]
     },
-    tag: { p: ['M20.6 13.4 12 22l-9-9V4a1 1 0 0 1 1-1h9z'], c: [[7.5, 7.5, 1.5]] }
+    tag: { p: ['M20.6 13.4 12 22l-9-9V4a1 1 0 0 1 1-1h9z'], c: [[7.5, 7.5, 1.5]] },
+    // ── New food / drink icons ──────────────────────────────────────
+    pizza: {
+      // Triangular slice + crust + 2 toppings.
+      p: ['M2 9l10-7 10 7-10 13z', 'M2 9l20 0'],
+      c: [
+        [10, 11, 1.2],
+        [13, 14, 1.2]
+      ]
+    },
+    coffee: {
+      // Coffee cup with handle + 2 steam wisps.
+      p: [
+        'M4 9h13v9a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3z',
+        'M17 11h2a2 2 0 0 1 0 4h-2',
+        'M8 2c0 2 2 2 2 4',
+        'M13 2c0 2 2 2 2 4'
+      ]
+    },
+    cup: {
+      // Tall glass/milkshake with straw.
+      p: ['M6 4h12l-1 16a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2z', 'M14 3l-1 7', 'M6 9h12']
+    },
+    icecream: {
+      // Cone + scoop with sprinkle drip.
+      p: ['M8 9a4 4 0 0 1 8 0H8z', 'M8 11l4 11 4-11', 'M11 14h2'],
+      c: [[12, 5, 0.8]]
+    },
+    bowl: {
+      // Bowl of curry/biryani with steam.
+      p: [
+        'M3 12h18a0 0 0 0 1 0 0c0 4-3 8-9 8s-9-4-9-8a0 0 0 0 1 0 0z',
+        'M9 4c0 2-1 3-1 5',
+        'M14 4c0 2-1 3-1 5',
+        'M18 4c0 2-1 3-1 5'
+      ]
+    },
+    salad: {
+      // Bowl with greens + tomato.
+      p: ['M3 10h18a0 0 0 0 1 0 0c0 4-3 8-9 8s-9-4-9-8a0 0 0 0 1 0 0z', 'M8 7l3 3', 'M16 7l-3 3'],
+      c: [[12, 13, 1.2]]
+    },
+    sushi: {
+      // Roll cross-section: outer rice + filling + inner core.
+      c: [
+        [12, 12, 6],
+        [12, 12, 2]
+      ],
+      p: ['M6 12h12', 'M12 6v12']
+    },
+    cake: {
+      // Layered cake with candle.
+      p: ['M3 19h18', 'M4 13h16v6H4z', 'M6 9h12v4H6z', 'M12 4v5'],
+      c: [[12, 3, 0.6]]
+    },
+    donut: {
+      // Donut ring with sprinkles.
+      c: [
+        [12, 12, 8],
+        [12, 12, 3]
+      ],
+      p: ['M7 7l1 1', 'M16 8l1 -1', 'M16 16l1 1', 'M7 16l1 1']
+    },
+    bus: {
+      // School-bus side view.
+      p: [
+        'M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10H4z',
+        'M4 16v3',
+        'M20 16v3',
+        'M4 11h16',
+        'M7 7h3',
+        'M14 7h3'
+      ],
+      c: [
+        [7.5, 17, 1.2],
+        [16.5, 17, 1.2]
+      ]
+    },
+    train: {
+      // Metro/train car.
+      p: [
+        'M5 4h14a2 2 0 0 1 2 2v10a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a2 2 0 0 1 2-2z',
+        'M3 12h18',
+        'M7 22l-2-3',
+        'M17 22l2-3'
+      ],
+      c: [
+        [8, 16, 0.7],
+        [16, 16, 0.7]
+      ]
+    },
+    medical: {
+      // Pill capsule split + sparkle.
+      p: ['M10 4 4 10a4 4 0 0 0 5.6 5.6L14 11', 'M14 11l4-4a4 4 0 0 0-5.6-5.6L8 6', 'M9 9l5 5']
+    }
   };
 </script>
 

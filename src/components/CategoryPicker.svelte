@@ -36,6 +36,11 @@
     /** Rename / re-icon a category; caller persists.  Picker opens the
      *  CategoryRenameSheet to collect the new values. */
     onRename?: ((id: string, patch: { name: string; icon: string }) => void) | undefined;
+    /** When set, the picker only shows categories whose parent_id matches
+     *  this id.  Top-level categories are hidden, the "+ Create" row
+     *  creates a SUB under this parent.  Used by QuickAddSheet for its
+     *  Sub-category field. */
+    restrictToParent?: string | undefined;
     onClose: () => void;
   }
 
@@ -48,6 +53,7 @@
     onCreate,
     onDelete,
     onRename,
+    restrictToParent,
     onClose
   }: Props = $props();
 
@@ -74,22 +80,25 @@
       editMode = false;
       confirmDeleteId = null;
       renameId = null;
-      // Tick first so the input is mounted; then focus.  Wrapped in try
-      // so an old browser without focus() doesn't break the picker.
-      tick().then(() => {
-        try {
-          searchInputEl?.focus();
-        } catch {
-          /* noop */
-        }
-      });
+      // Deliberately DO NOT auto-focus the search input — Hemanth's
+      // feedback: "when clicked on categories why to open keyboard? only
+      // when we click on that search or add new then it need to open".
+      // The picker slides up like a dropdown; if the user wants to search
+      // they tap the search field themselves.
     }
   });
 
+  /** Base list — when `restrictToParent` is set, only that parent's
+   *  children are eligible.  Otherwise every category is in scope and
+   *  the existing parent-then-children rendering takes care of layout. */
+  const inScope = $derived.by<Category[]>(() => {
+    if (restrictToParent === undefined) return categories;
+    return categories.filter((c) => c.parent_id === restrictToParent);
+  });
   const filtered = $derived.by(() => {
     const q = query.trim().toLowerCase();
-    if (q === '') return categories;
-    return categories.filter((c) => c.name.toLowerCase().includes(q));
+    if (q === '') return inScope;
+    return inScope.filter((c) => c.name.toLowerCase().includes(q));
   });
 
   const favSet = $derived(new Set(favIds));
@@ -213,7 +222,9 @@
     if (onCreate === undefined) return;
     const q = query.trim();
     if (q.length === 0) return;
-    onCreate(q, undefined);
+    // When picker is in sub-category mode, "+ Create" makes a child of
+    // the restricted parent — not a new top-level category.
+    onCreate(q, restrictToParent);
     query = '';
     onClose();
   }
@@ -225,7 +236,13 @@
     <div class="grab"></div>
 
     <div class="head">
-      <h2>{editMode ? 'Edit categories' : 'Pick a category'}</h2>
+      <h2>
+        {#if restrictToParent !== undefined}
+          {editMode ? 'Edit sub-categories' : 'Pick a sub-category'}
+        {:else}
+          {editMode ? 'Edit categories' : 'Pick a category'}
+        {/if}
+      </h2>
       <div class="head-actions">
         {#if onDelete !== undefined}
           <button
@@ -255,7 +272,21 @@
     </div>
 
     <div class="body">
-      {#if favs.length > 0}
+      {#if restrictToParent !== undefined && !editMode}
+        <!-- Sub-category mode offers a "(no sub)" row so the user can
+             clear the sub without closing the sheet. -->
+        <div class="row" class:selected={selectedId === null}>
+          <button type="button" class="row-main" onclick={() => pick(null)}>
+            <span class="icon dot-icon">
+              <span class="dot" style:background-color="var(--color-muted)"></span>
+            </span>
+            <span class="name muted">(no sub-category)</span>
+          </button>
+          <span class="star-placeholder"></span>
+        </div>
+      {/if}
+
+      {#if favs.length > 0 && restrictToParent === undefined}
         <div class="section-head">★ Favorites</div>
         {#each favs as c (c.id)}
           <div class="row" class:selected={c.id === selectedId}>
@@ -298,11 +329,11 @@
         {/each}
       {/if}
 
-      {#if others.length > 0 && favs.length > 0}
+      {#if others.length > 0 && favs.length > 0 && restrictToParent === undefined}
         <div class="section-head muted">All categories</div>
       {/if}
 
-      {#if !editMode}
+      {#if !editMode && restrictToParent === undefined}
         <div class="row" class:selected={selectedId === null}>
           <button type="button" class="row-main" onclick={() => pick(null)}>
             <span class="icon dot-icon">
