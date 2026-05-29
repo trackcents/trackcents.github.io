@@ -135,7 +135,7 @@
     <div class="ap-grab"></div>
 
     <div class="ap-head">
-      <h2>{editMode ? 'Edit payment methods' : 'Pick a payment method'}</h2>
+      <h2>{editMode ? 'Edit accounts' : 'Pick an account'}</h2>
       <div class="ap-head-actions">
         <button
           type="button"

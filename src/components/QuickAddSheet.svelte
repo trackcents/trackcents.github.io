@@ -126,9 +126,6 @@
   let saving = $state(false);
   let error = $state<string | null>(null);
   let pickerOpen = $state(false);
-  /** When opened with a restrictToParent, the picker shows only that
-   *  parent's children.  Drives the Sub-category button. */
-  let subPickerOpen = $state(false);
   let accountPickerOpen = $state(false);
 
   function pickCategory(id: string | null): void {
@@ -315,17 +312,10 @@
         : categoryIconName(effectiveParent.name)
       : 'tag'
   );
-  /** The Sub-category button's icon — only shown when a sub is picked. */
-  const selectedSubIcon = $derived<IconKey>(
-    effectiveSub
-      ? effectiveSub.icon && effectiveSub.icon.length > 0
-        ? (effectiveSub.icon as IconKey)
-        : categoryIconName(effectiveSub.name)
-      : 'tag'
-  );
-  const selectedSubColor = $derived.by(() =>
-    effectiveSub === null ? 'var(--color-muted)' : categoryColor(effectiveSub.id)
-  );
+  // The dedicated Sub-category button (and its selectedSubIcon /
+  // selectedSubColor derives) was removed when sub-cat went back to
+  // being picked via the single Category dropdown's nested view.
+  // effectiveSub is still kept to render the parent · child label.
 
   /** Account display name = nickname when set, else raw. */
   const accountLabel = $derived(accountDisplayName(account));
@@ -562,12 +552,12 @@
         />
       </label>
 
-      <!-- Category + Sub-category in the SAME row.  Putting them side by
-           side instead of stacked saves a whole row of vertical space,
-           so adding the sub-category field doesn't make the form taller
-           than the pre-sub version (Hemanth: "why weren't you able to
-           just fit sub categories also without having this keyboard
-           overlay problem"). -->
+      <!-- Category + Account in one row — the original pre-sub-category
+           layout.  Sub-category as a separate field was tried and then
+           removed (Hemanth: "please once remove that sub categories
+           which you added"); the CategoryPicker still renders sub-cats
+           indented under their parent so users can pick a sub directly
+           from this single Category button if they have any. -->
       <div class="qas-row-2col">
         <button type="button" class="qas-dd-btn" onclick={() => (pickerOpen = true)}>
           <span class="qas-dd-icon">
@@ -579,55 +569,23 @@
           </span>
           <span class="qas-dd-label">
             <span class="qas-lbl">Category</span>
-            <span class="qas-dd-value">{selectedCategoryName}</span>
-          </span>
-          <span class="qas-dd-chev" aria-hidden="true">▾</span>
-        </button>
-
-        <button
-          type="button"
-          class="qas-dd-btn"
-          class:disabled={effectiveParentId === null}
-          disabled={effectiveParentId === null}
-          onclick={() => (subPickerOpen = true)}
-        >
-          <span class="qas-dd-icon">
-            {#if effectiveSub !== null}
-              <CategoryIcon icon={selectedSubIcon} color={selectedSubColor} tint />
-            {:else}
-              <span class="dot" style:background-color="var(--color-muted)"></span>
-            {/if}
-          </span>
-          <span class="qas-dd-label">
-            <span class="qas-lbl">Sub-category</span>
             <span class="qas-dd-value">
-              {#if effectiveParentId === null}
-                (pick category)
-              {:else if effectiveSub !== null}
-                {effectiveSub.name}
-              {:else}
-                (optional)
-              {/if}
+              {selectedCategoryName}{#if effectiveSub !== null}
+                · {effectiveSub.name}{/if}
             </span>
           </span>
           <span class="qas-dd-chev" aria-hidden="true">▾</span>
         </button>
-      </div>
 
-      <!-- Payment method — its own row so the user always sees which
-           wallet / card the transaction is going against. -->
-      <button
-        type="button"
-        class="qas-dd-btn qas-full-row"
-        onclick={() => (accountPickerOpen = true)}
-      >
-        <span class="qas-dd-icon">💳</span>
-        <span class="qas-dd-label">
-          <span class="qas-lbl">Payment method</span>
-          <span class="qas-dd-value">{accountLabel}</span>
-        </span>
-        <span class="qas-dd-chev" aria-hidden="true">▾</span>
-      </button>
+        <button type="button" class="qas-dd-btn" onclick={() => (accountPickerOpen = true)}>
+          <span class="qas-dd-icon">💳</span>
+          <span class="qas-dd-label">
+            <span class="qas-lbl">Account</span>
+            <span class="qas-dd-value">{accountLabel}</span>
+          </span>
+          <span class="qas-dd-chev" aria-hidden="true">▾</span>
+        </button>
+      </div>
 
       <!-- Date + Time. -->
       <div class="qas-row-2col">
@@ -695,32 +653,6 @@
     onRename={onRenameCategory !== undefined ? handleRenameCategoryInner : undefined}
     onClose={() => (pickerOpen = false)}
   />
-
-  <!-- Sub-category picker — same component, restricted to the active
-       parent's children.  Picking a child sets categoryId to that
-       child id; picking "(no sub-category)" resets to the parent. -->
-  {#if effectiveParentId !== null}
-    <CategoryPicker
-      open={subPickerOpen}
-      {categories}
-      selectedId={effectiveSub?.id ?? null}
-      {txCountByCategoryId}
-      restrictToParent={effectiveParentId}
-      onSelect={(id) => {
-        // null = clear sub (keep parent), non-null = pick that sub.
-        if (id === null) {
-          categoryId = effectiveParentId;
-        } else {
-          categoryId = id;
-        }
-        userPickedCategory = true;
-      }}
-      onCreate={onCreateCategory !== undefined ? handleCreateCategory : undefined}
-      onDelete={onDeleteCategory !== undefined ? handleDeleteCategory : undefined}
-      onRename={onRenameCategory !== undefined ? handleRenameCategoryInner : undefined}
-      onClose={() => (subPickerOpen = false)}
-    />
-  {/if}
 
   <!-- Account picker popover -->
   <AccountPicker
@@ -965,25 +897,11 @@
   .qas-dd-btn:hover {
     background: var(--color-surface-hover);
   }
-  /* Full-width row variant of the dropdown trigger.  Used for the
-     Payment-method button on its own line. */
-  .qas-full-row {
-    width: 100%;
-  }
-  /* Chip-strip styles + formatters were removed when the auto-preview
-     ribbon was dropped (commit notes "I didn't at all liked your new
-     idea of adding one more layer").  Re-add if a future iteration
-     wants a Cash-App-style summary footer. */
-  .qas-dd-btn.disabled,
-  .qas-dd-btn:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-    background: var(--color-bg);
-  }
-  .qas-dd-btn.disabled:hover,
-  .qas-dd-btn:disabled:hover {
-    background: var(--color-bg);
-  }
+  /* qas-full-row + .disabled variants were removed when the dedicated
+     Sub-category + standalone Payment-method rows were dropped on
+     Hemanth's feedback ("please once remove that sub categories which
+     you added").  Re-add the disabled styles when there's another
+     dropdown that can be disabled. */
   .qas-dd-icon {
     width: 26px;
     height: 26px;
