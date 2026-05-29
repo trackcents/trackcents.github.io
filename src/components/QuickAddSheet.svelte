@@ -99,7 +99,14 @@
   let direction = $state<Direction>('expense');
   let account = $state('Cash');
   let categoryId = $state<string | null>(null);
-  let userTouchedCategory = $state(false);
+  /** True only when the user EXPLICITLY picked a category via the picker.
+   *  Bare auto-guesses don't flip this — so a later description change
+   *  ("biryani" → "cab") refreshes the category to whatever the new
+   *  description guesses to (or clears it).  Matches the way Amount/Date
+   *  already behave; Hemanth's screenshot bug was that Category got
+   *  stuck on the first guess and never refreshed when description
+   *  changed.  Renamed from userTouchedCategory for clarity. */
+  let userPickedCategory = $state(false);
   let userTouchedTime = $state(false);
   let userTouchedAccount = $state(false);
   /** Did the user manually edit the amount field?  Once true, the NL parser
@@ -112,7 +119,7 @@
 
   function pickCategory(id: string | null): void {
     categoryId = id;
-    userTouchedCategory = true;
+    userPickedCategory = true;
   }
 
   /** Parse a free-form time string into 24-hour HH:MM.  Returns '' on
@@ -172,7 +179,7 @@
         direction = initialType;
         account = defaultAccount(initialType);
         categoryId = null;
-        userTouchedCategory = false;
+        userPickedCategory = false;
         userTouchedAmount = false;
         userTouchedTime = false;
         userTouchedAccount = false;
@@ -218,11 +225,27 @@
         amount =
           p.amount_minor !== null ? (Number(p.amount_minor) / 100).toFixed(isInr ? 0 : 2) : '';
       }
-      if (!userTouchedTime) {
-        time = p.time_hhmm ?? '';
+      // Time: a parsed time in the description ALWAYS wins (it's the
+      // newest user intent), even if they typed in TimeInput earlier.
+      // When no time is in the description, only clear if the user
+      // hasn't typed manually — so a user-typed "06:00" survives a
+      // description with no time mention.  Hemanth's bug: time stuck
+      // on a stale "05:46 PM" after backspacing biryani and re-typing
+      // a fresh description with a new time.
+      if (p.time_hhmm !== null) {
+        time = p.time_hhmm;
+      } else if (!userTouchedTime) {
+        time = '';
       }
       if (p.direction === 'income' && direction === 'expense') direction = 'income';
-      if (!userTouchedCategory && guess !== null) categoryId = guess;
+      // Category: ALWAYS follow the new description guess (null clears
+      // to Uncategorized) unless the user explicitly picked one via the
+      // CategoryPicker.  Previously the guard skipped null guesses, so
+      // an "auto Food from biryani" stayed Food forever after the user
+      // backspaced + typed "cab".  Now category behaves like Amount /
+      // Date — the description is the single source of truth until the
+      // user actively picks.
+      if (!userPickedCategory) categoryId = guess;
     });
   });
 

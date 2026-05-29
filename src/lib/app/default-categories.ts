@@ -208,9 +208,24 @@ const SEED_RULES: ReadonlyArray<{ contains: string; category: string }> = [
   { contains: 'CAFE', category: 'Food' },
 
   // ── Transport ───────────────────────────────────────────────────────────
+  // Merchant matches first (most specific), then generic ride keywords so
+  // Bhargav-style manual entries ("auto to office", "cab home", "bus pass")
+  // auto-categorize without a manual rule.
   { contains: 'UBER', category: 'Transport' },
   { contains: 'LYFT', category: 'Transport' },
   { contains: 'OLA CABS', category: 'Transport' },
+  { contains: 'RAPIDO', category: 'Transport' },
+  { contains: 'NAMMA YATRI', category: 'Transport' },
+  { contains: 'IRCTC', category: 'Transport' },
+  { contains: 'CAB', category: 'Transport' },
+  { contains: 'TAXI', category: 'Transport' },
+  { contains: 'AUTO RICKSHAW', category: 'Transport' },
+  { contains: 'RICKSHAW', category: 'Transport' },
+  { contains: 'METRO', category: 'Transport' },
+  { contains: 'BUS', category: 'Transport' },
+  { contains: 'TRAIN', category: 'Transport' },
+  { contains: 'PARKING', category: 'Transport' },
+  { contains: 'TOLL', category: 'Transport' },
 
   // ── Gas ─────────────────────────────────────────────────────────────────
   { contains: 'SHELL', category: 'Gas' },
@@ -219,6 +234,22 @@ const SEED_RULES: ReadonlyArray<{ contains: string; category: string }> = [
   { contains: 'MOBIL', category: 'Gas' },
   { contains: 'BP GAS', category: 'Gas' },
   { contains: 'INDIAN OIL', category: 'Gas' },
+
+  // ── Travel (flights, hotels, vacation) ──────────────────────────────────
+  { contains: 'FLIGHT', category: 'Travel' },
+  { contains: 'AIRPORT', category: 'Travel' },
+  { contains: 'AIRLINES', category: 'Travel' },
+  { contains: 'AIRWAYS', category: 'Travel' },
+  { contains: 'INDIGO', category: 'Travel' },
+  { contains: 'AIR INDIA', category: 'Travel' },
+  { contains: 'EMIRATES', category: 'Travel' },
+  { contains: 'DELTA', category: 'Travel' },
+  { contains: 'UNITED AIRLINE', category: 'Travel' },
+  { contains: 'BOOKING.COM', category: 'Travel' },
+  { contains: 'AIRBNB', category: 'Travel' },
+  { contains: 'EXPEDIA', category: 'Travel' },
+  { contains: 'MAKEMYTRIP', category: 'Travel' },
+  { contains: 'HOTEL', category: 'Travel' },
 
   // ── Shopping ────────────────────────────────────────────────────────────
   { contains: 'AMAZON.COM', category: 'Shopping' },
