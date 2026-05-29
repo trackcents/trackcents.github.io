@@ -18,6 +18,7 @@
   import { parseQuickAddText, type ParsedQuickAdd } from '$lib/app/nl-quick-add';
   import { guessCategoryId } from '$lib/app/category-guess';
   import { guessAccount } from '$lib/app/account-guess';
+  import { buildSuggestTerms, suggestCompletion } from '$lib/app/autosuggest';
   import { extractRulePattern, isDuplicateRule } from '$lib/app/rule-from-desc';
   import { makeManualImport, newManualId, ManualEntryError } from '$lib/app/manual-entry';
   import { parseAmountToCents, CsvImportError } from '$lib/app/csv-import';
@@ -347,6 +348,21 @@
   /** Account display name = nickname when set, else raw. */
   const accountLabel = $derived(accountDisplayName(account));
 
+  // ── Inline autosuggest (ghost-text) for the description ─────────────────────
+  // Suggest a completion for the word being typed, from the user's categories +
+  // accounts + a common-words list (Hemanth: "type cof → fee in grey, swipe to
+  // fill"). Accept via the ⇥ button, Tab, or → at the end of the text.
+  const suggestTerms = $derived(
+    buildSuggestTerms(
+      categories.map((c) => c.name),
+      accounts
+    )
+  );
+  const suggestion = $derived(suggestCompletion(desc, suggestTerms));
+  function acceptSuggestion(): void {
+    if (suggestion !== null) desc = suggestion.accepted;
+  }
+
   /** Tx-count map keyed by category_id — drives the confirm-delete message
    *  in CategoryPicker so "Delete Food?" cites "12 transactions affected". */
   const txCountByCategoryId = $derived.by<Map<string, number>>(() => {
@@ -490,6 +506,17 @@
   }
 
   function onDescKey(e: KeyboardEvent): void {
+    // Tab (anywhere) or → (at the end) accepts the inline suggestion, like
+    // Gmail Smart Compose. On phones the ⇥ button does the same by tap.
+    if ((e.key === 'Tab' || e.key === 'ArrowRight') && suggestion !== null) {
+      const el = e.currentTarget as HTMLInputElement;
+      const atEnd = el.selectionStart === desc.length && el.selectionEnd === desc.length;
+      if (e.key === 'Tab' || atEnd) {
+        e.preventDefault();
+        acceptSuggestion();
+        return;
+      }
+    }
     if (e.key === 'Enter') {
       e.preventDefault();
       void save(); // save() validates the amount and surfaces an error if empty
@@ -655,15 +682,37 @@
     <div class="qas-dock">
       <span class="qas-type-hint">↑ Type what you spent — we fill the rest</span>
       <div class="qas-dock-row">
-        <input
-          type="text"
-          bind:value={desc}
-          placeholder={descPlaceholder}
-          class="qas-dock-input"
-          autocomplete="off"
-          spellcheck="false"
-          onkeydown={onDescKey}
-        />
+        <div class="qas-dock-field">
+          {#if suggestion !== null}
+            <!-- Ghost completion (Smart Compose): typed text invisible, only the
+                 grey suffix shows after the cursor. -->
+            <div class="qas-ghost" aria-hidden="true">
+              <span class="qas-ghost-typed">{desc}</span><span class="qas-ghost-suffix"
+                >{suggestion.suffix}</span
+              >
+            </div>
+          {/if}
+          <input
+            type="text"
+            bind:value={desc}
+            placeholder={descPlaceholder}
+            class="qas-dock-input"
+            autocomplete="off"
+            autocapitalize="none"
+            spellcheck="false"
+            onkeydown={onDescKey}
+          />
+        </div>
+        {#if suggestion !== null}
+          <button
+            type="button"
+            class="qas-accept-btn"
+            onclick={acceptSuggestion}
+            aria-label={`Accept suggestion: ${suggestion.suffix}`}
+          >
+            ⇥
+          </button>
+        {/if}
         <button
           type="button"
           class="qas-send-btn"
@@ -1055,21 +1104,71 @@
     align-items: center;
     gap: 0.5rem;
   }
-  .qas-dock-input {
+  .qas-dock-field {
+    position: relative;
     flex: 1;
     min-width: 0;
     border: 1.5px solid var(--color-accent);
     background: var(--color-bg);
-    color: var(--color-text);
     border-radius: 12px;
+    overflow: hidden;
+  }
+  .qas-dock-field:focus-within {
+    background: var(--color-surface);
+  }
+  /* Ghost layer painted ON TOP of the input: the typed part is invisible (so
+     the real input text + caret show through) and only the grey completion is
+     drawn, right after the cursor. pointer-events:none so taps reach the input. */
+  .qas-ghost {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
     padding: 0.7rem 0.85rem;
     font-size: 0.98rem;
+    font-family: inherit;
+    line-height: 1.2;
+    white-space: pre;
+    overflow: hidden;
+  }
+  .qas-ghost-typed {
+    color: transparent;
+  }
+  .qas-ghost-suffix {
+    color: var(--color-muted);
+    opacity: 0.6;
+  }
+  .qas-dock-input {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: var(--color-text);
+    padding: 0.7rem 0.85rem;
+    font-size: 0.98rem;
+    line-height: 1.2;
     font-family: inherit;
   }
   .qas-dock-input:focus {
     outline: none;
-    border-color: var(--color-accent);
-    background: var(--color-surface);
+  }
+  .qas-accept-btn {
+    flex-shrink: 0;
+    height: 40px;
+    padding: 0 0.7rem;
+    border-radius: 999px;
+    border: 1px solid var(--color-accent);
+    background: var(--color-accent-soft);
+    color: var(--color-accent);
+    font-size: 0.95rem;
+    font-weight: 800;
+    cursor: pointer;
+  }
+  .qas-accept-btn:active {
+    transform: scale(0.95);
   }
   .qas-send-btn {
     flex-shrink: 0;
@@ -1173,7 +1272,8 @@
   .qas-sheet.keyboard-open .qas-dock {
     padding-top: 0.35rem;
   }
-  .qas-sheet.keyboard-open .qas-dock-input {
+  .qas-sheet.keyboard-open .qas-dock-input,
+  .qas-sheet.keyboard-open .qas-ghost {
     padding: 0.55rem 0.8rem;
   }
   .qas-sheet.keyboard-open .qas-send-btn {
