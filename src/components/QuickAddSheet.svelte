@@ -169,52 +169,6 @@
 
   let amountInputEl = $state<HTMLInputElement | null>(null);
 
-  // ── Live-preview formatting helpers (used in the chip strip under
-  //    Description so the user can see the auto-detected fields even
-  //    when the keyboard hides Category/Date/Time/Sub etc.) ─────────────
-
-  const MONTH_LABELS = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec'
-  ] as const;
-  /** "Today" / "Yesterday" / "May 22" for an ISO YYYY-MM-DD. */
-  function formatDateForPreview(iso: string): string {
-    const t = today();
-    if (iso === t) return 'Today';
-    // Compute "yesterday" by going one day back from the device's today.
-    const td = new Date(`${t}T12:00:00`);
-    td.setDate(td.getDate() - 1);
-    const ystr = `${td.getFullYear()}-${String(td.getMonth() + 1).padStart(2, '0')}-${String(td.getDate()).padStart(2, '0')}`;
-    if (iso === ystr) return 'Yesterday';
-    const parts = iso.split('-');
-    const m = parseInt(parts[1] ?? '0', 10);
-    const d = parseInt(parts[2] ?? '0', 10);
-    if (m < 1 || m > 12) return iso;
-    return `${MONTH_LABELS[m - 1]} ${d}`;
-  }
-  /** "3:40 PM" for a 24h "HH:MM". */
-  function formatTimeForPreview(hhmm: string): string {
-    const m = hhmm.match(/^(\d{1,2}):(\d{2})$/);
-    if (!m) return hhmm;
-    const h24 = parseInt(m[1]!, 10);
-    const min = m[2]!;
-    if (!Number.isFinite(h24) || h24 < 0 || h24 > 23) return hhmm;
-    const ap = h24 < 12 ? 'AM' : 'PM';
-    const h12raw = h24 % 12;
-    const h12 = h12raw === 0 ? 12 : h12raw;
-    return `${h12}:${min} ${ap}`;
-  }
-
   /** Defaults to use whenever the sheet opens.  Direction-aware:
    *    expense  → last-used real account (or "Cash")
    *    income   → "Income"   (so transfers/income don't pollute "last used")
@@ -608,7 +562,12 @@
         />
       </label>
 
-      <!-- Category + Account triggers -->
+      <!-- Category + Sub-category in the SAME row.  Putting them side by
+           side instead of stacked saves a whole row of vertical space,
+           so adding the sub-category field doesn't make the form taller
+           than the pre-sub version (Hemanth: "why weren't you able to
+           just fit sub categories also without having this keyboard
+           overlay problem"). -->
       <div class="qas-row-2col">
         <button type="button" class="qas-dd-btn" onclick={() => (pickerOpen = true)}>
           <span class="qas-dd-icon">
@@ -625,45 +584,47 @@
           <span class="qas-dd-chev" aria-hidden="true">▾</span>
         </button>
 
-        <button type="button" class="qas-dd-btn" onclick={() => (accountPickerOpen = true)}>
-          <span class="qas-dd-icon">💳</span>
+        <button
+          type="button"
+          class="qas-dd-btn"
+          class:disabled={effectiveParentId === null}
+          disabled={effectiveParentId === null}
+          onclick={() => (subPickerOpen = true)}
+        >
+          <span class="qas-dd-icon">
+            {#if effectiveSub !== null}
+              <CategoryIcon icon={selectedSubIcon} color={selectedSubColor} tint />
+            {:else}
+              <span class="dot" style:background-color="var(--color-muted)"></span>
+            {/if}
+          </span>
           <span class="qas-dd-label">
-            <span class="qas-lbl">Payment method</span>
-            <span class="qas-dd-value">{accountLabel}</span>
+            <span class="qas-lbl">Sub-category</span>
+            <span class="qas-dd-value">
+              {#if effectiveParentId === null}
+                (pick category)
+              {:else if effectiveSub !== null}
+                {effectiveSub.name}
+              {:else}
+                (optional)
+              {/if}
+            </span>
           </span>
           <span class="qas-dd-chev" aria-hidden="true">▾</span>
         </button>
       </div>
 
-      <!-- Sub-category — separate field, DISABLED until a Category is
-         picked (Hemanth: "until then it has to be disabled"). Enabled
-         once a parent exists; tap opens a picker filtered to that
-         parent's children. -->
+      <!-- Payment method — its own row so the user always sees which
+           wallet / card the transaction is going against. -->
       <button
         type="button"
-        class="qas-dd-btn qas-sub-row"
-        class:disabled={effectiveParentId === null}
-        disabled={effectiveParentId === null}
-        onclick={() => (subPickerOpen = true)}
+        class="qas-dd-btn qas-full-row"
+        onclick={() => (accountPickerOpen = true)}
       >
-        <span class="qas-dd-icon">
-          {#if effectiveSub !== null}
-            <CategoryIcon icon={selectedSubIcon} color={selectedSubColor} tint />
-          {:else}
-            <span class="dot" style:background-color="var(--color-muted)"></span>
-          {/if}
-        </span>
+        <span class="qas-dd-icon">💳</span>
         <span class="qas-dd-label">
-          <span class="qas-lbl">Sub-category</span>
-          <span class="qas-dd-value">
-            {#if effectiveParentId === null}
-              (pick a category first)
-            {:else if effectiveSub !== null}
-              {effectiveSub.name}
-            {:else}
-              (none — optional)
-            {/if}
-          </span>
+          <span class="qas-lbl">Payment method</span>
+          <span class="qas-dd-value">{accountLabel}</span>
         </span>
         <span class="qas-dd-chev" aria-hidden="true">▾</span>
       </button>
@@ -707,41 +668,15 @@
     </div>
     <!-- ↑ end of qas-scroll ----------------------------------------------- -->
 
-    <!-- Sticky footer — chip strip + Save always above the keyboard.  No
-         scroll on this area; the user can read what the parser detected
-         and tap Save without ever scrolling the form even when the
-         keyboard is open.  ALWAYS visible (not gated on description
-         content) so the user sees the defaults from the moment the
-         sheet opens. -->
+    <!-- Sticky footer — Save always above the keyboard.  No scroll on
+         this area; the user can tap Save without scrolling even when
+         the keyboard is open.  The auto-preview chip strip that briefly
+         lived here was DROPPED on Hemanth's feedback ("I didn't at all
+         liked your new idea of adding one more layer") — the Category /
+         Sub-category / Payment / Date / Time buttons above already
+         show the auto-detected values directly, so the ribbon was
+         redundant clutter. -->
     <div class="qas-footer">
-      <div class="qas-preview" aria-live="polite">
-        <span class="qas-preview-tag">Auto</span>
-        <span class="qas-chip">📅 {formatDateForPreview(date)}</span>
-        {#if time !== ''}
-          <span class="qas-chip">🕐 {formatTimeForPreview(time)}</span>
-        {/if}
-        {#if categoryId !== null && effectiveParent !== null}
-          <span class="qas-chip">
-            <span class="qas-chip-icon">
-              <CategoryIcon
-                icon={selectedCategoryIcon}
-                color={selectedCategoryColor}
-                tint
-                size={12}
-              />
-            </span>
-            {effectiveParent.name}{#if effectiveSub !== null}
-              · {effectiveSub.name}{/if}
-          </span>
-        {:else}
-          <span class="qas-chip qas-chip-muted">🍽 No category</span>
-        {/if}
-        <span class="qas-chip">💳 {accountLabel}</span>
-        {#if amount.trim() !== '' && amount !== '0'}
-          <span class="qas-chip qas-chip-amount">{currencySymbol}{amount}</span>
-        {/if}
-      </div>
-
       <button type="button" class="qas-save-btn" onclick={save} disabled={saving}>
         {saving ? 'Saving…' : 'Save'}
       </button>
@@ -1030,58 +965,15 @@
   .qas-dd-btn:hover {
     background: var(--color-surface-hover);
   }
-  /* Sub-category row spans the full sheet width and lives directly under
-     the Category | Payment-method row so the two reads as a pair. */
-  .qas-sub-row {
+  /* Full-width row variant of the dropdown trigger.  Used for the
+     Payment-method button on its own line. */
+  .qas-full-row {
     width: 100%;
   }
-  /* ── Live auto-preview strip (above the keyboard fold) ─────────── */
-  .qas-preview {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    flex-wrap: wrap;
-    padding: 0.4rem 0.55rem;
-    background: var(--color-accent-soft);
-    border-radius: 12px;
-  }
-  .qas-chip-muted {
-    opacity: 0.65;
-  }
-  .qas-chip-amount {
-    background-image: var(--grad-primary);
-    color: var(--color-accent-fg);
-    border-color: transparent;
-    font-weight: 700;
-  }
-  .qas-preview-tag {
-    font-size: 0.62rem;
-    font-weight: 700;
-    color: var(--color-accent);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    padding: 0.05rem 0.4rem;
-    background: var(--color-surface);
-    border-radius: 999px;
-  }
-  .qas-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.18rem 0.55rem;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: 999px;
-    font-size: 0.75rem;
-    color: var(--color-text);
-    line-height: 1.2;
-    white-space: nowrap;
-  }
-  .qas-chip-icon {
-    display: inline-flex;
-    align-items: center;
-    margin-right: 0.05rem;
-  }
+  /* Chip-strip styles + formatters were removed when the auto-preview
+     ribbon was dropped (commit notes "I didn't at all liked your new
+     idea of adding one more layer").  Re-add if a future iteration
+     wants a Cash-App-style summary footer. */
   .qas-dd-btn.disabled,
   .qas-dd-btn:disabled {
     opacity: 0.55;
