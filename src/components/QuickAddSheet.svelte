@@ -127,6 +127,25 @@
   let error = $state<string | null>(null);
   let pickerOpen = $state(false);
   let accountPickerOpen = $state(false);
+  /** True when the soft keyboard is open.  Drives a `.keyboard-open`
+   *  class on the sheet that compacts the form (hides the big title,
+   *  hides Notes, tightens gaps) so Amount + Description + Category |
+   *  Account + Date | Time are all reachable above the keyboard. */
+  let keyboardOpen = $state(false);
+  $effect(() => {
+    if (typeof window === 'undefined' || !window.visualViewport) return;
+    const vv = window.visualViewport;
+    const update = (): void => {
+      keyboardOpen = window.innerHeight - vv.height > 120;
+    };
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+    };
+  });
 
   function pickCategory(id: string | null): void {
     categoryId = id;
@@ -493,7 +512,13 @@
 
 {#if open}
   <button type="button" class="qas-backdrop" aria-label="Close" onclick={onClose}></button>
-  <div class="qas-sheet" role="dialog" aria-modal="true" aria-label={title}>
+  <div
+    class="qas-sheet"
+    class:keyboard-open={keyboardOpen}
+    role="dialog"
+    aria-modal="true"
+    aria-label={title}
+  >
     <div class="qas-grab"></div>
 
     <div class="qas-header">
@@ -609,7 +634,7 @@
 
       <!-- Notes — free-form, persisted as an annotation so you can find out
          later WHY this transaction matters. -->
-      <label class="qas-block">
+      <label class="qas-block qas-notes-block">
         <span class="qas-lbl">Notes <span class="qas-opt">(optional — for future you)</span></span>
         <textarea
           bind:value={note}
@@ -957,5 +982,56 @@
   .qas-save-btn:disabled {
     opacity: 0.6;
     cursor: default;
+  }
+
+  /* ── Compact form when the soft keyboard is open ─────────────────────
+     With Pixel-7-size viewport reduced by a ~460px keyboard, the visible
+     area is ~380px.  The default form is ~510px tall.  Hide / shrink
+     the non-essential bits while typing so Amount + Description +
+     Category | Account + Date | Time are all reachable above the
+     keyboard fold (Hemanth: "okate screen lo … amount kanapadaali,
+     categories kanapadaali, time kanapadaali, description kudaa
+     kanapadaali, date kudaa").  The class is added by JS from the
+     visualViewport listener. */
+  .qas-sheet.keyboard-open {
+    gap: 0.3rem;
+  }
+  /* The big "Add expense" title disappears; only the × close button
+     remains in the header.  The X button is positioned via the
+     existing flex-end alignment so no layout reflow happens. */
+  .qas-sheet.keyboard-open .qas-title {
+    display: none;
+  }
+  /* The header shrinks: just the × close button on its own row,
+     no padding to spare. */
+  .qas-sheet.keyboard-open .qas-header {
+    justify-content: flex-end;
+    min-height: 0;
+  }
+  /* Notes is optional ("for future you").  Hide it while typing so
+     Date / Time and Save are reachable; user can dismiss the keyboard
+     to access Notes when they actually want to add one. */
+  .qas-sheet.keyboard-open .qas-notes-block {
+    display: none;
+  }
+  /* Tighten the Amount + dropdown heights so the saved-pixels add up. */
+  .qas-sheet.keyboard-open .qas-amount-row {
+    padding: 0.4rem 0.85rem;
+  }
+  .qas-sheet.keyboard-open .qas-amount {
+    font-size: 1.55rem;
+  }
+  .qas-sheet.keyboard-open .qas-type-toggle {
+    padding: 0.12rem;
+  }
+  .qas-sheet.keyboard-open .qas-type-opt {
+    padding: 0.32rem 0.4rem;
+    font-size: 0.8rem;
+  }
+  .qas-sheet.keyboard-open .qas-dd-btn {
+    padding: 0.4rem 0.6rem;
+  }
+  .qas-sheet.keyboard-open .qas-field {
+    padding: 0.4rem 0.65rem;
   }
 </style>
