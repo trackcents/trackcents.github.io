@@ -491,13 +491,8 @@
 
   function onDescKey(e: KeyboardEvent): void {
     if (e.key === 'Enter') {
-      if (amount.trim() === '') {
-        e.preventDefault();
-        amountInputEl?.focus();
-      } else {
-        e.preventDefault();
-        void save();
-      }
+      e.preventDefault();
+      void save(); // save() validates the amount and surfaces an error if empty
     }
   }
 
@@ -555,6 +550,14 @@
         {/each}
       </div>
 
+      <!-- Option-1: everything below fills in LIVE as you type in the dock at
+           the bottom of the sheet, and stays pinned up here out of the
+           keyboard's way. -->
+      <div class="qas-auto-head">
+        <span class="qas-lbl">Auto-filled from what you type</span>
+        <span class="qas-live"><span class="qas-live-dot"></span>Live</span>
+      </div>
+
       <!-- Amount (big & prominent). -->
       <div class="qas-amount-row">
         <span class="qas-cur">{currencySymbol}</span>
@@ -567,23 +570,8 @@
           class="qas-amount num"
           aria-label="Amount"
           oninput={() => (userTouchedAmount = true)}
-          onfocus={() => (userTouchedAmount = true)}
         />
       </div>
-
-      <!-- Description with smart NL parsing -->
-      <label class="qas-block">
-        <span class="qas-lbl">Description</span>
-        <input
-          type="text"
-          bind:value={desc}
-          placeholder={descPlaceholder}
-          class="qas-field"
-          autocomplete="off"
-          spellcheck="false"
-          onkeydown={onDescKey}
-        />
-      </label>
 
       <!-- Category + Account in one row — the original pre-sub-category
            layout.  Sub-category as a separate field was tried and then
@@ -657,22 +645,39 @@
           autocomplete="off"
         ></textarea>
       </label>
-
-      {#if error}
-        <p class="qas-error">{error}</p>
-      {/if}
-
-      <!-- Save lives at the END of the scrollable form, NOT in a sticky
-           footer (Hemanth: "why to show save button even while typing?
-           that itself is occupying whole space"). With the keyboard
-           open, the user sees Amount + Description above it; Cat /
-           Account / Date / Time / Notes / Save are reachable by
-           scrolling within the form or dismissing the keyboard. -->
-      <button type="button" class="qas-save-btn" onclick={save} disabled={saving}>
-        {saving ? 'Saving…' : 'Save'}
-      </button>
     </div>
     <!-- ↑ end of qas-scroll ----------------------------------------------- -->
+
+    <!-- Description dock — pinned at the bottom of the sheet (OUTSIDE the
+         scroll area), so the box you TYPE in is always just above the
+         keyboard and never covered. The summary above fills in live as you
+         type here. This is the Option-1 layout. -->
+    <div class="qas-dock">
+      <span class="qas-type-hint">↑ Type what you spent — we fill the rest</span>
+      <div class="qas-dock-row">
+        <input
+          type="text"
+          bind:value={desc}
+          placeholder={descPlaceholder}
+          class="qas-dock-input"
+          autocomplete="off"
+          spellcheck="false"
+          onkeydown={onDescKey}
+        />
+        <button
+          type="button"
+          class="qas-send-btn"
+          onclick={save}
+          disabled={saving}
+          aria-label="Save"
+        >
+          {saving ? '…' : '↑'}
+        </button>
+      </div>
+      {#if error}
+        <p class="qas-error qas-dock-error">{error}</p>
+      {/if}
+    </div>
   </div>
 
   <!-- Category picker popover (top-level + nested view) -->
@@ -992,30 +997,110 @@
     margin: 0;
   }
 
-  .qas-save-btn {
-    margin-top: 0.25rem;
-    width: 100%;
-    padding: 0.85rem;
-    border-radius: 14px;
+  /* ── Option-1 "auto-filled" header ─────────────────────────────────── */
+  .qas-auto-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 0.1rem;
+  }
+  .qas-live {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.58rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-accent);
+  }
+  .qas-live-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--color-accent);
+    animation: qas-pulse 1.5s ease-in-out infinite;
+  }
+  @keyframes qas-pulse {
+    0%,
+    100% {
+      opacity: 0.4;
+      transform: scale(0.85);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.1);
+    }
+  }
+
+  /* ── Description dock — pinned at the bottom, always above the keyboard ── */
+  .qas-dock {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--color-border);
+  }
+  .qas-type-hint {
+    text-align: center;
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-accent);
+  }
+  .qas-dock-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .qas-dock-input {
+    flex: 1;
+    min-width: 0;
+    border: 1.5px solid var(--color-accent);
+    background: var(--color-bg);
+    color: var(--color-text);
+    border-radius: 12px;
+    padding: 0.7rem 0.85rem;
+    font-size: 0.98rem;
+    font-family: inherit;
+  }
+  .qas-dock-input:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    background: var(--color-surface);
+  }
+  .qas-send-btn {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 999px;
     border: 0;
     background-image: var(--grad-primary);
     color: var(--color-accent-fg);
-    font-size: 1rem;
+    font-size: 1.1rem;
     font-weight: 700;
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     transition:
       filter 0.16s ease,
       transform 0.12s ease;
   }
-  .qas-save-btn:hover:not(:disabled) {
+  .qas-send-btn:hover:not(:disabled) {
     filter: brightness(1.05);
   }
-  .qas-save-btn:active:not(:disabled) {
-    transform: scale(0.98);
+  .qas-send-btn:active:not(:disabled) {
+    transform: scale(0.95);
   }
-  .qas-save-btn:disabled {
+  .qas-send-btn:disabled {
     opacity: 0.6;
     cursor: default;
+  }
+  .qas-dock-error {
+    text-align: center;
   }
 
   /* ── Compact form when the soft keyboard is open ─────────────────────
@@ -1079,10 +1164,20 @@
   .qas-sheet.keyboard-open .qas-field {
     padding: 0.4rem 0.65rem;
   }
-  /* Slightly slimmer Save button to ensure it sits inside the visible
-     area above the keyboard. */
-  .qas-sheet.keyboard-open .qas-save-btn {
-    padding: 0.65rem;
-    font-size: 0.95rem;
+  /* Keyboard open: tighten the dock so the type box + send sit snug above the
+     keyboard, and drop the header/hint to save vertical room. */
+  .qas-sheet.keyboard-open .qas-auto-head,
+  .qas-sheet.keyboard-open .qas-type-hint {
+    display: none;
+  }
+  .qas-sheet.keyboard-open .qas-dock {
+    padding-top: 0.35rem;
+  }
+  .qas-sheet.keyboard-open .qas-dock-input {
+    padding: 0.55rem 0.8rem;
+  }
+  .qas-sheet.keyboard-open .qas-send-btn {
+    width: 40px;
+    height: 40px;
   }
 </style>
