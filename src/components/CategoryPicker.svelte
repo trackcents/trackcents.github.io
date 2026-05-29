@@ -395,6 +395,16 @@
               🗑
             </button>
           {:else}
+            {#if !isChild && onCreate !== undefined}
+              <button
+                type="button"
+                class="addsub-pill"
+                aria-label="Add a sub-category under {c.name}"
+                onclick={(ev) => startAddSub(c.id, ev)}
+              >
+                ＋ sub
+              </button>
+            {/if}
             <button
               type="button"
               class="star"
@@ -455,8 +465,8 @@
              has at least one sub-category anywhere.  Doesn't run in
              restrictToParent mode (they're already in the sub-flow). -->
         <p class="subcat-hint">
-          💡 Want sub-categories? Tap <strong>Edit</strong> → the
-          <strong>＋</strong> next to a category (e.g. add “Biryani” under Food).
+          💡 Want sub-categories? Tap <strong>＋ sub</strong> next to any category (e.g. add “Biryani”
+          under Food).
         </p>
       {/if}
     </div>
@@ -734,6 +744,32 @@
   }
   .addsub:hover {
     background: var(--color-accent-soft);
+  }
+  /* Always-visible "+ sub" affordance on parent rows in normal mode — makes
+     sub-categories discoverable without entering Edit mode (Hemanth, 2026-05-29:
+     "sub categories is not visible to me"). Tapping it opens the same inline
+     add-sub input the Edit-mode ＋ uses. */
+  .addsub-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    height: 26px;
+    padding: 0 0.5rem;
+    margin-right: 0.1rem;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--color-accent);
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+  .addsub-pill:hover {
+    background: var(--color-accent-soft);
+    border-color: var(--color-accent);
   }
   /* ── Sub-category indentation ─────────────────────────── */
   .row.child .row-main {
