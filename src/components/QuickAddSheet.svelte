@@ -623,22 +623,18 @@
       {#if error}
         <p class="qas-error">{error}</p>
       {/if}
-    </div>
-    <!-- ↑ end of qas-scroll ----------------------------------------------- -->
 
-    <!-- Sticky footer — Save always above the keyboard.  No scroll on
-         this area; the user can tap Save without scrolling even when
-         the keyboard is open.  The auto-preview chip strip that briefly
-         lived here was DROPPED on Hemanth's feedback ("I didn't at all
-         liked your new idea of adding one more layer") — the Category /
-         Sub-category / Payment / Date / Time buttons above already
-         show the auto-detected values directly, so the ribbon was
-         redundant clutter. -->
-    <div class="qas-footer">
+      <!-- Save lives at the END of the scrollable form, NOT in a sticky
+           footer (Hemanth: "why to show save button even while typing?
+           that itself is occupying whole space"). With the keyboard
+           open, the user sees Amount + Description above it; Cat /
+           Account / Date / Time / Notes / Save are reachable by
+           scrolling within the form or dismissing the keyboard. -->
       <button type="button" class="qas-save-btn" onclick={save} disabled={saving}>
         {saving ? 'Saving…' : 'Save'}
       </button>
     </div>
+    <!-- ↑ end of qas-scroll ----------------------------------------------- -->
   </div>
 
   <!-- Category picker popover (top-level + nested view) -->
@@ -705,13 +701,15 @@
        sheet's bottom edge sits right at the keyboard top. */
     max-height: calc(95dvh - var(--kb-inset-bottom, 0px));
     /* NO overflow on the sheet itself — internal scroll lives on
-       .qas-scroll so the .qas-footer (preview chips + Save) stays
-       pinned to the sheet's bottom edge regardless of how much content
-       is above. */
+       .qas-scroll so the form body scrolls inside the sheet.  Save now
+       sits at the END of the scrollable area (Hemanth: "why to show
+       save button even while typing?"), not in a pinned footer. */
     overflow: hidden;
   }
-  /* Scroll area — everything between the header and the sticky footer.
-     Takes the remaining height after the header / footer / padding. */
+  /* Scroll area — the entire form body, including the Save button as
+     the last child.  When the keyboard opens, Amount + Description
+     stay visible; the rest is reachable by scrolling or by dismissing
+     the keyboard. */
   .qas-scroll {
     flex: 1 1 auto;
     overflow-y: auto;
@@ -719,20 +717,7 @@
     flex-direction: column;
     gap: 0.5rem;
     min-height: 0; /* lets flex-shrink kick in inside the column */
-    /* Small pad-bottom so the last form field never touches the chip strip. */
     padding-bottom: 0.4rem;
-  }
-  /* Sticky footer — always visible, always above the keyboard.  Contains
-     the auto-preview chip strip and the Save button. */
-  .qas-footer {
-    flex: 0 0 auto;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    border-top: 1px solid var(--color-border);
-    padding-top: 0.55rem;
-    margin-top: 0.1rem;
-    background: var(--color-surface);
   }
   @keyframes rise {
     from {
