@@ -169,6 +169,52 @@
 
   let amountInputEl = $state<HTMLInputElement | null>(null);
 
+  // ── Live-preview formatting helpers (used in the chip strip under
+  //    Description so the user can see the auto-detected fields even
+  //    when the keyboard hides Category/Date/Time/Sub etc.) ─────────────
+
+  const MONTH_LABELS = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec'
+  ] as const;
+  /** "Today" / "Yesterday" / "May 22" for an ISO YYYY-MM-DD. */
+  function formatDateForPreview(iso: string): string {
+    const t = today();
+    if (iso === t) return 'Today';
+    // Compute "yesterday" by going one day back from the device's today.
+    const td = new Date(`${t}T12:00:00`);
+    td.setDate(td.getDate() - 1);
+    const ystr = `${td.getFullYear()}-${String(td.getMonth() + 1).padStart(2, '0')}-${String(td.getDate()).padStart(2, '0')}`;
+    if (iso === ystr) return 'Yesterday';
+    const parts = iso.split('-');
+    const m = parseInt(parts[1] ?? '0', 10);
+    const d = parseInt(parts[2] ?? '0', 10);
+    if (m < 1 || m > 12) return iso;
+    return `${MONTH_LABELS[m - 1]} ${d}`;
+  }
+  /** "3:40 PM" for a 24h "HH:MM". */
+  function formatTimeForPreview(hhmm: string): string {
+    const m = hhmm.match(/^(\d{1,2}):(\d{2})$/);
+    if (!m) return hhmm;
+    const h24 = parseInt(m[1]!, 10);
+    const min = m[2]!;
+    if (!Number.isFinite(h24) || h24 < 0 || h24 > 23) return hhmm;
+    const ap = h24 < 12 ? 'AM' : 'PM';
+    const h12raw = h24 % 12;
+    const h12 = h12raw === 0 ? 12 : h12raw;
+    return `${h12}:${min} ${ap}`;
+  }
+
   /** Defaults to use whenever the sheet opens.  Direction-aware:
    *    expense  → last-used real account (or "Cash")
    *    income   → "Income"   (so transfers/income don't pollute "last used")
@@ -556,6 +602,38 @@
       />
     </label>
 
+    <!-- Live auto-preview strip — visible right under Description so the
+         user can see what's being auto-detected even when the keyboard
+         covers the rest of the form (Hemanth: "How can I see while typing
+         what it is being selected?").  Shows only when the desc is
+         non-empty so it doesn't clutter the empty-state. -->
+    {#if desc.trim().length > 0}
+      <div class="qas-preview" aria-live="polite">
+        <span class="qas-preview-tag">Auto</span>
+        <span class="qas-chip">📅 {formatDateForPreview(date)}</span>
+        {#if time !== ''}
+          <span class="qas-chip">🕐 {formatTimeForPreview(time)}</span>
+        {/if}
+        {#if categoryId !== null && effectiveParent !== null}
+          <span class="qas-chip">
+            <span class="qas-chip-icon">
+              <CategoryIcon
+                icon={selectedCategoryIcon}
+                color={selectedCategoryColor}
+                tint
+                size={12}
+              />
+            </span>
+            {effectiveParent.name}{#if effectiveSub !== null}
+              · {effectiveSub.name}{/if}
+          </span>
+        {/if}
+        {#if amount.trim() !== '' && amount !== '0'}
+          <span class="qas-chip">{currencySymbol}{amount}</span>
+        {/if}
+      </div>
+    {/if}
+
     <!-- Category + Account triggers -->
     <div class="qas-row-2col">
       <button type="button" class="qas-dd-btn" onclick={() => (pickerOpen = true)}>
@@ -912,6 +990,45 @@
      the Category | Payment-method row so the two reads as a pair. */
   .qas-sub-row {
     width: 100%;
+  }
+  /* ── Live auto-preview strip (above the keyboard fold) ─────────── */
+  .qas-preview {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+    padding: 0.35rem 0.5rem;
+    background: var(--color-accent-soft);
+    border-radius: 10px;
+    margin-top: -0.1rem;
+  }
+  .qas-preview-tag {
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: var(--color-accent);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0.05rem 0.4rem;
+    background: var(--color-surface);
+    border-radius: 999px;
+  }
+  .qas-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.18rem 0.55rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    font-size: 0.75rem;
+    color: var(--color-text);
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+  .qas-chip-icon {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 0.05rem;
   }
   .qas-dd-btn.disabled,
   .qas-dd-btn:disabled {
