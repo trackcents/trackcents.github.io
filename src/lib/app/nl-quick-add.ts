@@ -86,66 +86,97 @@ export function parseQuickAddText(text: string, defaultDateIso: string): ParsedQ
    *  amount because the filter only knew about the date. */
   const chronoSpans: Array<[number, number]> = [];
 
-  if (chronoResults.length > 0) {
-    const r0 = chronoResults[0]!;
-    let d = r0.date();
-    const dateStart = r0.index;
-    let dateEnd = r0.index + r0.text.length;
+  // Per-result classification + extraction.  Walk ALL chrono results,
+  // not just the first; classify each as DATE / STRONG-TIME / weak; use
+  // each one's components appropriately and feed its span (possibly
+  // shrunk) into chronoSpans so the amount filter knows what's already
+  // claimed.
+  let dateExtracted = false;
+  const refYear = refDate.getFullYear();
+  for (const r of chronoResults) {
+    /** Result text starts with `<digits><space>` — the user typed a bare
+     *  number before the rest of the phrase.  When this co-occurs with a
+     *  certain date ("10 may07th", "18 today", "12 today"), chrono mis-
+     *  attributes the leading number to a "weak hour" and the user's
+     *  intended amount disappears.  Classifying these as "amount, not
+     *  time" was Hemanth's screenshot-5 fix. */
+    const hasLeadingBareNumber = /^\d+\s+/.test(r.text);
+    /** Date components are CERTAIN (typed by the user) — not just implied
+     *  from forwardDate.  Used to distinguish "10am chai" (no date typed,
+     *  date stays today) from "10 may07th" (date IS typed). */
+    const hasCertainDate =
+      (r.start.isCertain('day') && r.start.isCertain('month')) || r.start.isCertain('weekday');
+    const hourCertain = r.start.isCertain('hour');
+    const meridiemCertain = r.start.isCertain('meridiem');
+    const minuteValue = r.start.get('minute') ?? 0;
+    /** When a result has BOTH a leading bare number AND a certain date,
+     *  the leading digits are the user's AMOUNT (not part of the time).
+     *  Suppress the hour and shrink the span to expose those digits. */
+    const leadingNumberInDate = hasLeadingBareNumber && hasCertainDate;
+    /** Strong time = explicit time format the user clearly typed.  Either
+     *  AM/PM is certain, or the minute is non-zero.  Suppressed when this
+     *  is a leading-bare-number-into-a-date case. */
+    const isStrongTime =
+      hourCertain && (meridiemCertain || minuteValue > 0) && !leadingNumberInDate;
 
-    // ── Year heuristic (handles BOTH directions of "wrong" 2-digit years) ──
-    //
-    // 1. Explicit 4-digit year (e.g. "may 23 2027") → trust it.
-    // 2. No 4-digit year, but chrono inferred a year > 5 years away from
-    //    today → almost certainly chrono's 2-digit-year rule firing on
-    //    what the user intended as an AMOUNT (Hemanth's "22nd may 75
-    //    dollars" → chrono read 1975, swallowing "75" into the date span
-    //    so the amount fell back to "34" stolen from "03:34 PM").  Reset
-    //    the year to today's AND shrink the date span so the trailing
-    //    "75" can be re-claimed by the amount logic.
-    // 3. Past-month-this-year heuristic still applies (forwardDate=true
-    //    picks NEXT year for "may 23" when today is May 28 → roll back).
-    const has4DigitYear = /\b(19|20)\d{2}\b/.test(r0.text);
-    const refYear = refDate.getFullYear();
-    const parsedYear = d.getFullYear();
-    if (!has4DigitYear && Math.abs(parsedYear - refYear) > 5) {
-      // The "75" / "27" trailing the date phrase was chrono's 2-digit-year
-      // inference, not a real year.  Shrink the span to strip it; reset
-      // the year to refYear.
-      const trailing = r0.text.match(/\s+\d{1,2}\s*$/);
-      if (trailing) {
-        const beforeDigits = r0.text.slice(0, r0.text.length - trailing[0].length);
-        dateEnd = r0.index + beforeDigits.length;
+    let spanStart = r.index;
+    let spanEnd = r.index + r.text.length;
+
+    // ── Date extraction (first qualifying result wins) ───────────────────
+    if (hasCertainDate && !dateExtracted) {
+      let d = r.date();
+
+      // 2-digit-year heuristic: a parsed year > 5 years from today, with
+      // no 4-digit year typed, is almost certainly chrono's 2-digit
+      // inference firing on what was actually an AMOUNT (Hemanth's
+      // "22nd may 75 dollars" → chrono read 1975).  Shrink the span to
+      // strip the trailing digits and reset year to today's.  An
+      // explicit 4-digit year ("hotel on 22nd may 1975") stays as-is.
+      const has4DigitYear = /\b(19|20)\d{2}\b/.test(r.text);
+      const parsedYear = d.getFullYear();
+      if (!has4DigitYear && Math.abs(parsedYear - refYear) > 5) {
+        const trailing = r.text.match(/\s+\d{1,2}\s*$/);
+        if (trailing) {
+          const beforeDigits = r.text.slice(0, r.text.length - trailing[0].length);
+          spanEnd = r.index + beforeDigits.length;
+        }
+        d = new Date(refYear, d.getMonth(), d.getDate(), 12, 0, 0);
       }
-      d = new Date(refYear, d.getMonth(), d.getDate(), 12, 0, 0);
-    }
-    const daysAhead = (d.getTime() - refDate.getTime()) / 86_400_000;
-    if (!has4DigitYear && daysAhead > 60) {
-      d = new Date(d.getFullYear() - 1, d.getMonth(), d.getDate(), 12, 0, 0);
+
+      // Past-month-this-year heuristic: forwardDate=true picks NEXT year
+      // for a partial date that's already passed (e.g. "may 23" when
+      // today is May 28).  Roll back unless the user typed an explicit
+      // year.
+      const daysAhead = (d.getTime() - refDate.getTime()) / 86_400_000;
+      if (!has4DigitYear && daysAhead > 60) {
+        d = new Date(d.getFullYear() - 1, d.getMonth(), d.getDate(), 12, 0, 0);
+      }
+
+      dateIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      dateExtracted = true;
     }
 
-    dateIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    chronoSpans.push([dateStart, dateEnd]);
-
-    // ── Time extraction across ALL chrono results ─────────────────────────
-    // chrono.parse may return separate results for date and time (e.g.
-    // "22nd may 75" + "03:34 PM" come back as two results).  Scan every
-    // result for the first one carrying an explicit hour; if none, leave
-    // time null (the description had no time phrase the user typed).
-    for (const cr of chronoResults) {
-      if (!cr.start.isCertain('hour')) continue;
-      const hh = cr.start.get('hour');
-      const mm = cr.start.get('minute') ?? 0;
+    // ── Time extraction (first strong time result wins) ──────────────────
+    if (isStrongTime && timeHhmm === null) {
+      const hh = r.start.get('hour');
+      const mm = r.start.get('minute') ?? 0;
       if (hh !== null && hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) {
         timeHhmm = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
-        break;
       }
     }
 
-    // Record every chrono span (date AND time) so the amount filter
-    // excludes digits inside any of them.
-    for (let i = 1; i < chronoResults.length; i++) {
-      const cr = chronoResults[i]!;
-      chronoSpans.push([cr.index, cr.index + cr.text.length]);
+    // ── Span contribution to amount-exclusion list ───────────────────────
+    if (leadingNumberInDate) {
+      // Shrink: skip past the leading digits + whitespace so the user's
+      // amount digits are exposed to the amount filter.
+      const m = r.text.match(/^(\d+\s+)/);
+      if (m && m[1] !== undefined) spanStart = r.index + m[1].length;
+    }
+    // Only contribute a span when this result was actually USED for date
+    // or time.  Weak-hour-only results (no date, no strong time) make NO
+    // contribution — their digits are amount-eligible.
+    if (hasCertainDate || isStrongTime) {
+      chronoSpans.push([spanStart, spanEnd]);
     }
   }
 
