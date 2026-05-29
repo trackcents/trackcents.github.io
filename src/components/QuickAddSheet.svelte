@@ -985,16 +985,27 @@
   }
 
   /* ── Compact form when the soft keyboard is open ─────────────────────
-     With Pixel-7-size viewport reduced by a ~460px keyboard, the visible
-     area is ~380px.  The default form is ~510px tall.  Hide / shrink
-     the non-essential bits while typing so Amount + Description +
-     Category | Account + Date | Time are all reachable above the
+     The .keyboard-open class is added by JS from the visualViewport
+     listener whenever the keyboard reduces the visible area by more
+     than 120px.  All rules below use `rem` units so the compaction
+     scales the same way across every phone size — from a 320-wide
+     iPhone SE up to a folded Galaxy Z.  The goal: Amount + Description
+     + Category | Account + Date | Time + Save all reachable above the
      keyboard fold (Hemanth: "okate screen lo … amount kanapadaali,
      categories kanapadaali, time kanapadaali, description kudaa
-     kanapadaali, date kudaa").  The class is added by JS from the
-     visualViewport listener. */
+     kanapadaali, date kudaa").  Tested at viewports 320×568 (iPhone SE)
+     and 412×915 (Pixel 7) via scripts/screenshot-quickadd-keyboard.mjs. */
   .qas-sheet.keyboard-open {
-    gap: 0.3rem;
+    gap: 0.25rem;
+    /* Shrink the top + bottom padding so the form has more vertical
+       room.  The grab handle still has its own margin so the sheet
+       still looks like a sheet. */
+    padding-top: 0.2rem;
+  }
+  /* The grab handle no longer needs vertical breathing room when the
+     form is compacted. */
+  .qas-sheet.keyboard-open .qas-grab {
+    margin: 0.1rem auto 0.1rem;
   }
   /* The big "Add expense" title disappears; only the × close button
      remains in the header.  The X button is positioned via the
@@ -1033,5 +1044,11 @@
   }
   .qas-sheet.keyboard-open .qas-field {
     padding: 0.4rem 0.65rem;
+  }
+  /* Slightly slimmer Save button to ensure it sits inside the visible
+     area above the keyboard. */
+  .qas-sheet.keyboard-open .qas-save-btn {
+    padding: 0.65rem;
+    font-size: 0.95rem;
   }
 </style>
