@@ -557,57 +557,163 @@
       <button type="button" class="qas-close-btn" onclick={onClose} aria-label="Close">✕</button>
     </div>
 
-    <!-- Type toggle -->
-    <div class="qas-type-toggle">
-      {#each [{ v: 'expense', l: 'Expense' }, { v: 'income', l: 'Income' }, { v: 'transfer', l: 'Transfer' }] as opt (opt.v)}
-        {@const active = direction === opt.v}
-        <button
-          type="button"
-          class="qas-type-opt"
-          class:active
-          onclick={() => (direction = opt.v as Direction)}
-        >
-          {opt.l}
+    <!-- Scrollable form body — when the keyboard opens, this shrinks and
+         scrolls so the sticky footer (chip strip + Save) stays glued just
+         above the keyboard.  Hemanth's complaint that the form bottom got
+         lost under the keyboard was because EVERYTHING was in one scroll
+         container; now the chip strip + Save are pinned outside it. -->
+    <div class="qas-scroll">
+      <!-- Type toggle -->
+      <div class="qas-type-toggle">
+        {#each [{ v: 'expense', l: 'Expense' }, { v: 'income', l: 'Income' }, { v: 'transfer', l: 'Transfer' }] as opt (opt.v)}
+          {@const active = direction === opt.v}
+          <button
+            type="button"
+            class="qas-type-opt"
+            class:active
+            onclick={() => (direction = opt.v as Direction)}
+          >
+            {opt.l}
+          </button>
+        {/each}
+      </div>
+
+      <!-- Amount (big & prominent). -->
+      <div class="qas-amount-row">
+        <span class="qas-cur">{currencySymbol}</span>
+        <input
+          type="text"
+          inputmode="decimal"
+          bind:value={amount}
+          bind:this={amountInputEl}
+          placeholder={amountPlaceholder}
+          class="qas-amount num"
+          aria-label="Amount"
+          oninput={() => (userTouchedAmount = true)}
+          onfocus={() => (userTouchedAmount = true)}
+        />
+      </div>
+
+      <!-- Description with smart NL parsing -->
+      <label class="qas-block">
+        <span class="qas-lbl">Description</span>
+        <input
+          type="text"
+          bind:value={desc}
+          placeholder={descPlaceholder}
+          class="qas-field"
+          autocomplete="off"
+          spellcheck="false"
+          onkeydown={onDescKey}
+        />
+      </label>
+
+      <!-- Category + Account triggers -->
+      <div class="qas-row-2col">
+        <button type="button" class="qas-dd-btn" onclick={() => (pickerOpen = true)}>
+          <span class="qas-dd-icon">
+            {#if categoryId === null}
+              <span class="dot" style:background-color={selectedCategoryColor}></span>
+            {:else}
+              <CategoryIcon icon={selectedCategoryIcon} color={selectedCategoryColor} tint />
+            {/if}
+          </span>
+          <span class="qas-dd-label">
+            <span class="qas-lbl">Category</span>
+            <span class="qas-dd-value">{selectedCategoryName}</span>
+          </span>
+          <span class="qas-dd-chev" aria-hidden="true">▾</span>
         </button>
-      {/each}
+
+        <button type="button" class="qas-dd-btn" onclick={() => (accountPickerOpen = true)}>
+          <span class="qas-dd-icon">💳</span>
+          <span class="qas-dd-label">
+            <span class="qas-lbl">Payment method</span>
+            <span class="qas-dd-value">{accountLabel}</span>
+          </span>
+          <span class="qas-dd-chev" aria-hidden="true">▾</span>
+        </button>
+      </div>
+
+      <!-- Sub-category — separate field, DISABLED until a Category is
+         picked (Hemanth: "until then it has to be disabled"). Enabled
+         once a parent exists; tap opens a picker filtered to that
+         parent's children. -->
+      <button
+        type="button"
+        class="qas-dd-btn qas-sub-row"
+        class:disabled={effectiveParentId === null}
+        disabled={effectiveParentId === null}
+        onclick={() => (subPickerOpen = true)}
+      >
+        <span class="qas-dd-icon">
+          {#if effectiveSub !== null}
+            <CategoryIcon icon={selectedSubIcon} color={selectedSubColor} tint />
+          {:else}
+            <span class="dot" style:background-color="var(--color-muted)"></span>
+          {/if}
+        </span>
+        <span class="qas-dd-label">
+          <span class="qas-lbl">Sub-category</span>
+          <span class="qas-dd-value">
+            {#if effectiveParentId === null}
+              (pick a category first)
+            {:else if effectiveSub !== null}
+              {effectiveSub.name}
+            {:else}
+              (none — optional)
+            {/if}
+          </span>
+        </span>
+        <span class="qas-dd-chev" aria-hidden="true">▾</span>
+      </button>
+
+      <!-- Date + Time. -->
+      <div class="qas-row-2col">
+        <label class="qas-block">
+          <span class="qas-lbl">Date</span>
+          <input
+            type="date"
+            bind:value={date}
+            class="qas-field"
+            onchange={() => (userTouchedDate = true)}
+          />
+        </label>
+        <div class="qas-block">
+          <span class="qas-lbl">Time <span class="qas-opt">(optional)</span></span>
+          <!-- Segmented HH : MM AM/PM control — no typing the colon, AM/PM is
+             a tappable toggle.  Two-way bound to the 24-hour `time` string,
+             which both the NL autofill and the save path already speak. -->
+          <TimeInput bind:value={time} onUserEdit={() => (userTouchedTime = true)} />
+        </div>
+      </div>
+
+      <!-- Notes — free-form, persisted as an annotation so you can find out
+         later WHY this transaction matters. -->
+      <label class="qas-block">
+        <span class="qas-lbl">Notes <span class="qas-opt">(optional — for future you)</span></span>
+        <textarea
+          bind:value={note}
+          placeholder="e.g. with Murali, paid for everyone"
+          class="qas-field qas-notes"
+          rows="2"
+          autocomplete="off"
+        ></textarea>
+      </label>
+
+      {#if error}
+        <p class="qas-error">{error}</p>
+      {/if}
     </div>
+    <!-- ↑ end of qas-scroll ----------------------------------------------- -->
 
-    <!-- Amount (big & prominent). -->
-    <div class="qas-amount-row">
-      <span class="qas-cur">{currencySymbol}</span>
-      <input
-        type="text"
-        inputmode="decimal"
-        bind:value={amount}
-        bind:this={amountInputEl}
-        placeholder={amountPlaceholder}
-        class="qas-amount num"
-        aria-label="Amount"
-        oninput={() => (userTouchedAmount = true)}
-        onfocus={() => (userTouchedAmount = true)}
-      />
-    </div>
-
-    <!-- Description with smart NL parsing -->
-    <label class="qas-block">
-      <span class="qas-lbl">Description</span>
-      <input
-        type="text"
-        bind:value={desc}
-        placeholder={descPlaceholder}
-        class="qas-field"
-        autocomplete="off"
-        spellcheck="false"
-        onkeydown={onDescKey}
-      />
-    </label>
-
-    <!-- Live auto-preview strip — visible right under Description so the
-         user can see what's being auto-detected even when the keyboard
-         covers the rest of the form (Hemanth: "How can I see while typing
-         what it is being selected?").  Shows only when the desc is
-         non-empty so it doesn't clutter the empty-state. -->
-    {#if desc.trim().length > 0}
+    <!-- Sticky footer — chip strip + Save always above the keyboard.  No
+         scroll on this area; the user can read what the parser detected
+         and tap Save without ever scrolling the form even when the
+         keyboard is open.  ALWAYS visible (not gated on description
+         content) so the user sees the defaults from the moment the
+         sheet opens. -->
+    <div class="qas-footer">
       <div class="qas-preview" aria-live="polite">
         <span class="qas-preview-tag">Auto</span>
         <span class="qas-chip">📅 {formatDateForPreview(date)}</span>
@@ -627,113 +733,19 @@
             {effectiveParent.name}{#if effectiveSub !== null}
               · {effectiveSub.name}{/if}
           </span>
-        {/if}
-        {#if amount.trim() !== '' && amount !== '0'}
-          <span class="qas-chip">{currencySymbol}{amount}</span>
-        {/if}
-      </div>
-    {/if}
-
-    <!-- Category + Account triggers -->
-    <div class="qas-row-2col">
-      <button type="button" class="qas-dd-btn" onclick={() => (pickerOpen = true)}>
-        <span class="qas-dd-icon">
-          {#if categoryId === null}
-            <span class="dot" style:background-color={selectedCategoryColor}></span>
-          {:else}
-            <CategoryIcon icon={selectedCategoryIcon} color={selectedCategoryColor} tint />
-          {/if}
-        </span>
-        <span class="qas-dd-label">
-          <span class="qas-lbl">Category</span>
-          <span class="qas-dd-value">{selectedCategoryName}</span>
-        </span>
-        <span class="qas-dd-chev" aria-hidden="true">▾</span>
-      </button>
-
-      <button type="button" class="qas-dd-btn" onclick={() => (accountPickerOpen = true)}>
-        <span class="qas-dd-icon">💳</span>
-        <span class="qas-dd-label">
-          <span class="qas-lbl">Payment method</span>
-          <span class="qas-dd-value">{accountLabel}</span>
-        </span>
-        <span class="qas-dd-chev" aria-hidden="true">▾</span>
-      </button>
-    </div>
-
-    <!-- Sub-category — separate field, DISABLED until a Category is
-         picked (Hemanth: "until then it has to be disabled"). Enabled
-         once a parent exists; tap opens a picker filtered to that
-         parent's children. -->
-    <button
-      type="button"
-      class="qas-dd-btn qas-sub-row"
-      class:disabled={effectiveParentId === null}
-      disabled={effectiveParentId === null}
-      onclick={() => (subPickerOpen = true)}
-    >
-      <span class="qas-dd-icon">
-        {#if effectiveSub !== null}
-          <CategoryIcon icon={selectedSubIcon} color={selectedSubColor} tint />
         {:else}
-          <span class="dot" style:background-color="var(--color-muted)"></span>
+          <span class="qas-chip qas-chip-muted">🍽 No category</span>
         {/if}
-      </span>
-      <span class="qas-dd-label">
-        <span class="qas-lbl">Sub-category</span>
-        <span class="qas-dd-value">
-          {#if effectiveParentId === null}
-            (pick a category first)
-          {:else if effectiveSub !== null}
-            {effectiveSub.name}
-          {:else}
-            (none — optional)
-          {/if}
-        </span>
-      </span>
-      <span class="qas-dd-chev" aria-hidden="true">▾</span>
-    </button>
-
-    <!-- Date + Time. -->
-    <div class="qas-row-2col">
-      <label class="qas-block">
-        <span class="qas-lbl">Date</span>
-        <input
-          type="date"
-          bind:value={date}
-          class="qas-field"
-          onchange={() => (userTouchedDate = true)}
-        />
-      </label>
-      <div class="qas-block">
-        <span class="qas-lbl">Time <span class="qas-opt">(optional)</span></span>
-        <!-- Segmented HH : MM AM/PM control — no typing the colon, AM/PM is
-             a tappable toggle.  Two-way bound to the 24-hour `time` string,
-             which both the NL autofill and the save path already speak. -->
-        <TimeInput bind:value={time} onUserEdit={() => (userTouchedTime = true)} />
+        <span class="qas-chip">💳 {accountLabel}</span>
+        {#if amount.trim() !== '' && amount !== '0'}
+          <span class="qas-chip qas-chip-amount">{currencySymbol}{amount}</span>
+        {/if}
       </div>
+
+      <button type="button" class="qas-save-btn" onclick={save} disabled={saving}>
+        {saving ? 'Saving…' : 'Save'}
+      </button>
     </div>
-
-    <!-- Notes — free-form, persisted as an annotation so you can find out
-         later WHY this transaction matters. -->
-    <label class="qas-block">
-      <span class="qas-lbl">Notes <span class="qas-opt">(optional — for future you)</span></span>
-      <textarea
-        bind:value={note}
-        placeholder="e.g. with Murali, paid for everyone"
-        class="qas-field qas-notes"
-        rows="2"
-        autocomplete="off"
-      ></textarea>
-    </label>
-
-    {#if error}
-      <p class="qas-error">{error}</p>
-    {/if}
-
-    <button type="button" class="qas-save-btn" onclick={save} disabled={saving}>
-      {saving ? 'Saving…' : 'Save'}
-    </button>
   </div>
 
   <!-- Category picker popover (top-level + nested view) -->
@@ -807,7 +819,9 @@
   .qas-sheet {
     position: fixed;
     inset-inline: 0;
-    bottom: 0;
+    /* Lift the sheet above the soft keyboard via --kb-inset-bottom
+       (set globally by keyboard-inset.ts via visualViewport). */
+    bottom: var(--kb-inset-bottom, 0px);
     z-index: 50;
     background: var(--color-surface);
     border-top-left-radius: 22px;
@@ -820,8 +834,38 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    max-height: 95dvh;
+    /* Cap height to the available viewport WITHOUT the keyboard so the
+       sheet's bottom edge sits right at the keyboard top. */
+    max-height: calc(95dvh - var(--kb-inset-bottom, 0px));
+    /* NO overflow on the sheet itself — internal scroll lives on
+       .qas-scroll so the .qas-footer (preview chips + Save) stays
+       pinned to the sheet's bottom edge regardless of how much content
+       is above. */
+    overflow: hidden;
+  }
+  /* Scroll area — everything between the header and the sticky footer.
+     Takes the remaining height after the header / footer / padding. */
+  .qas-scroll {
+    flex: 1 1 auto;
     overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-height: 0; /* lets flex-shrink kick in inside the column */
+    /* Small pad-bottom so the last form field never touches the chip strip. */
+    padding-bottom: 0.4rem;
+  }
+  /* Sticky footer — always visible, always above the keyboard.  Contains
+     the auto-preview chip strip and the Save button. */
+  .qas-footer {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    border-top: 1px solid var(--color-border);
+    padding-top: 0.55rem;
+    margin-top: 0.1rem;
+    background: var(--color-surface);
   }
   @keyframes rise {
     from {
@@ -997,10 +1041,18 @@
     align-items: center;
     gap: 0.35rem;
     flex-wrap: wrap;
-    padding: 0.35rem 0.5rem;
+    padding: 0.4rem 0.55rem;
     background: var(--color-accent-soft);
-    border-radius: 10px;
-    margin-top: -0.1rem;
+    border-radius: 12px;
+  }
+  .qas-chip-muted {
+    opacity: 0.65;
+  }
+  .qas-chip-amount {
+    background-image: var(--grad-primary);
+    color: var(--color-accent-fg);
+    border-color: transparent;
+    font-weight: 700;
   }
   .qas-preview-tag {
     font-size: 0.62rem;
