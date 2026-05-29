@@ -103,6 +103,14 @@
 
   const favSet = $derived(new Set(favIds));
   const favs = $derived(filtered.filter((c) => favSet.has(c.id)));
+  /** Does the user have ANY sub-category yet?  Drives a small "tap Edit
+   *  to add sub-categories" hint at the bottom of the picker — shown
+   *  ONLY when the user has none yet, so it teaches the feature once
+   *  and then disappears.  Skip in restrictToParent mode (the user is
+   *  already inside the sub-flow). */
+  const hasAnySub = $derived(
+    categories.some((c) => c.parent_id !== undefined && c.parent_id !== '')
+  );
   /** Non-favourite top-level categories, each followed by its children
    *  in source order.  Sub-categories that appear in filtered without
    *  their parent (orphans from a deleted parent, or matched by search
@@ -440,6 +448,16 @@
           <span class="icon">＋</span>
           <span class="name">Create &quot;<strong>{query.trim()}</strong>&quot;</span>
         </button>
+      {/if}
+
+      {#if !editMode && !hasAnySub && restrictToParent === undefined && onCreate !== undefined && query.trim().length === 0}
+        <!-- One-time discoverability hint.  Disappears as soon as the user
+             has at least one sub-category anywhere.  Doesn't run in
+             restrictToParent mode (they're already in the sub-flow). -->
+        <p class="subcat-hint">
+          💡 Want sub-categories? Tap <strong>Edit</strong> → the
+          <strong>＋</strong> next to a category (e.g. add “Biryani” under Food).
+        </p>
       {/if}
     </div>
   </div>
@@ -804,6 +822,21 @@
     color: var(--color-muted);
     font-size: 0.85rem;
     padding: 1.4rem 0.8rem;
+  }
+  /* One-time discoverability hint for sub-categories — light tinted
+     background so it reads as a "tip" not part of the row list. */
+  .subcat-hint {
+    margin: 0.5rem 0.3rem 0.2rem;
+    padding: 0.55rem 0.7rem;
+    background: var(--color-accent-soft);
+    border-radius: 10px;
+    font-size: 0.78rem;
+    color: var(--color-text);
+    line-height: 1.4;
+  }
+  .subcat-hint strong {
+    color: var(--color-accent);
+    font-weight: 700;
   }
   .create {
     display: flex;

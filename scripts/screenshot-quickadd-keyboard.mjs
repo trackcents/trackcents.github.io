@@ -21,13 +21,15 @@ const browser = await chromium.launch({ headless: true });
  */
 const TARGETS = [
   // The smallest common modern phone — if it fits here, it fits anywhere.
-  { name: 'iphone-se',  device: devices['iPhone SE'],   keyboard: 260 },
+  { name: 'iphone-se', device: devices['iPhone SE'], keyboard: 260 },
   // Mid-range Android, common in India + US.
-  { name: 'pixel-5',    device: devices['Pixel 5'],     keyboard: 360 },
+  { name: 'pixel-5', device: devices['Pixel 5'], keyboard: 360 },
   // Common 2024-era flagship.
-  { name: 'pixel-7',    device: devices['Pixel 7'],     keyboard: 460 },
+  { name: 'pixel-7', device: devices['Pixel 7'], keyboard: 460 },
   // Bigger iPhone.
-  { name: 'iphone-14',  device: devices['iPhone 14'],   keyboard: 380 }
+  { name: 'iphone-14', device: devices['iPhone 14'], keyboard: 380 },
+  // Biggest mainstream iPhone (per Hemanth's ask to also cover this).
+  { name: 'iphone-14-pro-max', device: devices['iPhone 14 Pro Max'], keyboard: 380 }
 ];
 
 for (const { name, device, keyboard } of TARGETS) {
@@ -35,13 +37,17 @@ for (const { name, device, keyboard } of TARGETS) {
     console.log(`Skipping ${name}: device not in @playwright/test devices list`);
     continue;
   }
-  console.log(`\n── ${name} (${device.viewport.width}x${device.viewport.height}, kb=${keyboard}) ──`);
+  console.log(
+    `\n── ${name} (${device.viewport.width}x${device.viewport.height}, kb=${keyboard}) ──`
+  );
   const context = await browser.newContext({ ...device });
   // Bypass onboarding via the salt-injection trick.
   await context.addInitScript(() => {
     try {
       localStorage.setItem('mtrb.salt', 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=');
-    } catch {}
+    } catch {
+      /* noop — script-injection failures are non-fatal for screenshots */
+    }
   });
   const page = await context.newPage();
   await page.goto('https://trackcents.github.io/today?add=expense', {
@@ -93,7 +99,9 @@ for (const { name, device, keyboard } of TARGETS) {
       viewportHeight: window.innerHeight,
       fields: {
         amount: box(find('.qas-amount-row')),
-        description: box(find('input[placeholder*="coffee today" i], input[placeholder*="chai today" i]')),
+        description: box(
+          find('input[placeholder*="coffee today" i], input[placeholder*="chai today" i]')
+        ),
         category: box(ddByLabel.Category),
         account: box(ddByLabel.Account),
         date: box(find('input[type="date"]')),
@@ -113,7 +121,13 @@ for (const { name, device, keyboard } of TARGETS) {
     const onScreen = v.top >= 0 && v.bottom <= result.viewportHeight && v.height > 0;
     const partial = !onScreen && v.height > 0 && v.top < result.viewportHeight && v.bottom > 0;
     const hidden = v.height === 0;
-    const tag = hidden ? '⊘ hidden (display:none)' : onScreen ? '✓' : partial ? '~partial' : '✗ off-screen';
+    const tag = hidden
+      ? '⊘ hidden (display:none)'
+      : onScreen
+        ? '✓'
+        : partial
+          ? '~partial'
+          : '✗ off-screen';
     console.log(
       `    ${k.padEnd(13)} : top=${String(v.top).padStart(4)} bottom=${String(v.bottom).padStart(4)} h=${String(v.height).padStart(3)} ${tag}`
     );

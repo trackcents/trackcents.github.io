@@ -594,10 +594,10 @@
           </span>
           <span class="qas-dd-label">
             <span class="qas-lbl">Category</span>
-            <span class="qas-dd-value">
-              {selectedCategoryName}{#if effectiveSub !== null}
-                · {effectiveSub.name}{/if}
-            </span>
+            <span class="qas-dd-value"
+              >{selectedCategoryName}{#if effectiveSub !== null}
+                · {effectiveSub.name}{/if}</span
+            >
           </span>
           <span class="qas-dd-chev" aria-hidden="true">▾</span>
         </button>
