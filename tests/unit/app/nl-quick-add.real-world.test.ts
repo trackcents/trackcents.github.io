@@ -126,7 +126,14 @@ const CASES: Case[] = [
     descContains: 'coffee'
   },
   { input: '40 chai today', amount: 4000n, date: TODAY, time: null, descContains: 'chai' },
-  { input: 'rent 15,000', amount: 1500000n, date: TODAY, time: null }
+  { input: 'rent 15,000', amount: 1500000n, date: TODAY, time: null },
+
+  // ── Desserts + sweets — added after Hemanth's "ice cream" report ─────────
+  // These check the parser only (descContains).  Category-guess is exercised
+  // separately in category-guess.test.ts now that the keyword list owns them.
+  { input: 'ice cream 5', amount: 500n, date: TODAY, time: null, descContains: 'ice cream' },
+  { input: '6 donuts today', amount: 600n, date: TODAY, time: null, descContains: 'donut' },
+  { input: 'cake 22', amount: 2200n, date: TODAY, time: null, descContains: 'cake' }
 ];
 
 describe('parseQuickAddText — real-world battery (Hemanth)', () => {

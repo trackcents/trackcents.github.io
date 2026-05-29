@@ -109,6 +109,13 @@
   let userPickedCategory = $state(false);
   let userTouchedTime = $state(false);
   let userTouchedAccount = $state(false);
+  /** True once the user picks a date via the native date input.  Without
+   *  this, the date sticks on an earlier-parsed value: typing "biryani
+   *  may07th" set date=2026-05-07, backspacing + typing "ice cream"
+   *  returned parser.date=today but the old code only OVERWROTE on
+   *  non-today, so the form kept showing 2026-05-07 (Hemanth's screenshot
+   *  showed 05/04/2026 after typing just "ice cream"). */
+  let userTouchedDate = $state(false);
   /** Did the user manually edit the amount field?  Once true, the NL parser
    *  in the description no longer overrides what they typed. */
   let userTouchedAmount = $state(false);
@@ -183,6 +190,7 @@
         userTouchedAmount = false;
         userTouchedTime = false;
         userTouchedAccount = false;
+        userTouchedDate = false;
         saving = false;
         error = null;
       });
@@ -214,13 +222,20 @@
       untrack(() => {
         if (!userTouchedAmount) amount = '';
         if (!userTouchedTime) time = '';
+        if (!userTouchedDate) date = today();
+        if (!userPickedCategory) categoryId = null;
       });
       return;
     }
     const p: ParsedQuickAdd = parseQuickAddText(desc, today());
     const guess = guessCategoryId(p.description, categories, rules);
     untrack(() => {
-      if (p.date_iso !== today()) date = p.date_iso;
+      // Date follows the description on every change (like Amount), unless
+      // the user manually picked one via the date input.  Earlier code only
+      // wrote when parser returned non-today, so a "biryani may07th" set
+      // date=2026-05-07 and then "ice cream" left date stuck at 05/07 —
+      // even though the parser correctly reported today() for "ice cream".
+      if (!userTouchedDate) date = p.date_iso;
       if (!userTouchedAmount) {
         amount =
           p.amount_minor !== null ? (Number(p.amount_minor) / 100).toFixed(isInr ? 0 : 2) : '';
@@ -491,7 +506,12 @@
     <div class="qas-row-2col">
       <label class="qas-block">
         <span class="qas-lbl">Date</span>
-        <input type="date" bind:value={date} class="qas-field" />
+        <input
+          type="date"
+          bind:value={date}
+          class="qas-field"
+          onchange={() => (userTouchedDate = true)}
+        />
       </label>
       <div class="qas-block">
         <span class="qas-lbl">Time <span class="qas-opt">(optional)</span></span>
