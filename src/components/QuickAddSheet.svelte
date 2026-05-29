@@ -192,19 +192,33 @@
 
   // Live parse the Description as the user types — pulls amount + date +
   // TIME + auto-suggests a category.  Until the user touches a field, the
-  // NL parser keeps the form in sync with the description.
+  // NL parser keeps the form in sync with the description — INCLUDING
+  // clearing values when the current parse no longer finds them.  The
+  // earlier "only set when non-null" version was one-way: an intermediate
+  // typo like "drank milkshake on 22nd may 7" briefly filled $7, and once
+  // the final "75 dollars" landed in the date span the $7 stayed put
+  // (Hemanth's screenshots: $22, $7, $34 all came from stale intermediate
+  // parses).  The fix is to ALWAYS write the parser's view; the
+  // userTouched* flags still protect a field once the user has typed
+  // into it directly.
   $effect(() => {
-    const trimmed = desc.trim();
-    if (trimmed.length === 0) return;
+    if (desc.trim().length === 0) {
+      untrack(() => {
+        if (!userTouchedAmount) amount = '';
+        if (!userTouchedTime) time = '';
+      });
+      return;
+    }
     const p: ParsedQuickAdd = parseQuickAddText(desc, today());
     const guess = guessCategoryId(p.description, categories, rules);
     untrack(() => {
       if (p.date_iso !== today()) date = p.date_iso;
-      if (p.amount_minor !== null && !userTouchedAmount) {
-        amount = (Number(p.amount_minor) / 100).toFixed(isInr ? 0 : 2);
+      if (!userTouchedAmount) {
+        amount =
+          p.amount_minor !== null ? (Number(p.amount_minor) / 100).toFixed(isInr ? 0 : 2) : '';
       }
-      if (p.time_hhmm !== null && !userTouchedTime) {
-        time = p.time_hhmm;
+      if (!userTouchedTime) {
+        time = p.time_hhmm ?? '';
       }
       if (p.direction === 'income' && direction === 'expense') direction = 'income';
       if (!userTouchedCategory && guess !== null) categoryId = guess;

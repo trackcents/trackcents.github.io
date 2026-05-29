@@ -77,55 +77,86 @@ export function parseQuickAddText(text: string, defaultDateIso: string): ParsedQ
   const chronoResults = chrono.parse(text, refDate, { forwardDate: true });
 
   let dateIso = defaultDateIso;
-  let dateStart = -1;
-  let dateEnd = -1;
   let timeHhmm: string | null = null;
-  if (chronoResults.length > 0) {
-    const r = chronoResults[0]!;
-    let d = r.date();
+  /** Every chrono span — used to exclude amounts that fall inside ANY
+   *  date/time phrase (not just the first one).  The screenshot bug 3
+   *  was caused by only filtering against the first span: chrono
+   *  returned ["22nd may 75" (date), "03:34 PM" (time)] as two separate
+   *  results and the "3"/"34" inside the time span leaked into the
+   *  amount because the filter only knew about the date. */
+  const chronoSpans: Array<[number, number]> = [];
 
-    // Smart year heuristic — fix for Hemanth's feedback "I type 'may 23rd'
-    // and it picks 2027 even though today is May 28 2026."  Money entries
-    // are historical 99% of the time; a date >60 days in the future when
-    // the user didn't type a year almost certainly means LAST year, not
-    // next year (chrono + forwardDate picks next year when the partial
-    // date is past).  We only roll back when no explicit 4-digit year
-    // was typed, so an intentional "in 2027" stays 2027.
-    const userTypedYear = /\b(19|20)\d{2}\b/.test(r.text);
+  if (chronoResults.length > 0) {
+    const r0 = chronoResults[0]!;
+    let d = r0.date();
+    const dateStart = r0.index;
+    let dateEnd = r0.index + r0.text.length;
+
+    // ── Year heuristic (handles BOTH directions of "wrong" 2-digit years) ──
+    //
+    // 1. Explicit 4-digit year (e.g. "may 23 2027") → trust it.
+    // 2. No 4-digit year, but chrono inferred a year > 5 years away from
+    //    today → almost certainly chrono's 2-digit-year rule firing on
+    //    what the user intended as an AMOUNT (Hemanth's "22nd may 75
+    //    dollars" → chrono read 1975, swallowing "75" into the date span
+    //    so the amount fell back to "34" stolen from "03:34 PM").  Reset
+    //    the year to today's AND shrink the date span so the trailing
+    //    "75" can be re-claimed by the amount logic.
+    // 3. Past-month-this-year heuristic still applies (forwardDate=true
+    //    picks NEXT year for "may 23" when today is May 28 → roll back).
+    const has4DigitYear = /\b(19|20)\d{2}\b/.test(r0.text);
+    const refYear = refDate.getFullYear();
+    const parsedYear = d.getFullYear();
+    if (!has4DigitYear && Math.abs(parsedYear - refYear) > 5) {
+      // The "75" / "27" trailing the date phrase was chrono's 2-digit-year
+      // inference, not a real year.  Shrink the span to strip it; reset
+      // the year to refYear.
+      const trailing = r0.text.match(/\s+\d{1,2}\s*$/);
+      if (trailing) {
+        const beforeDigits = r0.text.slice(0, r0.text.length - trailing[0].length);
+        dateEnd = r0.index + beforeDigits.length;
+      }
+      d = new Date(refYear, d.getMonth(), d.getDate(), 12, 0, 0);
+    }
     const daysAhead = (d.getTime() - refDate.getTime()) / 86_400_000;
-    if (!userTypedYear && daysAhead > 60) {
+    if (!has4DigitYear && daysAhead > 60) {
       d = new Date(d.getFullYear() - 1, d.getMonth(), d.getDate(), 12, 0, 0);
     }
 
     dateIso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    dateStart = r.index;
-    dateEnd = r.index + r.text.length;
+    chronoSpans.push([dateStart, dateEnd]);
 
-    // Time extraction — chrono's ParsedComponents flags whether the user
-    // explicitly typed a time ("03:40 PM") vs the parser inferring noon as
-    // a default.  Only treat it as a real time when isCertain('hour') is
-    // true, otherwise the form gets "12:00" populated for every "may 23"
-    // entry which is wrong.  Hemanth's feedback: "time is not being
-    // autopopulated though I type" — "ate biryani on 23rd may 03:40 PM"
-    // should fill the time field with 15:40.
-    if (r.start.isCertain('hour')) {
-      const hh = r.start.get('hour');
-      const mm = r.start.get('minute') ?? 0;
+    // ── Time extraction across ALL chrono results ─────────────────────────
+    // chrono.parse may return separate results for date and time (e.g.
+    // "22nd may 75" + "03:34 PM" come back as two results).  Scan every
+    // result for the first one carrying an explicit hour; if none, leave
+    // time null (the description had no time phrase the user typed).
+    for (const cr of chronoResults) {
+      if (!cr.start.isCertain('hour')) continue;
+      const hh = cr.start.get('hour');
+      const mm = cr.start.get('minute') ?? 0;
       if (hh !== null && hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) {
         timeHhmm = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+        break;
       }
+    }
+
+    // Record every chrono span (date AND time) so the amount filter
+    // excludes digits inside any of them.
+    for (let i = 1; i < chronoResults.length; i++) {
+      const cr = chronoResults[i]!;
+      chronoSpans.push([cr.index, cr.index + cr.text.length]);
     }
   }
 
-  // Pick the largest amount that doesn't overlap the date phrase (so "June 4"
-  // never has "4" stolen as the amount).
+  // Pick the largest amount that doesn't overlap ANY chrono span (so
+  // "June 4" never has "4" stolen as the amount, AND "03:34 PM" never
+  // has "34" stolen either).
   let amountMinor: bigint | null = null;
   let amountStart = -1;
   let amountEnd = -1;
   const amounts = findAmounts(text);
-  const candidates = amounts.filter(
-    (a) => dateStart === -1 || a.end <= dateStart || a.start >= dateEnd
-  );
+  const candidates = amounts.filter((a) => !chronoSpans.some(([s, e]) => a.end > s && a.start < e));
   if (candidates.length > 0) {
     const best = candidates.reduce((acc, m) => (m.value > acc.value ? m : acc));
     amountMinor = BigInt(Math.round(best.value * 100));
@@ -133,10 +164,10 @@ export function parseQuickAddText(text: string, defaultDateIso: string): ParsedQ
     amountEnd = best.end;
   }
 
-  // Build the description by stripping the matched date + amount spans (longest
-  // span first so indices stay valid as we cut).
-  const spans: [number, number][] = [];
-  if (dateStart !== -1) spans.push([dateStart, dateEnd]);
+  // Build the description by stripping every span (longest span first so
+  // indices stay valid as we cut).  Now strips EVERY chrono span — date,
+  // time, and the amount.
+  const spans: [number, number][] = [...chronoSpans];
   if (amountStart !== -1) spans.push([amountStart, amountEnd]);
   spans.sort((a, b) => b[0] - a[0]);
   let desc = text;

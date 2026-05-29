@@ -144,4 +144,52 @@ describe('parseQuickAddText', () => {
     const p = parseQuickAddText('biryani on may 23 worth 450', '2026-05-28');
     expect(p.time_hhmm).toBeNull();
   });
+
+  // ── Screenshot regressions (2026-05-28 review) ──────────────────────────
+  // Three bugs Hemanth surfaced in screenshots:
+  //   1. "drank milkshake on 22nd may"        → amount was $22 (took "22"
+  //      from the DATE phrase).  After fix: amount null.
+  //   2. "drank milkshake on 22nd may 75 dollars" → amount was $7 + date
+  //      05/22/1975 (chrono read "75" as year 1975, swallowing it into
+  //      the date span).  After fix: amount 75, date 2026-05-22.
+  //   3. "shake on 22nd may 75 dollars and on 03:34 PM" → amount was $34
+  //      (stolen from "03:34 PM" because the time was a SEPARATE chrono
+  //      result and the amount filter only knew about the date span).
+  //      After fix: amount 75, date 2026-05-22, time 15:34.
+
+  it('SCREENSHOT 1: "drank milkshake on 22nd may" → no amount, date OK', () => {
+    const p = parseQuickAddText('drank milkshake on 22nd may', '2026-05-28');
+    expect(p.date_iso).toBe('2026-05-22');
+    expect(p.amount_minor).toBeNull(); // never claim "22" as the amount
+    expect(p.description.toLowerCase()).toContain('milkshake');
+  });
+
+  it('SCREENSHOT 2: "drank milkshake on 22nd may 75 dollars" → $75 + 2026', () => {
+    const p = parseQuickAddText('drank milkshake on 22nd may 75 dollars', '2026-05-28');
+    expect(p.date_iso).toBe('2026-05-22'); // NOT 1975-05-22
+    expect(p.amount_minor).toBe(7500n); // 75.00
+    expect(p.description.toLowerCase()).toContain('milkshake');
+  });
+
+  it('SCREENSHOT 3: "shake on 22nd may 75 dollars and on 03:34 PM" → 75 + 15:34 + 2026', () => {
+    const p = parseQuickAddText('shake on 22nd may 75 dollars and on 03:34 PM', '2026-05-28');
+    expect(p.date_iso).toBe('2026-05-22');
+    expect(p.amount_minor).toBe(7500n); // never steal "34" from the time
+    expect(p.time_hhmm).toBe('15:34'); // multi-chrono-result extraction
+    expect(p.description.toLowerCase()).toContain('shake');
+  });
+
+  it('explicit 4-digit year still wins (must not be stripped by the 2-digit fix)', () => {
+    const p = parseQuickAddText('hotel on 22nd may 1975', '2026-05-28');
+    expect(p.date_iso).toBe('1975-05-22');
+  });
+
+  it('"may 22" alone (day-only) still resolves to the 22nd, not stripped', () => {
+    // The trailing-digit strip should only fire when chrono's INFERRED year
+    // is way off (1975) — not when chrono picks the current/next year for
+    // a partial date.  "may 22" with today=May 28 → next year May 22 →
+    // rolled back to current year May 22 via the existing heuristic.
+    const p = parseQuickAddText('biryani on may 22', '2026-05-28');
+    expect(p.date_iso).toBe('2026-05-22');
+  });
 });
