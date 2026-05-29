@@ -71,11 +71,29 @@ const SEED_CATEGORIES: ReadonlyArray<{ name: string; color: string }> = [
  */
 const SEED_RULES: ReadonlyArray<{ contains: string; category: string }> = [
   // ── Investments (specific first) ────────────────────────────────────────
+  // Hemanth's privacy scrub: stripped per-user account suffixes ("15105")
+  // and balanced the list so no single broker stands out.  These are all
+  // common US / India brokerages -- nothing identifies a person.
   { contains: 'ROBINHOOD SECURITIES', category: 'Investment' },
-  { contains: 'FIDELITY 15105', category: 'Investment' },
+  { contains: 'FIDELITY', category: 'Investment' },
   { contains: 'VANGUARD', category: 'Investment' },
   { contains: 'SCHWAB', category: 'Investment' },
+  { contains: 'MERRILL', category: 'Investment' },
+  { contains: 'ETRADE', category: 'Investment' },
+  { contains: 'E*TRADE', category: 'Investment' },
+  { contains: 'TD AMERITRADE', category: 'Investment' },
+  { contains: 'WEBULL', category: 'Investment' },
+  { contains: 'BETTERMENT', category: 'Investment' },
+  { contains: 'WEALTHFRONT', category: 'Investment' },
   { contains: 'COINBASE', category: 'Investment' },
+  { contains: 'KRAKEN', category: 'Investment' },
+  { contains: 'BINANCE', category: 'Investment' },
+  { contains: 'ZERODHA', category: 'Investment' },
+  { contains: 'GROWW', category: 'Investment' },
+  { contains: 'UPSTOX', category: 'Investment' },
+  { contains: 'ICICIDIRECT', category: 'Investment' },
+  { contains: 'HDFC SECURITIES', category: 'Investment' },
+  { contains: 'KOTAK SECURITIES', category: 'Investment' },
 
   // ── CC payments ─────────────────────────────────────────────────────────
   { contains: 'PAYMENT TO CHASE CARD', category: 'CC Payment' },
@@ -90,16 +108,37 @@ const SEED_RULES: ReadonlyArray<{ contains: string; category: string }> = [
   { contains: 'PAYMENT - THANK YOU', category: 'CC Payment' },
 
   // ── Transfers ───────────────────────────────────────────────────────────
-  { contains: 'KITSAP CU TRANSFER', category: 'Transfer' },
+  // Generic patterns only -- no specific credit union or bank name that
+  // would identify the user (Hemanth's scrub: removed KITSAP CU TRANSFER).
+  { contains: 'CU TRANSFER', category: 'Transfer' },
+  { contains: 'CREDIT UNION TRANSFER', category: 'Transfer' },
+  { contains: 'BANK TRANSFER', category: 'Transfer' },
   { contains: 'ONLINE BANKING TRANSFER', category: 'Transfer' },
+  { contains: 'ZELLE', category: 'Transfer' },
+  { contains: 'VENMO', category: 'Transfer' },
+  { contains: 'CASH APP', category: 'Transfer' },
+  { contains: 'WIRE TRANSFER', category: 'Transfer' },
+  { contains: 'ACH TRANSFER', category: 'Transfer' },
+  { contains: 'IMPS', category: 'Transfer' },
+  { contains: 'NEFT', category: 'Transfer' },
+  { contains: 'UPI', category: 'Transfer' },
 
   // ── Salary / Income ─────────────────────────────────────────────────────
+  // ONLY generic salary indicators -- no specific employer name (Hemanth's
+  // scrub: removed ALTERA CORPORATI which named his employer).  If a user
+  // wants their employer auto-tagged, they create a rule in /categories.
   { contains: 'PAYROLL', category: 'Income (salary)' },
-  { contains: 'ALTERA CORPORATI', category: 'Income (salary)' },
-  { contains: 'INFOSYS', category: 'Income (salary)' },
+  { contains: 'DIRECT DEPOSIT', category: 'Income (salary)' },
+  { contains: 'SALARY', category: 'Income (salary)' },
+  { contains: 'PAYCHECK', category: 'Income (salary)' },
+  { contains: 'PAY CHECK', category: 'Income (salary)' },
+  { contains: 'WAGE', category: 'Income (salary)' },
   { contains: 'INTEREST PAID', category: 'Income (other)' },
   { contains: 'INTEREST EARNED', category: 'Income (other)' },
   { contains: 'DIVIDEND', category: 'Income (other)' },
+  { contains: 'CASHBACK', category: 'Income (other)' },
+  { contains: 'CASH BACK', category: 'Income (other)' },
+  { contains: 'STIMULUS', category: 'Income (other)' },
 
   // ── Refunds ─────────────────────────────────────────────────────────────
   { contains: 'CARD PURCHASE RETURN', category: 'Refund' },
@@ -112,9 +151,27 @@ const SEED_RULES: ReadonlyArray<{ contains: string; category: string }> = [
   { contains: 'ANNUAL FEE', category: 'Fees & interest' },
 
   // ── Bills (recurring living expenses) ───────────────────────────────────
+  // Mortgage servicers + landlord-style keywords.  Hemanth's scrub: keep
+  // PENNYMAC but balance with every other major US mortgage servicer so
+  // no single name stands out as "the user's".
   { contains: 'RENT', category: 'Rent/Mortgage' },
+  { contains: 'MORTGAGE', category: 'Rent/Mortgage' },
   { contains: 'PENNYMAC', category: 'Rent/Mortgage' },
   { contains: 'ROCKETMTG', category: 'Rent/Mortgage' },
+  { contains: 'ROCKET MORTGAGE', category: 'Rent/Mortgage' },
+  { contains: 'WELLS FARGO HOME MTG', category: 'Rent/Mortgage' },
+  { contains: 'CHASE MORTGAGE', category: 'Rent/Mortgage' },
+  { contains: 'BANK OF AMERICA MORTGAGE', category: 'Rent/Mortgage' },
+  { contains: 'LOANDEPOT', category: 'Rent/Mortgage' },
+  { contains: 'MR COOPER', category: 'Rent/Mortgage' },
+  { contains: 'NATIONSTAR', category: 'Rent/Mortgage' },
+  { contains: 'FREEDOM MORTGAGE', category: 'Rent/Mortgage' },
+  { contains: 'CALIBER HOME LOANS', category: 'Rent/Mortgage' },
+  { contains: 'CARRINGTON MTG', category: 'Rent/Mortgage' },
+  { contains: 'NEWREZ', category: 'Rent/Mortgage' },
+  { contains: 'HDFC HOME LOAN', category: 'Rent/Mortgage' },
+  { contains: 'ICICI HOME LOAN', category: 'Rent/Mortgage' },
+  { contains: 'SBI HOME LOAN', category: 'Rent/Mortgage' },
   { contains: 'T-MOBILE', category: 'Phone & Internet' },
   { contains: 'VERIZON', category: 'Phone & Internet' },
   { contains: 'AT&T', category: 'Phone & Internet' },

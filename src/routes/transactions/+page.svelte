@@ -90,7 +90,10 @@
 
   // QuickAddSheet's onSaved now passes a {learned} flag; this view doesn't show
   // a toast so we ignore it, but the signature has to match the prop type.
-  async function refreshAfterSave(info: { learned: boolean }): Promise<void> {
+  async function refreshAfterSave(info: {
+    learned: boolean;
+    rulePattern?: string | null;
+  }): Promise<void> {
     void info;
     const loaded = await loadImports();
     imports = loaded.imports;
@@ -169,16 +172,21 @@
   /** Create a new category from QuickAddSheet -> CategoryPicker.  Mirrors
    *  the implementation on the Today page.  Returns the new id so the
    *  form can select it immediately. */
-  async function handleCreateCategory(name: string): Promise<string> {
+  async function handleCreateCategory(name: string, parentId?: string): Promise<string> {
     const trimmed = name.trim();
     if (trimmed.length === 0) throw new Error('category name is empty');
-    const existing = categories.find((c) => c.name.toLowerCase() === trimmed.toLowerCase());
+    const existing = categories.find(
+      (c) =>
+        c.name.toLowerCase() === trimmed.toLowerCase() && (c.parent_id ?? '') === (parentId ?? '')
+    );
     if (existing) return existing.id;
     const newId =
       typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
         ? `cat-${crypto.randomUUID()}`
         : `cat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    categories = [...categories, { id: newId, name: trimmed }];
+    const newCat: Category = { id: newId, name: trimmed };
+    if (parentId !== undefined) newCat.parent_id = parentId;
+    categories = [...categories, newCat];
     await saveCategorization({ categories, rules, annotations });
     return newId;
   }

@@ -131,15 +131,28 @@
   // Bayes learns".  Auto-clears after 2.5s.
   let saveToast = $state<string | null>(null);
   let saveToastTimer: ReturnType<typeof setTimeout> | undefined;
-  async function refreshAfterSave(info: { learned: boolean }): Promise<void> {
+  async function refreshAfterSave(info: {
+    learned: boolean;
+    rulePattern?: string | null;
+  }): Promise<void> {
     imports = (await loadState()).imports;
     cat = await loadCategorization();
-    // Honest toast: only promise "I'll remember this" when the user actually
-    // picked / accepted a category — otherwise the Bayes classifier has nothing
-    // new to learn from (Murali round-5: don't over-promise the AI).
-    saveToast = info.learned ? '✓ Saved — I’ll remember this' : '✓ Saved';
+    // Toast varies by what the save did:
+    //  • rulePattern set → QuickAddSheet just minted a new "contains X →
+    //    Category" user-rule.  Show it explicitly so Hemanth can verify
+    //    + edit it later from /categories ("if for any reason I want to
+    //    delete or edit, I should have that option there").
+    //  • learned (category picked but no new rule) → "I'll remember this"
+    //  • neither → plain "Saved"
+    if (info.rulePattern && info.rulePattern.length > 0) {
+      saveToast = `✓ Tagged "${info.rulePattern}" — edit in /categories`;
+    } else if (info.learned) {
+      saveToast = '✓ Saved — I’ll remember this';
+    } else {
+      saveToast = '✓ Saved';
+    }
     if (saveToastTimer !== undefined) clearTimeout(saveToastTimer);
-    saveToastTimer = setTimeout(() => (saveToast = null), 2500);
+    saveToastTimer = setTimeout(() => (saveToast = null), 3500);
     // Re-run auto-categorise on the freshly loaded data so the new annotation
     // immediately feeds the classifier for future predictions.
     const updated = runAutoCategorize(imports, cat);
@@ -245,20 +258,28 @@
   /** Create a new category from the QuickAddSheet -> CategoryPicker flow.
    *  Generates a stable id, persists, returns the new id so the form can
    *  select it immediately. */
-  async function handleCreateCategory(name: string): Promise<string> {
+  async function handleCreateCategory(name: string, parentId?: string): Promise<string> {
     const trimmed = name.trim();
     if (trimmed.length === 0) throw new Error('category name is empty');
-    // Avoid silent collisions — if a category with this name (case-
-    // insensitive) already exists, just return its id.
-    const existing = cat.categories.find((c) => c.name.toLowerCase() === trimmed.toLowerCase());
+    // Avoid silent collisions WITHIN THE SAME PARENT — if a category
+    // with this exact (name, parent_id) already exists, just return its
+    // id.  We allow the SAME name under different parents (e.g. "Ice
+    // cream" can exist as a sub of both "Food" and "Gifts/Family") so
+    // this is a 2-key match, not name-only.
+    const existing = cat.categories.find(
+      (c) =>
+        c.name.toLowerCase() === trimmed.toLowerCase() && (c.parent_id ?? '') === (parentId ?? '')
+    );
     if (existing) return existing.id;
     const newId =
       typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
         ? `cat-${crypto.randomUUID()}`
         : `cat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const newCat: import('$lib/app/categorization').Category = { id: newId, name: trimmed };
+    if (parentId !== undefined) newCat.parent_id = parentId;
     cat = {
       ...cat,
-      categories: [...cat.categories, { id: newId, name: trimmed }]
+      categories: [...cat.categories, newCat]
     };
     await saveCategorization(cat);
     return newId;

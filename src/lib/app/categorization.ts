@@ -25,6 +25,12 @@ export interface Category {
    *  in CategoryPicker.  Free-form string so a future emoji-mode doesn't
    *  require a schema migration. */
   icon?: string;
+  /** Optional parent category id — set when this category is a SUB of
+   *  another (e.g. "Biryani" under "Food", "Ice cream" under "Food").
+   *  One level deep only; the picker doesn't render grand-children even
+   *  if the data has them.  Reports treat a sub's spend as both its own
+   *  bucket AND a contribution to the parent. */
+  parent_id?: string;
 }
 
 export interface CategoryRule {

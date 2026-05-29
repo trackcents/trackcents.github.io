@@ -27,8 +27,9 @@
     /** Existing annotations — used to count "X transactions" before delete. */
     txCountByCategoryId?: Map<string, number> | undefined;
     onSelect: (id: string | null) => void;
-    /** Create a new category with the given name; caller persists. */
-    onCreate?: ((name: string) => void) | undefined;
+    /** Create a new category with the given name; caller persists.  When
+     *  parentId is provided, the new category is a SUB of that parent. */
+    onCreate?: ((name: string, parentId?: string) => void) | undefined;
     /** Delete a category; caller persists.  Picker only calls this after
      *  the user confirms in the sub-sheet. */
     onDelete?: ((id: string) => void) | undefined;
@@ -93,7 +94,36 @@
 
   const favSet = $derived(new Set(favIds));
   const favs = $derived(filtered.filter((c) => favSet.has(c.id)));
-  const others = $derived(filtered.filter((c) => !favSet.has(c.id)));
+  /** Non-favourite top-level categories, each followed by its children
+   *  in source order.  Sub-categories that appear in filtered without
+   *  their parent (orphans from a deleted parent, or matched by search
+   *  while the parent didn't match) come last so they're still tappable. */
+  const others = $derived.by<Category[]>(() => {
+    const nonFav = filtered.filter((c) => !favSet.has(c.id));
+    const byId = new Map(nonFav.map((c) => [c.id, c]));
+    const parents = nonFav.filter((c) => !c.parent_id);
+    const seen = new Set<string>();
+    const out: Category[] = [];
+    for (const p of parents) {
+      out.push(p);
+      seen.add(p.id);
+      for (const child of nonFav) {
+        if (child.parent_id === p.id && !seen.has(child.id)) {
+          out.push(child);
+          seen.add(child.id);
+        }
+      }
+    }
+    // Orphans (parent missing from filter set, or parent doesn't exist).
+    for (const c of nonFav) {
+      if (!seen.has(c.id)) {
+        out.push(c);
+        seen.add(c.id);
+      }
+    }
+    void byId;
+    return out;
+  });
 
   /** Show "+ Create 'X'" when the typed query has no exact match. */
   const canCreate = $derived.by<boolean>(() => {
@@ -127,6 +157,36 @@
     ev.stopPropagation();
     renameId = id;
   }
+  /** Per-row inline "+ Sub" state — when set, the parent row reveals an
+   *  input where the user types the sub-category name.  Submit creates
+   *  the sub via onCreate(name, parentId). */
+  let addSubParentId = $state<string | null>(null);
+  let addSubName = $state('');
+  let addSubInputEl = $state<HTMLInputElement | null>(null);
+  function startAddSub(parentId: string, ev: MouseEvent): void {
+    ev.stopPropagation();
+    addSubParentId = parentId;
+    addSubName = '';
+    tick().then(() => {
+      try {
+        addSubInputEl?.focus();
+      } catch {
+        /* noop */
+      }
+    });
+  }
+  function cancelAddSub(): void {
+    addSubParentId = null;
+    addSubName = '';
+  }
+  function submitAddSub(): void {
+    if (onCreate === undefined || addSubParentId === null) return;
+    const name = addSubName.trim();
+    if (name.length === 0) return;
+    onCreate(name, addSubParentId);
+    addSubParentId = null;
+    addSubName = '';
+  }
   const renameTarget = $derived(
     renameId === null ? null : (categories.find((c) => c.id === renameId) ?? null)
   );
@@ -153,7 +213,7 @@
     if (onCreate === undefined) return;
     const q = query.trim();
     if (q.length === 0) return;
-    onCreate(q);
+    onCreate(q, undefined);
     query = '';
     onClose();
   }
@@ -255,14 +315,28 @@
       {/if}
 
       {#each others as c (c.id)}
-        <div class="row" class:selected={c.id === selectedId}>
+        {@const isChild = c.parent_id !== undefined && c.parent_id !== ''}
+        <div class="row" class:selected={c.id === selectedId} class:child={isChild}>
           <button type="button" class="row-main" onclick={() => pick(c.id)} disabled={editMode}>
+            {#if isChild}
+              <span class="indent-rail" aria-hidden="true"></span>
+            {/if}
             <span class="icon">
               <CategoryIcon icon={iconFor(c)} color={categoryColor(c.id)} tint />
             </span>
             <span class="name">{c.name}</span>
           </button>
           {#if editMode}
+            {#if !isChild && onCreate !== undefined}
+              <button
+                type="button"
+                class="addsub"
+                aria-label="Add subcategory under {c.name}"
+                onclick={(ev) => startAddSub(c.id, ev)}
+              >
+                ＋
+              </button>
+            {/if}
             {#if onRename !== undefined}
               <button
                 type="button"
@@ -292,6 +366,38 @@
             </button>
           {/if}
         </div>
+        {#if addSubParentId === c.id}
+          <!-- Inline input for a new sub-category under this parent. -->
+          <div class="addsub-row">
+            <span class="indent-rail" aria-hidden="true"></span>
+            <input
+              type="text"
+              bind:value={addSubName}
+              bind:this={addSubInputEl}
+              placeholder="Sub-category name (e.g. Biryani, Ice cream)"
+              class="addsub-input"
+              autocomplete="off"
+              onkeydown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  submitAddSub();
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  cancelAddSub();
+                }
+              }}
+            />
+            <button type="button" class="addsub-cancel" onclick={cancelAddSub}>✕</button>
+            <button
+              type="button"
+              class="addsub-save"
+              onclick={submitAddSub}
+              disabled={addSubName.trim().length === 0}
+            >
+              Add
+            </button>
+          </div>
+        {/if}
       {/each}
 
       {#if filtered.length === 0 && !canCreate}
@@ -561,6 +667,91 @@
   }
   .pencil {
     color: var(--color-accent);
+  }
+  .addsub {
+    width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: none;
+    border: 0;
+    color: var(--color-accent);
+    font-size: 1.05rem;
+    font-weight: 700;
+    cursor: pointer;
+    border-radius: 999px;
+  }
+  .addsub:hover {
+    background: var(--color-accent-soft);
+  }
+  /* ── Sub-category indentation ─────────────────────────── */
+  .row.child .row-main {
+    padding-left: 0.3rem;
+  }
+  .indent-rail {
+    display: inline-block;
+    width: 18px;
+    flex-shrink: 0;
+    border-left: 2px solid var(--color-border);
+    margin-left: 0.4rem;
+    margin-right: 0.4rem;
+    height: 18px;
+    position: relative;
+  }
+  .indent-rail::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 10px;
+    border-top: 2px solid var(--color-border);
+  }
+  /* ── Inline add-sub input row ─────────────────────────── */
+  .addsub-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.55rem;
+    background: var(--color-accent-soft);
+    border-radius: 12px;
+    margin: 0.2rem 0;
+  }
+  .addsub-input {
+    flex: 1;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    border-radius: 8px;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.9rem;
+    color: var(--color-text);
+    min-width: 0;
+  }
+  .addsub-input:focus {
+    outline: none;
+    border-color: var(--color-accent);
+  }
+  .addsub-cancel,
+  .addsub-save {
+    border: 0;
+    border-radius: 8px;
+    padding: 0.4rem 0.65rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .addsub-cancel {
+    background: transparent;
+    color: var(--color-muted);
+  }
+  .addsub-save {
+    background-image: var(--grad-primary);
+    color: var(--color-accent-fg);
+  }
+  .addsub-save:disabled {
+    opacity: 0.55;
+    cursor: default;
   }
   .star.starred {
     color: var(--color-accent);

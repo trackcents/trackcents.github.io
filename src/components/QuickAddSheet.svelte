@@ -17,6 +17,7 @@
   import { untrack } from 'svelte';
   import { parseQuickAddText, type ParsedQuickAdd } from '$lib/app/nl-quick-add';
   import { guessCategoryId } from '$lib/app/category-guess';
+  import { extractRulePattern, isDuplicateRule } from '$lib/app/rule-from-desc';
   import { makeManualImport, newManualId, ManualEntryError } from '$lib/app/manual-entry';
   import { parseAmountToCents, CsvImportError } from '$lib/app/csv-import';
   import { addImport } from '$lib/db/store';
@@ -61,10 +62,13 @@
     /** All known accounts (Cash + imported + manually added). */
     accounts: string[];
     onClose: () => void;
-    /** `learned` is true when a category annotation was saved. */
-    onSaved: (info: { learned: boolean }) => void;
-    /** Create a new category (parent persists). */
-    onCreateCategory?: ((name: string) => Promise<string> | string) | undefined;
+    /** `learned` is true when a category annotation was saved.  When the
+     *  save ALSO created a learn-from-pick rule, `rulePattern` carries
+     *  the pattern so the parent can show a "Tagged X → Food" toast. */
+    onSaved: (info: { learned: boolean; rulePattern?: string | null }) => void;
+    /** Create a new category (parent persists).  parent_id is set when
+     *  the user adds a SUB-category under an existing parent. */
+    onCreateCategory?: ((name: string, parentId?: string) => Promise<string> | string) | undefined;
     /** Delete a category (parent persists). */
     onDeleteCategory?: ((id: string) => Promise<void> | void) | undefined;
     /** Rename + re-icon a category (parent persists). */
@@ -294,10 +298,14 @@
     return m;
   });
 
-  async function handleCreateCategory(name: string): Promise<void> {
+  async function handleCreateCategory(name: string, parentId?: string): Promise<void> {
     if (onCreateCategory === undefined) return;
-    const newId = await onCreateCategory(name);
-    pickCategory(newId);
+    const newId = await onCreateCategory(name, parentId);
+    // Only select the new category when it was created at the top level
+    // (via "+ Create" in the search row).  When the user added a SUB
+    // from the picker's edit mode, they're still managing categories —
+    // don't yank focus by silently picking + closing the sheet.
+    if (parentId === undefined) pickCategory(newId);
   }
   async function handleDeleteCategory(id: string): Promise<void> {
     if (onDeleteCategory === undefined) return;
@@ -361,8 +369,39 @@
       // Persist category + (when transfer) flow_intent override + note.
       const key = transactionCategoryKey(rec.pdf_source_hash, 0);
       const trimmedNote = note.trim();
+
+      // ── Learn-from-pick (Hemanth: "if I select category to that, then
+      //    from next time if I add that name again, the same category
+      //    should be selected") ─────────────────────────────────────────
+      //
+      // When the user manually picked a category AND no existing rule
+      // covers the description's cleaned merchant phrase, silently
+      // create a user rule for next time.  Guard with:
+      //   • userPickedCategory must be true (auto-guesses do NOT create
+      //     rules — otherwise every entry would mint one)
+      //   • extractRulePattern returns a non-null pattern (≥3 chars
+      //     post-stripping of verbs/prepositions)
+      //   • no duplicate rule already exists for this pattern+category
+      let nextRules = rules;
+      let learnedPattern: string | null = null;
+      if (userPickedCategory && categoryId !== null && desc.trim().length > 0) {
+        const cleaned = parseQuickAddText(desc, today()).description;
+        const pattern = extractRulePattern(cleaned);
+        if (pattern !== null && !isDuplicateRule(rules, pattern, categoryId)) {
+          const ruleId =
+            typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+              ? `rule-${crypto.randomUUID()}`
+              : `rule-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+          nextRules = [...rules, { id: ruleId, contains: pattern, category_id: categoryId }];
+          learnedPattern = pattern;
+        }
+      }
+
       const needsAnnotationSave =
-        categoryId !== null || direction === 'transfer' || trimmedNote.length > 0;
+        categoryId !== null ||
+        direction === 'transfer' ||
+        trimmedNote.length > 0 ||
+        nextRules !== rules;
       if (needsAnnotationSave) {
         let map = new Map(Object.entries(annotations));
         if (categoryId !== null) {
@@ -377,11 +416,11 @@
         }
         await saveCategorization({
           categories,
-          rules,
+          rules: nextRules,
           annotations: Object.fromEntries(map)
         });
       }
-      onSaved({ learned: categoryId !== null });
+      onSaved({ learned: categoryId !== null, rulePattern: learnedPattern });
       onClose();
     } catch (e) {
       if (e instanceof ManualEntryError || e instanceof CsvImportError) error = e.message;
@@ -495,7 +534,7 @@
       <button type="button" class="qas-dd-btn" onclick={() => (accountPickerOpen = true)}>
         <span class="qas-dd-icon">💳</span>
         <span class="qas-dd-label">
-          <span class="qas-lbl">Account</span>
+          <span class="qas-lbl">Payment method</span>
           <span class="qas-dd-value">{accountLabel}</span>
         </span>
         <span class="qas-dd-chev" aria-hidden="true">▾</span>
