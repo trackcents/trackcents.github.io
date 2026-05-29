@@ -19,3 +19,4 @@ tests/**/corpus/
 # tests/ivv/ is the verification-engineer's STAGING area (raw, pre-promotion). The
 # promoted copies under tests/unit/independent/ are formatted + checked normally.
 tests/ivv/
+.playwright-mcp/

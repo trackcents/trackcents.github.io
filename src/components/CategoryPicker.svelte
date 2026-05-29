@@ -72,6 +72,11 @@
    *  there".  Without auto-focus, mobile users must tap twice (open the
    *  sheet, then tap the input). */
   let searchInputEl = $state<HTMLInputElement | null>(null);
+  /** Which parent categories are expanded to reveal their sub-categories.
+   *  Collapsed by DEFAULT so a parent with ~10 subs doesn't clutter the list
+   *  (Hemanth: "if I add 10 different sub categories ... that would clutter").
+   *  Tapping a parent row toggles it — see onRowTap. */
+  let expandedIds = $state<Set<string>>(new Set());
 
   $effect(() => {
     if (open) {
@@ -80,6 +85,13 @@
       editMode = false;
       confirmDeleteId = null;
       renameId = null;
+      // Re-open with the currently-selected sub's parent expanded, so the user
+      // sees their current pick in context (Apple Recents / Notion keep-context).
+      const sel = categories.find((c) => c.id === selectedId);
+      expandedIds =
+        sel !== undefined && sel.parent_id !== undefined && sel.parent_id !== ''
+          ? new Set([sel.parent_id])
+          : new Set();
       // Deliberately DO NOT auto-focus the search input — Hemanth's
       // feedback: "when clicked on categories why to open keyboard? only
       // when we click on that search or add new then it need to open".
@@ -111,6 +123,28 @@
   const hasAnySub = $derived(
     categories.some((c) => c.parent_id !== undefined && c.parent_id !== '')
   );
+  /** Sub-category count per parent id — a parent only gets an expand caret
+   *  (and a collapse gate) when it actually has children. */
+  const childCountByParent = $derived.by<Map<string, number>>(() => {
+    const m = new Map<string, number>();
+    for (const c of categories) {
+      if (c.parent_id !== undefined && c.parent_id !== '') {
+        m.set(c.parent_id, (m.get(c.parent_id) ?? 0) + 1);
+      }
+    }
+    return m;
+  });
+  /** While searching, force every parent open so matched subs aren't hidden
+   *  behind a closed caret (YNAB search-to-filter composes with the accordion). */
+  const searching = $derived(query.trim().length > 0);
+  function isExpanded(parentId: string): boolean {
+    return searching || expandedIds.has(parentId);
+  }
+  /** The parent Category of a sub (for "Food › Biryani" context on a favorite). */
+  function parentOf(c: Category): Category | null {
+    if (c.parent_id === undefined || c.parent_id === '') return null;
+    return categories.find((p) => p.id === c.parent_id) ?? null;
+  }
   /** Non-favourite top-level categories, each followed by its children
    *  in source order.  Sub-categories that appear in filtered without
    *  their parent (orphans from a deleted parent, or matched by search
@@ -162,6 +196,26 @@
     onSelect(id);
     onClose();
   }
+  function toggleExpand(id: string): void {
+    const next = new Set(expandedIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    expandedIds = next;
+  }
+  /** Row tap. A parent that HAS sub-categories expands to reveal them (and is
+   *  tentatively selected) WITHOUT closing — Hemanth: "tapping food should
+   *  also open subs". A leaf (a sub, or a parent with no subs) selects + closes. */
+  function onRowTap(c: Category): void {
+    if (editMode) return;
+    const isParent = c.parent_id === undefined || c.parent_id === '';
+    const hasKids = isParent && (childCountByParent.get(c.id) ?? 0) > 0;
+    if (hasKids) {
+      onSelect(c.id);
+      toggleExpand(c.id);
+      return;
+    }
+    pick(c.id);
+  }
   function toggleFav(id: string, ev: MouseEvent): void {
     ev.stopPropagation();
     favIds = toggleFavoriteCategory(id);
@@ -184,6 +238,8 @@
     ev.stopPropagation();
     addSubParentId = parentId;
     addSubName = '';
+    // Expand the parent so the new sub appears under it once created.
+    expandedIds = new Set(expandedIds).add(parentId);
     tick().then(() => {
       try {
         addSubInputEl?.focus();
@@ -297,12 +353,17 @@
       {#if favs.length > 0 && restrictToParent === undefined}
         <div class="section-head">★ Favorites</div>
         {#each favs as c (c.id)}
+          {@const fp = parentOf(c)}
           <div class="row" class:selected={c.id === selectedId}>
             <button type="button" class="row-main" onclick={() => pick(c.id)} disabled={editMode}>
               <span class="icon">
-                <CategoryIcon icon={iconFor(c)} color={categoryColor(c.id)} tint />
+                <CategoryIcon icon={iconFor(c)} color={categoryColor(fp ? fp.id : c.id)} tint />
               </span>
-              <span class="name">{c.name}</span>
+              {#if fp}
+                <span class="name"><span class="crumb">{fp.name} ›</span> {c.name}</span>
+              {:else}
+                <span class="name">{c.name}</span>
+              {/if}
             </button>
             {#if editMode}
               {#if onRename !== undefined}
@@ -355,97 +416,113 @@
 
       {#each others as c (c.id)}
         {@const isChild = c.parent_id !== undefined && c.parent_id !== ''}
-        <div class="row" class:selected={c.id === selectedId} class:child={isChild}>
-          <button type="button" class="row-main" onclick={() => pick(c.id)} disabled={editMode}>
-            {#if isChild}
-              <span class="indent-rail" aria-hidden="true"></span>
-            {/if}
-            <span class="icon">
-              <CategoryIcon icon={iconFor(c)} color={categoryColor(c.id)} tint />
-            </span>
-            <span class="name">{c.name}</span>
-          </button>
-          {#if editMode}
-            {#if !isChild && onCreate !== undefined}
-              <button
-                type="button"
-                class="addsub"
-                aria-label="Add subcategory under {c.name}"
-                onclick={(ev) => startAddSub(c.id, ev)}
-              >
-                ＋
-              </button>
-            {/if}
-            {#if onRename !== undefined}
-              <button
-                type="button"
-                class="pencil"
-                aria-label="Rename {c.name}"
-                onclick={(ev) => startRename(c.id, ev)}
-              >
-                ✏
-              </button>
-            {/if}
+        {@const kidCount = isChild ? 0 : (childCountByParent.get(c.id) ?? 0)}
+        {#if !isChild || isExpanded(c.parent_id ?? '')}
+          <div class="row" class:selected={c.id === selectedId} class:child={isChild}>
             <button
               type="button"
-              class="trash"
-              aria-label="Delete {c.name}"
-              onclick={(ev) => startDelete(c.id, ev)}
+              class="row-main"
+              onclick={() => onRowTap(c)}
+              disabled={editMode}
+              aria-expanded={kidCount > 0 ? isExpanded(c.id) : undefined}
             >
-              🗑
+              {#if isChild}
+                <span class="indent-rail" aria-hidden="true"></span>
+              {/if}
+              <span class="icon">
+                <CategoryIcon
+                  icon={iconFor(c)}
+                  color={categoryColor(isChild ? (c.parent_id ?? c.id) : c.id)}
+                  tint
+                />
+              </span>
+              <span class="name">{c.name}</span>
+              {#if kidCount > 0}
+                <span class="caret" aria-hidden="true">{isExpanded(c.id) ? '▾' : '▸'}</span>
+              {/if}
             </button>
-          {:else}
-            {#if !isChild && onCreate !== undefined}
+            {#if editMode}
+              {#if !isChild && onCreate !== undefined}
+                <button
+                  type="button"
+                  class="addsub"
+                  aria-label="Add subcategory under {c.name}"
+                  onclick={(ev) => startAddSub(c.id, ev)}
+                >
+                  ＋
+                </button>
+              {/if}
+              {#if onRename !== undefined}
+                <button
+                  type="button"
+                  class="pencil"
+                  aria-label="Rename {c.name}"
+                  onclick={(ev) => startRename(c.id, ev)}
+                >
+                  ✏
+                </button>
+              {/if}
               <button
                 type="button"
-                class="addsub-pill"
-                aria-label="Add a sub-category under {c.name}"
-                onclick={(ev) => startAddSub(c.id, ev)}
+                class="trash"
+                aria-label="Delete {c.name}"
+                onclick={(ev) => startDelete(c.id, ev)}
               >
-                ＋ sub
+                🗑
+              </button>
+            {:else}
+              {#if !isChild && onCreate !== undefined}
+                <button
+                  type="button"
+                  class="addsub-pill"
+                  aria-label="Add a sub-category under {c.name}"
+                  onclick={(ev) => startAddSub(c.id, ev)}
+                >
+                  ＋ sub
+                </button>
+              {/if}
+              <button
+                type="button"
+                class="star"
+                aria-label="Favorite {c.name}"
+                onclick={(ev) => toggleFav(c.id, ev)}
+              >
+                ☆
               </button>
             {/if}
-            <button
-              type="button"
-              class="star"
-              aria-label="Favorite {c.name}"
-              onclick={(ev) => toggleFav(c.id, ev)}
-            >
-              ☆
-            </button>
-          {/if}
-        </div>
-        {#if addSubParentId === c.id}
-          <!-- Inline input for a new sub-category under this parent. -->
-          <div class="addsub-row">
-            <span class="indent-rail" aria-hidden="true"></span>
-            <input
-              type="text"
-              bind:value={addSubName}
-              bind:this={addSubInputEl}
-              placeholder="Sub-category name (e.g. Biryani, Ice cream)"
-              class="addsub-input"
-              autocomplete="off"
-              onkeydown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  submitAddSub();
-                } else if (e.key === 'Escape') {
-                  e.preventDefault();
-                  cancelAddSub();
-                }
-              }}
-            />
-            <button type="button" class="addsub-cancel" onclick={cancelAddSub}>✕</button>
-            <button
-              type="button"
-              class="addsub-save"
-              onclick={submitAddSub}
-              disabled={addSubName.trim().length === 0}
-            >
-              Add
-            </button>
           </div>
+          {#if addSubParentId === c.id}
+            <!-- Inline input for a new sub-category under this parent. -->
+            <div class="addsub-row">
+              <span class="indent-rail" aria-hidden="true"></span>
+              <input
+                type="text"
+                bind:value={addSubName}
+                bind:this={addSubInputEl}
+                placeholder="Sub-category name (e.g. Biryani, Ice cream)"
+                class="addsub-input"
+                autocomplete="off"
+                onkeydown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    submitAddSub();
+                  } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    cancelAddSub();
+                  }
+                }}
+              />
+              <button type="button" class="addsub-cancel" onclick={cancelAddSub}>✕</button>
+              <button
+                type="button"
+                class="addsub-save"
+                onclick={submitAddSub}
+                disabled={addSubName.trim().length === 0}
+              >
+                Add
+              </button>
+            </div>
+          {/if}
         {/if}
       {/each}
 
@@ -696,6 +773,20 @@
   }
   .row .name.muted {
     color: var(--color-muted);
+  }
+  /* Parent breadcrumb shown on a favorited sub ("Food › Biryani") so a
+     favorite never loses its parent context (Hemanth's de-indent bug). */
+  .row .name .crumb {
+    color: var(--color-muted);
+    font-weight: 600;
+  }
+  /* Expand/collapse caret on a parent that has sub-categories. Pushed to the
+     right of the row by the flex:1 name. */
+  .caret {
+    flex-shrink: 0;
+    color: var(--color-muted);
+    font-size: 0.7rem;
+    margin-left: 0.35rem;
   }
 
   .star,

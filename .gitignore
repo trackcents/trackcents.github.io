@@ -90,3 +90,4 @@ tests/fixtures/**/*.pdf
 reports/temp3-survey/
 reports/chef/screenshots/
 reports/chef/
+.playwright-mcp/

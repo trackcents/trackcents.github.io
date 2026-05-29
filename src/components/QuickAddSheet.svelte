@@ -17,6 +17,7 @@
   import { untrack } from 'svelte';
   import { parseQuickAddText, type ParsedQuickAdd } from '$lib/app/nl-quick-add';
   import { guessCategoryId } from '$lib/app/category-guess';
+  import { guessAccount } from '$lib/app/account-guess';
   import { extractRulePattern, isDuplicateRule } from '$lib/app/rule-from-desc';
   import { makeManualImport, newManualId, ManualEntryError } from '$lib/app/manual-entry';
   import { parseAmountToCents, CsvImportError } from '$lib/app/csv-import';
@@ -247,6 +248,7 @@
         if (!userTouchedTime) time = '';
         if (!userTouchedDate) date = today();
         if (!userPickedCategory) categoryId = null;
+        if (!userTouchedAccount) account = defaultAccount(direction);
       });
       return;
     }
@@ -284,6 +286,12 @@
       // Date — the description is the single source of truth until the
       // user actively picks.
       if (!userPickedCategory) categoryId = guess;
+      // Account auto-fill (Hemanth: "account should also fill as I type").
+      // Match the typed text against the user's saved accounts; a match wins,
+      // else fall back to the direction default — unless the user picked one.
+      if (!userTouchedAccount) {
+        account = guessAccount(desc, accounts) ?? defaultAccount(direction);
+      }
     });
   });
 
@@ -593,11 +601,16 @@
             {/if}
           </span>
           <span class="qas-dd-label">
-            <span class="qas-lbl">Category</span>
-            <span class="qas-dd-value"
-              >{selectedCategoryName}{#if effectiveSub !== null}
-                · {effectiveSub.name}{/if}</span
-            >
+            {#if effectiveSub !== null}
+              <!-- Parent reuses the label slot; sub is the bold value, clamped
+                   to 2 lines before truncating so the SUB is never the part
+                   hidden (Hemanth: always see both category + sub, even long). -->
+              <span class="qas-lbl qas-crumb">{selectedCategoryName} ›</span>
+              <span class="qas-dd-value qas-clamp2">{effectiveSub.name}</span>
+            {:else}
+              <span class="qas-lbl">Category</span>
+              <span class="qas-dd-value">{selectedCategoryName}</span>
+            {/if}
           </span>
           <span class="qas-dd-chev" aria-hidden="true">▾</span>
         </button>
@@ -945,6 +958,27 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  /* When a sub-category is picked, the sub becomes the bold value and may wrap
+     to 2 lines (then clip) so it is the LAST thing hidden — never truncated
+     away like before. The parent rides in the label slot above it (.qas-crumb). */
+  .qas-dd-value.qas-clamp2 {
+    white-space: normal;
+    text-overflow: clip;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .qas-lbl.qas-crumb {
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 0.62rem;
+    margin-bottom: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--color-muted);
   }
   .qas-dd-chev {
     color: var(--color-muted);
