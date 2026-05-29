@@ -41,6 +41,7 @@
   import CategoryIcon from '$components/CategoryIcon.svelte';
   import CategoryPicker from '$components/CategoryPicker.svelte';
   import AccountPicker from '$components/AccountPicker.svelte';
+  import TimeInput from '$components/TimeInput.svelte';
 
   const currencySymbol = getDisplayCurrencySymbol();
   const isInr = currencySymbol === '₹';
@@ -469,37 +470,13 @@
         <span class="qas-lbl">Date</span>
         <input type="date" bind:value={date} class="qas-field" />
       </label>
-      <label class="qas-block">
-        <span class="qas-lbl">Time <span class="qas-opt">(e.g. 10:30 PM)</span></span>
-        <input
-          type="text"
-          inputmode="text"
-          bind:value={time}
-          placeholder="e.g. 10:30 PM"
-          class="qas-field"
-          autocomplete="off"
-          spellcheck="false"
-          maxlength="9"
-          onkeydown={(e) => {
-            // Only treat REAL keystrokes (not programmatic bind:value
-            // assignments) as user intent.  oninput fires for both, which
-            // briefly flipped userTouchedTime=true on the first parse and
-            // pinned the field empty even when the description carried a
-            // time -- Hemanth: "time is still not autopopulating while I
-            // type".  onkeydown is dispatched only for keyboard events,
-            // never for el.value=..., so the flag is correctly preserved.
-            if (
-              e.key.length === 1 ||
-              e.key === 'Backspace' ||
-              e.key === 'Delete' ||
-              e.key === 'Enter'
-            ) {
-              userTouchedTime = true;
-            }
-          }}
-          onfocus={() => (userTouchedTime = true)}
-        />
-      </label>
+      <div class="qas-block">
+        <span class="qas-lbl">Time <span class="qas-opt">(optional)</span></span>
+        <!-- Segmented HH : MM AM/PM control — no typing the colon, AM/PM is
+             a tappable toggle.  Two-way bound to the 24-hour `time` string,
+             which both the NL autofill and the save path already speak. -->
+        <TimeInput bind:value={time} onUserEdit={() => (userTouchedTime = true)} />
+      </div>
     </div>
 
     <!-- Notes — free-form, persisted as an annotation so you can find out

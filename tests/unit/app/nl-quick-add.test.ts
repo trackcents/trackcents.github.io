@@ -192,4 +192,14 @@ describe('parseQuickAddText', () => {
     const p = parseQuickAddText('biryani on may 22', '2026-05-28');
     expect(p.date_iso).toBe('2026-05-22');
   });
+
+  it('SCREENSHOT 4: "ate biryani on 18th May 45 dollars at 07:34 PM" → $45 + 19:34', () => {
+    // Hemanth's follow-up screenshot — same shape as S3 but with the
+    // connector word "at" instead of "and on", and "07:34 PM" trailing.
+    // Locks in the time autofill across the "at <time>" pattern.
+    const p = parseQuickAddText('ate biryani on 18th May 45 dollars at 07:34 PM', '2026-05-28');
+    expect(p.date_iso).toBe('2026-05-18');
+    expect(p.amount_minor).toBe(4500n);
+    expect(p.time_hhmm).toBe('19:34');
+  });
 });
