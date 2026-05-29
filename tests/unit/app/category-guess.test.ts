@@ -97,4 +97,17 @@ describe('guessCategoryId', () => {
     // "gas" inside "gastropub" must not pull the Gas category (word boundary).
     expect(guessCategoryId('gastropub 500', cats, NO_RULES)).toBeNull();
   });
+
+  it('a named sub beats a seeded default rule pointing at the parent', () => {
+    // The real bug: the seed ships a "COFFEE → Food" rule; the user adds a
+    // Coffee sub under Food. Typing "coffee" must pick the SUB, not the parent.
+    const cats: Category[] = [
+      { id: 'c-food', name: 'Food', color: '#f00' },
+      { id: 'c-coffee', name: 'Coffee', color: '#f80', parent_id: 'c-food' }
+    ];
+    const seedRules: CategoryRule[] = [
+      { id: 'seed-rule-1', contains: 'COFFEE', category_id: 'c-food' }
+    ];
+    expect(guessCategoryId('morning coffee 80', cats, seedRules)).toBe('c-coffee');
+  });
 });

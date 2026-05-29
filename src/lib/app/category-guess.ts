@@ -195,6 +195,22 @@ function containsWord(text: string, token: string): boolean {
   const re = new RegExp(`(?:^|[^a-z0-9])${escapeRegExp(token.toLowerCase())}(?:$|[^a-z0-9])`, 'i');
   return re.test(text);
 }
+/** The id of the category in `cats` whose OWN name appears as a word in `text`,
+ *  preferring the most-specific (longest) name. Null when none match. */
+function bestNameMatch(cats: Category[], text: string): string | null {
+  let bestId: string | null = null;
+  let bestLen = 0;
+  for (const c of cats) {
+    const name = c.name.trim();
+    if (name.length < 3) continue;
+    if (containsWord(text, name) && name.length > bestLen) {
+      bestId = c.id;
+      bestLen = name.length;
+    }
+  }
+  return bestId;
+}
+const isSubCategory = (c: Category): boolean => c.parent_id !== undefined && c.parent_id !== '';
 
 export function guessCategoryId(
   description: string,
@@ -204,27 +220,24 @@ export function guessCategoryId(
   const desc = description.trim();
   if (desc.length === 0) return null;
 
-  // 1. The user's own rules — strongest signal because they wrote them.
+  // 0. A SUB-category whose OWN name is typed wins outright. You created it on
+  //    purpose, and it's more specific than any seeded default keyword rule
+  //    that points at the PARENT. (Hemanth, 2026-05-29: made a "Coffee" sub and
+  //    saved it, but the seeded "COFFEE → Food" rule kept winning so only Food
+  //    was picked. The named sub must beat the default rule.) Longest name wins.
+  const subMatch = bestNameMatch(categories.filter(isSubCategory), desc);
+  if (subMatch !== null) return subMatch;
+
+  // 1. The user's own rules — strongest signal among the rest.
   const ruleMatch = firstMatchingRule(rules, desc);
   if (ruleMatch !== null) return ruleMatch.category_id;
 
-  // 2. Direct name match — a category OR sub-category whose OWN name appears as
-  //    a word in the text. This is what makes a user-created sub auto-fill:
-  //    add "Coffee" under Food, type "coffee", and you get Food › Coffee.
-  //    (Hemanth, 2026-05-29: created a Coffee sub but typing "coffee" didn't
-  //    fill it — the keyword fallback below only ever resolves to the PARENT.)
-  //    Most-specific wins (longest matching name), so a sub beats its parent.
-  let bestId: string | null = null;
-  let bestLen = 0;
-  for (const c of categories) {
-    const name = c.name.trim().toLowerCase();
-    if (name.length < 3) continue;
-    if (containsWord(desc, name) && name.length > bestLen) {
-      bestId = c.id;
-      bestLen = name.length;
-    }
-  }
-  if (bestId !== null) return bestId;
+  // 2. A top-level category whose OWN name is typed (e.g. type "shopping").
+  const parentMatch = bestNameMatch(
+    categories.filter((c) => !isSubCategory(c)),
+    desc
+  );
+  if (parentMatch !== null) return parentMatch;
 
   // 3. Intent keyword fallback → resolved against the user's category names.
   const intent = matchIntent(desc);
