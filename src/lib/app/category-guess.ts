@@ -184,6 +184,18 @@ function matchIntent(text: string): string | null {
  *
  * @returns the matched category's id, or `null` when nothing fits.
  */
+/** Escape a string for use inside a RegExp. */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+/** Does `token` appear as a whole word in `text` (case-insensitive)? Word
+ *  boundary = not a letter/digit, so "coffee" matches "morning coffee 80" and
+ *  "coffee-shop" but NOT "coffees" or the "coffee" inside "scoffed". */
+function containsWord(text: string, token: string): boolean {
+  const re = new RegExp(`(?:^|[^a-z0-9])${escapeRegExp(token.toLowerCase())}(?:$|[^a-z0-9])`, 'i');
+  return re.test(text);
+}
+
 export function guessCategoryId(
   description: string,
   categories: Category[],
@@ -196,7 +208,25 @@ export function guessCategoryId(
   const ruleMatch = firstMatchingRule(rules, desc);
   if (ruleMatch !== null) return ruleMatch.category_id;
 
-  // 2. Intent keyword fallback → resolved against the user's category names.
+  // 2. Direct name match — a category OR sub-category whose OWN name appears as
+  //    a word in the text. This is what makes a user-created sub auto-fill:
+  //    add "Coffee" under Food, type "coffee", and you get Food › Coffee.
+  //    (Hemanth, 2026-05-29: created a Coffee sub but typing "coffee" didn't
+  //    fill it — the keyword fallback below only ever resolves to the PARENT.)
+  //    Most-specific wins (longest matching name), so a sub beats its parent.
+  let bestId: string | null = null;
+  let bestLen = 0;
+  for (const c of categories) {
+    const name = c.name.trim().toLowerCase();
+    if (name.length < 3) continue;
+    if (containsWord(desc, name) && name.length > bestLen) {
+      bestId = c.id;
+      bestLen = name.length;
+    }
+  }
+  if (bestId !== null) return bestId;
+
+  // 3. Intent keyword fallback → resolved against the user's category names.
   const intent = matchIntent(desc);
   if (intent === null) return null;
   const intentLower = intent.toLowerCase();

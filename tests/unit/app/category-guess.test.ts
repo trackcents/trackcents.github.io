@@ -65,4 +65,36 @@ describe('guessCategoryId', () => {
     ];
     expect(guessCategoryId('STARBUCKS #4218', CATS, rules)).toBe('c-shop');
   });
+
+  // Sub-category auto-fill by NAME (Hemanth: added "Coffee" under Food, typing
+  // "coffee" must fill Food › Coffee, not just the Food parent).
+  it('auto-fills a user-created sub-category by its own name', () => {
+    const cats: Category[] = [
+      { id: 'c-food', name: 'Food', color: '#f00' },
+      { id: 'c-coffee', name: 'Coffee', color: '#f80', parent_id: 'c-food' }
+    ];
+    expect(guessCategoryId('morning coffee 80', cats, NO_RULES)).toBe('c-coffee');
+  });
+
+  it('a matching sub-category name beats its parent (most-specific wins)', () => {
+    const cats: Category[] = [
+      { id: 'c-food', name: 'Food', color: '#f00' },
+      { id: 'c-biryani', name: 'Biryani', color: '#f80', parent_id: 'c-food' }
+    ];
+    expect(guessCategoryId('biryani for lunch', cats, NO_RULES)).toBe('c-biryani');
+  });
+
+  it('still falls back to the keyword intent when no category name matches', () => {
+    const cats: Category[] = [{ id: 'c-food', name: 'Food', color: '#f00' }];
+    expect(guessCategoryId('chai 20', cats, NO_RULES)).toBe('c-food');
+  });
+
+  it('does not match a category name embedded in a longer word', () => {
+    const cats: Category[] = [
+      { id: 'c-food', name: 'Food', color: '#f00' },
+      { id: 'c-gas', name: 'Gas', color: '#0f0' }
+    ];
+    // "gas" inside "gastropub" must not pull the Gas category (word boundary).
+    expect(guessCategoryId('gastropub 500', cats, NO_RULES)).toBeNull();
+  });
 });
