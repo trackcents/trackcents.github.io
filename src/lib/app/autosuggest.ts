@@ -76,23 +76,19 @@ export function buildSuggestTerms(
   const seen = new Set<string>();
   const out: string[] = [];
   const add = (raw: string): void => {
-    for (const word of raw.split(/[^A-Za-z]+/)) {
-      const w = word.trim();
-      if (w.length < 3) continue;
-      const k = w.toLowerCase();
-      if (seen.has(k)) continue;
-      seen.add(k);
-      out.push(w);
-    }
+    const w = raw.trim();
+    if (w.length < 3) return;
+    const k = w.toLowerCase();
+    if (seen.has(k)) return;
+    seen.add(k);
+    out.push(w);
   };
+  // Keep FULL names (not split into words) so a multi-word name like "Milk
+  // Shake" is suggested whole — Hemanth: typing "Mi" should offer "Milk Shake",
+  // not just "Milk". User names first so they win the shortest-match tie-break.
   for (const n of categoryNames) add(n);
   for (const n of accountNames) add(n);
-  for (const t of COMMON_TERMS) {
-    if (!seen.has(t)) {
-      seen.add(t);
-      out.push(t);
-    }
-  }
+  for (const t of COMMON_TERMS) add(t);
   return out;
 }
 
@@ -108,26 +104,36 @@ export interface Suggestion {
  * @returns the suggestion, or null when there's nothing useful to offer.
  */
 export function suggestCompletion(text: string, terms: readonly string[]): Suggestion | null {
-  // Only complete when actively typing a word at the very end (>= 2 letters,
-  // and not right after a space/number).
-  const m = text.match(/([A-Za-z]{2,})$/);
-  if (m === null) return null;
-  const lastWord = m[1]!;
-  const lower = lastWord.toLowerCase();
+  // Only complete while actively typing a word (the text ends in a letter).
+  if (text.length === 0 || !/[A-Za-z]$/.test(text)) return null;
 
-  let best: string | null = null;
-  for (const term of terms) {
-    const t = term.toLowerCase();
-    if (t.length <= lower.length) continue; // must add at least one char
-    if (!t.startsWith(lower)) continue;
-    // Prefer the shortest matching term (the most likely / least surprising).
-    if (best === null || term.length < best.length) best = term;
+  // Candidate "typed prefixes": the trailing text starting at each word
+  // boundary, longest first (whole trailing phrase → … → last word). This lets
+  // a multi-word name like "Milk Shake" complete from "Mi" OR from "milk sh",
+  // winning over the single word "Milk".
+  const starts: number[] = [0];
+  for (let i = 1; i < text.length; i++) {
+    if (/\s/.test(text[i - 1]!) && !/\s/.test(text[i]!)) starts.push(i);
   }
-  if (best === null) return null;
 
-  const suffix = best.slice(lastWord.length);
-  if (suffix.length === 0) return null;
-  // Append to what they typed so their own casing is preserved
-  // ("Cof" + "fee" → "Coffee").
-  return { suffix, accepted: text + suffix };
+  for (const start of starts) {
+    const typed = text.slice(start);
+    if (typed.replace(/\s/g, '').length < 2) continue; // need >= 2 letters
+    const lower = typed.toLowerCase();
+    let best: string | null = null;
+    for (const term of terms) {
+      const t = term.toLowerCase();
+      if (t.length <= lower.length) continue; // must add at least one char
+      if (!t.startsWith(lower)) continue;
+      // Prefer the shortest matching term (least surprising).
+      if (best === null || term.length < best.length) best = term;
+    }
+    if (best !== null) {
+      const suffix = best.slice(typed.length);
+      // Append to what they typed so their casing is preserved ("Mi" + "lk
+      // Shake" → "Milk Shake").
+      if (suffix.length > 0) return { suffix, accepted: text + suffix };
+    }
+  }
+  return null;
 }

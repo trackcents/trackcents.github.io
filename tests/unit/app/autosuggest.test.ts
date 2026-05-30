@@ -42,19 +42,34 @@ describe('suggestCompletion', () => {
   test('does not trip on a trailing number', () => {
     expect(suggestCompletion('coffee 80', TERMS)).toBeNull();
   });
+
+  test('suggests a WHOLE multi-word name ("Mi" -> "Milk Shake")', () => {
+    expect(suggestCompletion('Mi', ['Milk Shake'])).toEqual({
+      suffix: 'lk Shake',
+      accepted: 'Milk Shake'
+    });
+  });
+
+  test('continues a multi-word name mid-phrase ("milk sh" -> "ake")', () => {
+    expect(suggestCompletion('milk sh', ['Milk Shake'])).toEqual({
+      suffix: 'ake',
+      accepted: 'milk shake'
+    });
+  });
+
+  test('multi-word suggestion works after earlier words', () => {
+    expect(suggestCompletion('bought Mi', ['Milk Shake'])?.accepted).toBe('bought Milk Shake');
+  });
 });
 
 describe('buildSuggestTerms', () => {
-  test('splits multi-word names and includes account words', () => {
+  test('keeps full multi-word names and merges the common list', () => {
     const terms = buildSuggestTerms(['Phone & Internet', 'Food'], ['HDFC UPI']);
     const lower = terms.map((t) => t.toLowerCase());
-    expect(lower).toContain('phone');
-    expect(lower).toContain('internet');
+    expect(lower).toContain('phone & internet');
     expect(lower).toContain('food');
-    expect(lower).toContain('hdfc');
-    expect(lower).toContain('upi');
-    // common list still merged in
-    expect(lower).toContain('coffee');
+    expect(lower).toContain('hdfc upi');
+    expect(lower).toContain('coffee'); // common list still merged in
   });
 
   test('drops words shorter than 3 chars and de-dupes', () => {

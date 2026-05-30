@@ -129,6 +129,10 @@
   let error = $state<string | null>(null);
   let pickerOpen = $state(false);
   let accountPickerOpen = $state(false);
+  /** Accounts added via the picker THIS session — merged into the list right
+   *  away (the parent's derived account list only refreshes on reload), so a
+   *  just-added account auto-fills + shows in the picker immediately. */
+  let sessionAccounts = $state<string[]>([]);
   /** True when the soft keyboard is open.  Drives a `.keyboard-open`
    *  class on the sheet that compacts the form (hides the big title,
    *  hides Notes, tightens gaps) so Amount + Description + Category |
@@ -291,7 +295,7 @@
       // Match the typed text against the user's saved accounts; a match wins,
       // else fall back to the direction default — unless the user picked one.
       if (!userTouchedAccount) {
-        account = guessAccount(desc, accounts) ?? defaultAccount(direction);
+        account = guessAccount(desc, allAccounts) ?? defaultAccount(direction);
       }
     });
   });
@@ -347,6 +351,8 @@
 
   /** Account display name = nickname when set, else raw. */
   const accountLabel = $derived(accountDisplayName(account));
+  /** Account list including any added THIS session (see sessionAccounts). */
+  const allAccounts = $derived([...new Set([...accounts, ...sessionAccounts])]);
 
   // ── Inline autosuggest (ghost-text) for the description ─────────────────────
   // Suggest a completion for the word being typed, from the user's categories +
@@ -355,7 +361,7 @@
   const suggestTerms = $derived(
     buildSuggestTerms(
       categories.map((c) => c.name),
-      accounts
+      allAccounts
     )
   );
   const suggestion = $derived(suggestCompletion(desc, suggestTerms));
@@ -402,6 +408,7 @@
   }
   function createAccount(name: string): void {
     rememberManualAccount(name);
+    if (!sessionAccounts.includes(name)) sessionAccounts = [...sessionAccounts, name];
     account = name;
     userTouchedAccount = true;
   }
@@ -410,6 +417,11 @@
     error = null;
     saving = true;
     try {
+      if (amount.trim() === '') {
+        error = 'Enter an amount.';
+        saving = false;
+        return;
+      }
       const mag = parseAmountToCents(amount, 1);
       const abs = mag < 0n ? -mag : mag;
       if (abs === 0n) {
@@ -498,7 +510,11 @@
       onSaved({ learned: categoryId !== null, rulePattern: learnedPattern });
       onClose();
     } catch (e) {
-      if (e instanceof ManualEntryError || e instanceof CsvImportError) error = e.message;
+      // parseAmountToCents throws a CSV-flavoured error ("CSV import: row 1:
+      // amount is empty") — confusing for a manual entry, so map it to plain
+      // words.
+      if (e instanceof CsvImportError) error = 'Enter a valid amount.';
+      else if (e instanceof ManualEntryError) error = e.message;
       else error = e instanceof Error ? e.message : String(e);
     } finally {
       saving = false;
@@ -707,6 +723,7 @@
           <button
             type="button"
             class="qas-accept-btn"
+            onpointerdown={(e) => e.preventDefault()}
             onclick={acceptSuggestion}
             aria-label={`Accept suggestion: ${suggestion.suffix}`}
           >
@@ -745,7 +762,7 @@
   <!-- Account picker popover -->
   <AccountPicker
     open={accountPickerOpen}
-    {accounts}
+    accounts={allAccounts}
     selected={account}
     onSelect={pickAccount}
     onCreate={createAccount}
