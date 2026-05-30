@@ -5,7 +5,6 @@
   // Top categories + recent activity follow the active month so the slider
   // really BROWSES the past, not just the box.
   import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { loadState } from '$lib/db/store';
   import type { ImportRecord } from '$lib/db/store';
@@ -17,13 +16,17 @@
   import {
     summaryFromImports,
     detailedRowsFromImports,
-    spendableFlowByMonth
+    spendableFlowByMonth,
+    incomeRowsForMonth
   } from '$lib/app/categorization-glue';
   import { runAutoCategorize } from '$lib/app/auto-categorize';
   import { seedCategoriesAndRules, shouldAutoSeed } from '$lib/app/default-categories';
   import {
     deleteCategory as deleteCategoryPure,
-    renameCategory as renameCategoryPure
+    renameCategory as renameCategoryPure,
+    setAnnotation,
+    pruneAnnotation,
+    type TransactionAnnotation
   } from '$lib/app/categorization';
   import { listAllAccounts } from '$lib/app/accounts';
   import { detectPaychecks } from '$lib/app/paycheck-detector';
@@ -40,11 +43,13 @@
   import BudgetBox from '$components/BudgetBox.svelte';
   import MonthPickerSheet from '$components/MonthPickerSheet.svelte';
   import QuickAddSheet from '$components/QuickAddSheet.svelte';
+  import ManageIncomeSheet from '$components/ManageIncomeSheet.svelte';
 
   let loading = $state(true);
   let imports = $state<ImportRecord[]>([]);
   let cat = $state<CategorizationState>({ categories: [], rules: [], annotations: {} });
   let goals = $state<SavingsGoal[]>([]);
+  let manageIncomeOpen = $state(false);
 
   onMount(async () => {
     imports = (await loadState()).imports;
@@ -347,6 +352,29 @@
   const activeFlow = $derived(nbm.get(activeMonth));
   const activeMonthLabel = $derived(monthName(activeMonth));
 
+  // ── Manage-income drill-down ────────────────────────────────────────────
+  // The exact income deposits behind the BudgetBox "of $X income" number, so
+  // tapping the income line shows ONLY those (not all transactions) and lets
+  // the user edit them. Total mirrors the headline (activeFlow.inflow_minor).
+  const activeIncomeRows = $derived(incomeRowsForMonth(imports, cat.annotations, activeMonth));
+  const activeIncomeTotalMinor = $derived(activeFlow?.inflow_minor ?? 0n);
+  /** Persist a per-transaction edit from the income sheet (rename / not-income
+   *  / exclude). Mirrors the transactions page: setAnnotation → prune → save. */
+  async function updateIncomeAnnotation(
+    key: string,
+    patch: Partial<TransactionAnnotation>
+  ): Promise<void> {
+    const next = setAnnotation(new Map(Object.entries(cat.annotations)), key, patch);
+    const a = next.get(key);
+    if (a !== undefined) {
+      const pruned = pruneAnnotation(a);
+      if (pruned === null) next.delete(key);
+      else next.set(key, pruned);
+    }
+    cat = { ...cat, annotations: Object.fromEntries(next) };
+    await saveCategorization(cat);
+  }
+
   /** Previous month's leftover (income − spent), signed.  Drives the small
    *  "+₹X from April" / "−₹X from April" carry-forward line under the income
    *  sub-line on the box.  Returns 0n when there's no data for the prior month
@@ -395,23 +423,20 @@
   const allDetailed = $derived(detailedRowsFromImports(imports, cat.annotations));
 
   /**
-   * "Extra income" for the ACTIVE month: every inflow transaction in this
-   * month MINUS the single largest (the inferred base / recurring income).
-   * 0n when there's only 1 inflow.  Drives the green "+$X extra income · tap
-   * to manage" line on the BudgetBox (Hemanth's design spec: total income at
-   * top, extras broken out below).  Ignored transactions are excluded.
+   * "Extra income" for the ACTIVE month, used only for the small green
+   * "+$X other inflows →" chip (a secondary entry into the income drill-down).
+   * Derived from the SAME flow-intent income rows as the drill-down (so marking
+   * a deposit "not income" / excluding it immediately updates this chip too),
+   * NOT from raw inflows. It is still "income beyond the single largest deposit"
+   * — a provisional split; the real "which deposit is the paycheck" decision
+   * arrives with the paycheck-selection flow.
    */
   const activeExtraIncomeMinor = $derived.by<bigint>(() => {
-    const inflows: bigint[] = [];
-    for (const r of allDetailed) {
-      if (r.posted_date.slice(0, 7) === activeMonth && r.amount_minor > 0n && !r.ignored) {
-        inflows.push(r.amount_minor);
-      }
-    }
-    if (inflows.length < 2) return 0n;
-    inflows.sort((a, b) => (a > b ? -1 : a < b ? 1 : 0));
+    const amts = activeIncomeRows.map((r) => r.amount_minor);
+    if (amts.length < 2) return 0n;
+    amts.sort((a, b) => (a > b ? -1 : a < b ? 1 : 0));
     let extra = 0n;
-    for (let i = 1; i < inflows.length; i++) extra += inflows[i]!;
+    for (let i = 1; i < amts.length; i++) extra += amts[i]!;
     return extra;
   });
 
@@ -450,7 +475,7 @@
       canPrev={canPrevMonth}
       canNext={canNextMonth}
       onLabelClick={() => (pickerOpen = true)}
-      onManageIncome={() => goto(`/transactions?month=${activeMonth}`)}
+      onManageIncome={() => (manageIncomeOpen = true)}
     />
 
     <div class="card rise mt-4 p-8 text-center">
@@ -525,7 +550,7 @@
       canPrev={canPrevMonth}
       canNext={canNextMonth}
       onLabelClick={() => (pickerOpen = true)}
-      onManageIncome={() => goto(`/transactions?month=${activeMonth}`)}
+      onManageIncome={() => (manageIncomeOpen = true)}
     />
 
     {#if spentTodayMinor > 0n}
@@ -747,6 +772,17 @@
     onCreateCategory={handleCreateCategory}
     onDeleteCategory={handleDeleteCategory}
     onRenameCategory={handleRenameCategory}
+  />
+
+  <!-- Manage-income drill-down — opens from the BudgetBox income line. Shows
+       ONLY this month's income deposits, each editable in place. -->
+  <ManageIncomeSheet
+    open={manageIncomeOpen}
+    monthLabel={activeMonthLabel}
+    rows={activeIncomeRows}
+    totalMinor={activeIncomeTotalMinor}
+    onUpdate={updateIncomeAnnotation}
+    onClose={() => (manageIncomeOpen = false)}
   />
 
   <!-- Save-confirmation toast — shows briefly after a manual transaction is

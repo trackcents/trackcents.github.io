@@ -291,6 +291,14 @@ describe('pruneAnnotation', () => {
     });
   });
 
+  test('preserves a flow_intent override (regression: was silently dropped)', () => {
+    // The Manage-income sheet sets flow_intent:'transfer_self' to mean "this
+    // deposit is NOT income". pruneAnnotation must keep it, or the edit reverts.
+    expect(
+      pruneAnnotation({ category_id: null, source: 'manual', flow_intent: 'transfer_self' })
+    ).toEqual({ category_id: null, source: 'manual', flow_intent: 'transfer_self' });
+  });
+
   test('an extras-only annotation survives (e.g. ignored)', () => {
     expect(pruneAnnotation({ category_id: null, source: 'manual', ignored: true })).toEqual({
       category_id: null,

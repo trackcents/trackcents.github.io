@@ -327,6 +327,76 @@ export function flowIntentRowsFromImports(
   return out;
 }
 
+/** One income deposit, for the "Manage income" drill-down on Home. */
+export interface IncomeRow {
+  /** Stable annotation key `<hash>#<idx>`. */
+  key: string;
+  posted_date: string;
+  /** Display name: the user's rename (custom_name) if set, else cleaned description. */
+  description: string;
+  /** The deposit's signed amount (always > 0 here). */
+  amount_minor: bigint;
+  /** Inferred flow intent (salary / gift_in / interest_earned / cash_in). */
+  flow_intent: FlowIntent;
+}
+
+/**
+ * The exact set of INCOME deposits that make up a month's income number on the
+ * Home BudgetBox — i.e. every inflow whose inferred flow_intent is in
+ * INCOME_INTENTS, not ignored, amount > 0, in `month` (YYYY-MM). Uses the SAME
+ * inference path as `spendableFlowByMonth`, so the listed deposits reconcile to
+ * the headline "of $X income" (when none are split — splitting is a later slice).
+ *
+ * Structure-based, NEVER amount-based: we list ALL income inflows, not a
+ * size-derived subset (that retires the old "biggest inflow is the paycheck"
+ * heuristic). Newest first. Pure.
+ */
+export function incomeRowsForMonth(
+  imports: ImportRecord[],
+  annotations: Record<string, TransactionAnnotation>,
+  month: string,
+  opts: SpendableFlowOptions = {}
+): IncomeRow[] {
+  const rows = flowIntentRowsFromImports(imports, annotations);
+  const context: {
+    reconciledCcPayments?: ReadonlySet<string>;
+    transferPairKeys?: ReadonlySet<string>;
+    paycheckKeys?: ReadonlySet<string>;
+  } = {};
+  if (opts.reconciledCcPayments !== undefined)
+    context.reconciledCcPayments = opts.reconciledCcPayments;
+  if (opts.transferPairKeys !== undefined) context.transferPairKeys = opts.transferPairKeys;
+  if (opts.paycheckKeys !== undefined) context.paycheckKeys = opts.paycheckKeys;
+  const intents = inferAllFlowIntents(rows, context);
+
+  const out: IncomeRow[] = [];
+  for (const imp of imports) {
+    imp.transactions.forEach((t, i) => {
+      const key = transactionCategoryKey(imp.pdf_source_hash, i);
+      const ann = annotations[key];
+      if (ann?.ignored) return;
+      if (t.amount_minor <= 0n) return;
+      if (t.posted_date.slice(0, 7) !== month) return;
+      const intent = intents.get(key) ?? 'unknown';
+      if (!INCOME_INTENTS.has(intent)) return;
+      const renamed = ann?.custom_name;
+      const description =
+        renamed !== undefined && renamed.trim().length > 0
+          ? renamed
+          : cleanDescription(t.description);
+      out.push({
+        key,
+        posted_date: t.posted_date,
+        description,
+        amount_minor: t.amount_minor,
+        flow_intent: intent
+      });
+    });
+  }
+  out.sort((a, b) => (a.posted_date < b.posted_date ? 1 : a.posted_date > b.posted_date ? -1 : 0));
+  return out;
+}
+
 /** Join imports + annotations → detailed rows (for the chart drill-down list). */
 export function detailedRowsFromImports(
   imports: ImportRecord[],

@@ -257,6 +257,10 @@ export function pruneAnnotation(a: TransactionAnnotation): TransactionAnnotation
   if (a.is_recurring === true) cleaned.is_recurring = true;
   if (a.refund_of !== undefined && a.refund_of !== '') cleaned.refund_of = a.refund_of;
   if (a.split !== undefined && a.split.length > 0) cleaned.split = a.split;
+  // A manual flow_intent override (e.g. "this deposit is NOT income → transfer_self"
+  // from the Manage-income sheet, or an intent flip from the row drawer) must
+  // survive normalization. This was previously dropped, silently undoing the edit.
+  if (a.flow_intent !== undefined && a.flow_intent !== '') cleaned.flow_intent = a.flow_intent;
   // An uncategorized, manual annotation with no extras carries nothing — drop it.
   if (
     cleaned.category_id === null &&

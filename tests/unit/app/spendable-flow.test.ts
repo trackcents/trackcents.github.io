@@ -12,7 +12,7 @@
  *   - net_minor     = $3000 − $75 = $2925
  */
 import { describe, expect, test } from 'vitest';
-import { spendableFlowByMonth } from '../../../src/lib/app/categorization-glue';
+import { spendableFlowByMonth, incomeRowsForMonth } from '../../../src/lib/app/categorization-glue';
 import type { ImportRecord } from '../../../src/lib/db/store';
 import type { ParsedTransaction } from '../../../src/lib/adapters/types';
 
@@ -107,5 +107,51 @@ describe('spendableFlowByMonth — synthetic month with mixed intents', () => {
     const may = flow.get('2026-05');
     // outflow_minor includes only the $100 purchase netted with $25 refund.
     expect(may!.outflow_minor).toBeLessThan(200_00n);
+  });
+});
+
+describe('incomeRowsForMonth — the deposits behind the income number', () => {
+  test('lists ONLY income inflows (the payroll), not refund/cc/transfer/investment', () => {
+    const rows = incomeRowsForMonth([checkingImport], {}, '2026-05');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.amount_minor).toBe(3000_00n);
+    expect(rows[0]!.flow_intent).toBe('salary');
+  });
+
+  test('the listed total reconciles to the BudgetBox income number (no splits)', () => {
+    const rows = incomeRowsForMonth([checkingImport], {}, '2026-05');
+    const listed = rows.reduce((s, r) => s + r.amount_minor, 0n);
+    const headline = spendableFlowByMonth([checkingImport], {}).get('2026-05')!.inflow_minor;
+    expect(listed).toBe(headline);
+  });
+
+  test('an ignored deposit drops out of the income list', () => {
+    const ann = {
+      'hash-chase-may#0': { category_id: null, source: 'manual' as const, ignored: true }
+    };
+    expect(incomeRowsForMonth([checkingImport], ann, '2026-05')).toHaveLength(0);
+  });
+
+  test('a user flow_intent override (not income) removes it from the list', () => {
+    const ann = {
+      'hash-chase-may#0': {
+        category_id: null,
+        source: 'manual' as const,
+        flow_intent: 'transfer_self'
+      }
+    };
+    expect(incomeRowsForMonth([checkingImport], ann, '2026-05')).toHaveLength(0);
+  });
+
+  test('custom_name is used as the display name', () => {
+    const ann = {
+      'hash-chase-may#0': { category_id: null, source: 'manual' as const, custom_name: 'My salary' }
+    };
+    const rows = incomeRowsForMonth([checkingImport], ann, '2026-05');
+    expect(rows[0]!.description).toBe('My salary');
+  });
+
+  test('a different month returns no rows', () => {
+    expect(incomeRowsForMonth([checkingImport], {}, '2026-04')).toHaveLength(0);
   });
 });

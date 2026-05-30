@@ -164,8 +164,18 @@
   </p>
 
   {#if hasIncome}
-    <!-- ── 4 · "of ₹X income" subline ─────────────────────────────────── -->
-    <p class="of-income">of {formatMoneyNoDecimal(budget.income_minor)} income</p>
+    <!-- ── 4 · "of ₹X income" subline — tappable to manage income ──────── -->
+    <button
+      type="button"
+      class="of-income"
+      onclick={onManageIncome}
+      disabled={onManageIncome === undefined}
+      aria-label="See and edit this month's income"
+    >
+      of {formatMoneyNoDecimal(budget.income_minor)} income
+      {#if onManageIncome !== undefined}<span class="of-income-arrow" aria-hidden="true">›</span
+        >{/if}
+    </button>
 
     {#if extraIncomeMinor > 0n}
       <!-- ── 5 · "+₹X other inflows →" green chip ────────────────────── -->
@@ -321,9 +331,31 @@
     margin-bottom: 0.5rem;
   }
   .of-income {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
     color: var(--color-muted);
     font-size: 0.9rem;
     margin-bottom: 0.85rem;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .of-income:disabled {
+    cursor: default;
+  }
+  .of-income-arrow {
+    font-size: 1.1rem;
+    line-height: 1;
+    transition: transform 0.16s ease;
+  }
+  .of-income:not(:disabled):hover {
+    color: var(--color-text);
+  }
+  .of-income:not(:disabled):hover .of-income-arrow {
+    transform: translateX(2px);
   }
 
   /* ── Extra-inflows chip ──────────────────────────────────────────── */
