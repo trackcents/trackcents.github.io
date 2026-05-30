@@ -305,6 +305,10 @@
     gap: 0.4rem;
     cursor: pointer;
     transition: background-color 0.16s ease;
+    min-width: 0;
+    max-width: 62vw;
+    white-space: nowrap;
+    overflow: hidden;
   }
   .month-pill:hover {
     background: var(--color-surface-hover);
@@ -431,7 +435,7 @@
   /* ── Stats row ───────────────────────────────────────────────────── */
   .stats {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 0.6rem;
   }
   .stat {
@@ -439,6 +443,7 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 0.2rem;
+    min-width: 0;
   }
   .stat-value-primary {
     font-size: 1.4rem;

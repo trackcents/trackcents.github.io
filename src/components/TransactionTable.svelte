@@ -49,14 +49,14 @@
   }
 </script>
 
-<div class="overflow-x-auto rounded-xl border" style="border-color: var(--color-border);">
-  <table class="w-full text-sm">
+<div class="rounded-xl border" style="border-color: var(--color-border);">
+  <table class="w-full table-fixed text-sm">
     <thead class="text-[var(--color-muted)]" style="background-color: var(--color-surface);">
       <tr>
-        <th class="px-3 py-2 text-left font-medium">Date</th>
-        <th class="px-3 py-2 text-left font-medium">Description</th>
-        <th class="px-3 py-2 text-left font-medium">Type</th>
-        <th class="px-3 py-2 text-right font-medium">Amount</th>
+        <th class="w-[74px] px-2 py-2 text-left font-medium sm:px-3">Date</th>
+        <th class="px-2 py-2 text-left font-medium sm:px-3">Description</th>
+        <th class="hidden w-[64px] px-2 py-2 text-left font-medium sm:table-cell sm:px-3">Type</th>
+        <th class="w-[88px] px-2 py-2 text-right font-medium sm:px-3">Amount</th>
       </tr>
     </thead>
     <tbody>
@@ -64,7 +64,7 @@
         {@const info = typeInfo(txn.transaction_type)}
         {@const link = getLink?.(i)}
         <tr style:background-color={i % 2 === 0 ? 'transparent' : 'var(--color-surface)'}>
-          <td class="px-3 py-2 font-mono text-xs whitespace-nowrap text-[var(--color-text)]">
+          <td class="px-2 py-2 font-mono text-[11px] text-[var(--color-text)] sm:px-3 sm:text-xs">
             {txn.posted_date}
           </td>
           <td class="px-3 py-2 text-[var(--color-text)] desc-cell" title={txn.description}>
@@ -73,7 +73,7 @@
               <button
                 type="button"
                 onclick={() => onLinkClick?.(link)}
-                class="ml-2 inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs whitespace-nowrap transition-colors hover:underline"
+                class="mt-1 inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs transition-colors hover:underline"
                 style="border-color: var(--color-accent); color: var(--color-accent); background-color: color-mix(in oklab, var(--color-accent) 12%, transparent);"
                 title="Click to drill into the matching credit-card statement"
               >
@@ -85,7 +85,7 @@
                    but the matcher found no matching CC statement.  Surface a
                    small CTA so the user knows what to do next. -->
               <span
-                class="ml-2 inline-flex items-center gap-1 rounded-md border border-dashed px-2 py-0.5 text-xs whitespace-nowrap text-[var(--color-muted)]"
+                class="mt-1 inline-flex items-center gap-1 rounded-md border border-dashed px-2 py-0.5 text-xs text-[var(--color-muted)]"
                 style:border-color="var(--color-border)"
                 title="No matching credit-card statement found yet. Import the CC statement covering this payment."
               >
@@ -93,11 +93,14 @@
               </span>
             {/if}
           </td>
-          <td class="px-3 py-2 text-xs text-[var(--color-muted)]" title={info.tooltip}>
+          <td
+            class="hidden px-2 py-2 text-xs text-[var(--color-muted)] sm:table-cell sm:px-3"
+            title={info.tooltip}
+          >
             {info.label}
           </td>
           <td
-            class="px-3 py-2 text-right font-mono whitespace-nowrap"
+            class="px-2 py-2 text-right font-mono text-xs sm:px-3 sm:text-sm"
             style:color={txn.amount_minor < 0n
               ? 'var(--color-danger)'
               : txn.amount_minor > 0n
@@ -134,7 +137,9 @@
      The full description survives in the title= tooltip; tap-to-expand is a
      future affordance. */
   :global(.desc-cell) {
-    max-width: 240px;
+    /* table-fixed gives this the flexible remaining width; the text wraps
+       (clamped to 2 lines) instead of forcing the table to scroll. */
+    min-width: 0;
   }
   :global(.desc-text) {
     display: -webkit-box;

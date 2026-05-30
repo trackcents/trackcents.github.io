@@ -69,7 +69,7 @@
 
 <svelte:head><title>Review categories · trackcents</title></svelte:head>
 
-<main class="mx-auto max-w-2xl px-6 py-8">
+<main class="mx-auto max-w-2xl px-4 sm:px-6 py-8">
   <header class="mb-5">
     <h1 class="text-2xl font-semibold text-[var(--color-text)]">Review categories</h1>
     <p class="mt-1 text-sm text-[var(--color-muted)]">

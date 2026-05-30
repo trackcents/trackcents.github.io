@@ -72,7 +72,7 @@
 
 <svelte:head><title>Recurring · trackcents</title></svelte:head>
 
-<main class="mx-auto max-w-3xl px-6 py-8">
+<main class="mx-auto max-w-3xl px-4 sm:px-6 py-8">
   <h1 class="mb-1 text-2xl font-semibold">Recurring</h1>
   <p class="mb-6 text-sm" style:color="var(--color-muted)">
     Subscriptions and bills we spotted repeating in your statements.

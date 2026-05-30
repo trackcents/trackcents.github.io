@@ -297,7 +297,7 @@
 
 <svelte:head><title>Transactions · trackcents</title></svelte:head>
 
-<main class="mx-auto max-w-6xl px-6 py-8">
+<main class="mx-auto max-w-6xl px-4 sm:px-6 py-8">
   <header class="mb-4 flex flex-wrap items-start justify-between gap-3">
     <div>
       <h1 class="text-2xl font-semibold text-[var(--color-text)]">All transactions</h1>

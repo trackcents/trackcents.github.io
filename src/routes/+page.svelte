@@ -365,7 +365,7 @@
 
 <svelte:head><title>Import statements · trackcents</title></svelte:head>
 
-<main class="mx-auto max-w-5xl px-6 py-12">
+<main class="mx-auto max-w-5xl px-4 sm:px-6 py-12">
   <header class="mb-6 flex flex-wrap items-baseline justify-between gap-4">
     <div>
       <h1 class="text-3xl font-semibold tracking-tight text-[var(--color-text)]">

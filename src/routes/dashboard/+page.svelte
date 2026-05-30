@@ -193,7 +193,7 @@
 
 <svelte:head><title>Dashboard · trackcents</title></svelte:head>
 
-<main class="mx-auto max-w-5xl px-6 py-8">
+<main class="mx-auto max-w-5xl px-4 sm:px-6 py-8">
   <h1 class="mb-1 text-2xl font-semibold">Dashboard</h1>
   <p class="mb-6 text-sm" style:color="var(--color-muted)">
     Where your money went, and what's left.
@@ -265,24 +265,29 @@
           {#if drillRows.length === 0}
             <p class="text-sm" style:color="var(--color-muted)">No spending in this category.</p>
           {:else}
-            <table class="w-full text-sm">
-              <tbody>
-                {#each drillRows as r (r.key)}
-                  <tr class="border-t" style="border-color: var(--color-border);">
-                    <td
-                      class="num py-1 pr-3 text-xs whitespace-nowrap"
-                      style:color="var(--color-muted)">{r.posted_date}</td
-                    >
-                    <td class="py-1 pr-3">{r.description}</td>
-                    <td class="py-1 pr-3 text-xs" style:color="var(--color-muted)">{r.bank_name}</td
-                    >
-                    <td class="num py-1 text-right" style:color="var(--color-danger)"
-                      >{formatMoney(r.amount_minor)}</td
-                    >
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
+            <div>
+              {#each drillRows as r (r.key)}
+                <div
+                  class="flex items-center gap-3 border-t py-2"
+                  style="border-color: var(--color-border);"
+                >
+                  <div class="min-w-0 flex-1">
+                    <div class="truncate text-sm" style:color="var(--color-text)">
+                      {r.description}
+                    </div>
+                    <div class="mt-0.5 text-xs" style:color="var(--color-muted)">
+                      {r.posted_date} · {r.bank_name}
+                    </div>
+                  </div>
+                  <div
+                    class="num shrink-0 text-right text-sm font-medium"
+                    style:color="var(--color-danger)"
+                  >
+                    {formatMoney(r.amount_minor)}
+                  </div>
+                </div>
+              {/each}
+            </div>
           {/if}
         </div>
       {/if}

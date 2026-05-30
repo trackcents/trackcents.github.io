@@ -125,7 +125,7 @@
   <title>Payment drill · trackcents</title>
 </svelte:head>
 
-<main class="mx-auto max-w-5xl px-6 py-8">
+<main class="mx-auto max-w-5xl px-4 sm:px-6 py-8">
   <nav class="mb-4">
     <button
       type="button"

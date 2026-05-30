@@ -207,7 +207,7 @@
 {#snippet categoryPicker(r: UnifiedRow)}
   <div class="flex items-center gap-2">
     <CategoryIcon
-      icon={categoryIconName(currentCatName(r))}
+      icon={categoryIconName(categoryFor?.(r) ? currentCatName(r) : displayName(r))}
       color={categoryColor(categoryFor?.(r) ?? null)}
       size={15}
     />
@@ -251,7 +251,11 @@
     </div>
     <div class="flex gap-2 sm:col-span-2">
       <dt class="text-[var(--color-muted)]">Raw text:</dt>
-      <dd class="font-mono text-xs whitespace-pre-wrap text-[var(--color-text)]">{r.raw_text}</dd>
+      <dd
+        class="max-h-32 overflow-y-auto font-mono text-xs break-words whitespace-pre-wrap text-[var(--color-text)]"
+      >
+        {r.raw_text}
+      </dd>
     </div>
   </dl>
   {#if showActions}
@@ -404,9 +408,10 @@
   </div>
 {/snippet}
 
-<!-- ── Desktop: sortable table (≥768px) ── -->
+<!-- ── Desktop: sortable table (≥1024px only — phones/tablets get the card list
+     so the 6-column table never forces horizontal scroll). ── -->
 <div
-  class="hidden overflow-x-auto rounded-xl border md:block"
+  class="hidden overflow-x-auto rounded-xl border lg:block"
   style="border-color: var(--color-border);"
 >
   <table class="w-full text-sm">
@@ -542,8 +547,8 @@
   {/if}
 </div>
 
-<!-- ── Phone: clean hairline-divided list, tap a row to expand (<768px) ── -->
-<div class="md:hidden">
+<!-- ── Phone + tablet: clean hairline-divided list, tap a row to expand (<1024px) ── -->
+<div class="lg:hidden">
   {#if rows.length === 0}
     <p
       class="rounded-xl border p-6 text-center text-sm text-[var(--color-muted)]"
@@ -566,7 +571,7 @@
             aria-expanded={expandedNow}
           >
             <CategoryIcon
-              icon={categoryIconName(currentCatName(r))}
+              icon={categoryIconName(categoryFor?.(r) ? currentCatName(r) : displayName(r))}
               color={categoryColor(categoryFor?.(r) ?? null)}
               tint
             />

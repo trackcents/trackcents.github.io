@@ -186,7 +186,7 @@
   );
 </script>
 
-<main class="mx-auto max-w-3xl px-6 py-8">
+<main class="mx-auto max-w-3xl px-4 sm:px-6 py-8">
   <h1 class="mb-1 text-2xl font-semibold">Budget</h1>
   <p class="mb-6 text-sm" style:color="var(--color-muted)">
     Two paychecks fund each budget month. Here's what's left in each.

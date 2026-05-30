@@ -8,6 +8,8 @@
   // exclude. Carry-to-next-month is the next step.
   import { formatMoney, parseMoney } from '$lib/util/money';
   import { centsToDecimal } from '$lib/app/export-csv';
+  import { categoryIconName, type GlyphKey } from '$lib/app/category-visuals';
+  import CategoryIcon from '$components/CategoryIcon.svelte';
   import type { IncomeRow } from '$lib/app/categorization-glue';
   import type { TransactionAnnotation } from '$lib/app/categorization';
   import type { FlowIntent } from '$lib/app/flow-intent';
@@ -43,6 +45,19 @@
   };
   function intentLabel(i: FlowIntent): string {
     return INTENT_LABEL[i] ?? 'Income';
+  }
+  // A meaningful glyph per deposit: a brand/dish match on the description wins
+  // (e.g. a Swiggy refund shows the Swiggy logo), else a flow-intent icon.
+  const INTENT_ICON: Record<string, GlyphKey> = {
+    salary: 'wallet',
+    gift_in: 'gift',
+    interest_earned: 'percent',
+    cash_in: 'banknote'
+  };
+  function iconFor(row: IncomeRow): GlyphKey {
+    const byName = categoryIconName(row.description);
+    if (byName !== 'tag') return byName;
+    return INTENT_ICON[row.flow_intent] ?? 'banknote';
   }
   function prettyDate(iso: string): string {
     // iso = YYYY-MM-DD → "12 May"
@@ -150,11 +165,17 @@
       {#each rows as row (row.key)}
         <div class="mi-row" class:open={expandedKey === row.key}>
           <button type="button" class="mi-row-main" onclick={() => toggle(row)}>
+            <span class="mi-icon">
+              <CategoryIcon icon={iconFor(row)} color="var(--color-success)" tint size={20} />
+            </span>
             <span class="mi-row-info">
               <span class="mi-name">{row.description}</span>
-              <span class="mi-sub"
-                >{prettyDate(row.posted_date)} · {intentLabel(row.flow_intent)}</span
-              >
+              <span class="mi-sub">
+                {prettyDate(row.posted_date)} · {intentLabel(row.flow_intent)}
+                {#if row.income_minor !== row.amount_minor}
+                  <span class="mi-capped-pill">capped</span>
+                {/if}
+              </span>
             </span>
             <span class="mi-amount-wrap">
               <span class="mi-amount">+{formatMoney(row.income_minor)}</span>
@@ -162,6 +183,8 @@
                 <span class="mi-amount-of">of {formatMoney(row.amount_minor)}</span>
               {/if}
             </span>
+            <span class="mi-chevron" class:flip={expandedKey === row.key} aria-hidden="true">⌄</span
+            >
           </button>
 
           {#if expandedKey === row.key}
@@ -340,7 +363,7 @@
   .mi-row-main {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.65rem;
     width: 100%;
     border: 0;
     background: transparent;
@@ -348,6 +371,34 @@
     padding: 0.7rem 0.85rem;
     text-align: left;
     cursor: pointer;
+  }
+  .mi-icon {
+    flex-shrink: 0;
+    display: inline-flex;
+  }
+  .mi-capped-pill {
+    display: inline-block;
+    margin-left: 0.3rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+    color: var(--color-accent);
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    vertical-align: middle;
+  }
+  .mi-chevron {
+    flex-shrink: 0;
+    color: var(--color-muted);
+    font-size: 1.1rem;
+    line-height: 1;
+    transition: transform 0.18s ease;
+    margin-top: -2px;
+  }
+  .mi-chevron.flip {
+    transform: rotate(180deg);
   }
   .mi-row-info {
     flex: 1;

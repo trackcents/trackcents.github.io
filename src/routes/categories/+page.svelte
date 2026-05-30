@@ -88,7 +88,7 @@
   }
 </script>
 
-<main class="mx-auto max-w-3xl px-6 py-8">
+<main class="mx-auto max-w-3xl px-4 sm:px-6 py-8">
   <div class="mb-1 flex flex-wrap items-center justify-between gap-3">
     <h1 class="text-2xl font-semibold">Categories &amp; rules</h1>
     <a href="/categories/review" class="btn btn-ghost">Review uncategorized →</a>
