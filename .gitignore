@@ -11,6 +11,10 @@ service-account*.json
 # Claude Code project files (may contain tokens / sensitive context)
 .claude/
 
+# Throwaway commit-message scratch files (used for multi-line commits on Windows)
+COMMIT_MSG.tmp
+*.commitmsg
+
 # OS / editor
 .DS_Store
 Thumbs.db
