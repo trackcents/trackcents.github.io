@@ -2,15 +2,20 @@
   // Pictogram for a category (Rocket-Money cue). `tint` draws it in a soft
   // rounded square filled with the category colour at low opacity. Icons are
   // rendered as real <path>/<circle> elements (no {@html}).
-  import type { IconKey } from '$lib/app/category-visuals';
+  import type { GlyphKey, IconKey } from '$lib/app/category-visuals';
+  import type { BrandKey } from '$lib/app/brand-logos';
+  import type { FoodKey } from '$lib/app/food-icons';
+  import BrandLogo from '$components/BrandLogo.svelte';
+  import FoodIcon from '$components/FoodIcon.svelte';
 
   let {
     icon,
     color = 'var(--color-muted)',
     size = 18,
     tint = false
-  }: { icon: IconKey; color?: string; size?: number; tint?: boolean } = $props();
+  }: { icon: GlyphKey; color?: string; size?: number; tint?: boolean } = $props();
 
+  // A glyph is a branded logo, a dish illustration, or a generic stroke icon.
   type Shape = { p: string[]; c?: Array<[number, number, number]> };
   const ICONS: Record<IconKey, Shape> = {
     cart: {
@@ -233,6 +238,7 @@
 </script>
 
 {#snippet glyph(stroke: string)}
+  {@const shape = ICONS[icon as IconKey] ?? ICONS.tag}
   <svg
     width={size}
     height={size}
@@ -244,16 +250,20 @@
     stroke-linejoin="round"
     aria-hidden="true"
   >
-    {#each ICONS[icon].p as d (d)}
+    {#each shape.p as d (d)}
       <path {d} />
     {/each}
-    {#each ICONS[icon].c ?? [] as circle (circle)}
+    {#each shape.c ?? [] as circle (circle)}
       <circle cx={circle[0]} cy={circle[1]} r={circle[2]} />
     {/each}
   </svg>
 {/snippet}
 
-{#if tint}
+{#if icon.startsWith('brand:')}
+  <BrandLogo brand={icon.slice(6) as BrandKey} {size} {tint} />
+{:else if icon.startsWith('food:')}
+  <FoodIcon food={icon.slice(5) as FoodKey} {color} {size} {tint} />
+{:else if tint}
   <span
     class="inline-flex items-center justify-center rounded-lg"
     style="width: {size + 16}px; height: {size +

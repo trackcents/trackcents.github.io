@@ -16,7 +16,7 @@
   import { tick } from 'svelte';
   import type { Category } from '$lib/app/categorization';
   import { loadFavoriteCategoryIds, toggleFavoriteCategory } from '$lib/app/favorites';
-  import { categoryColor, categoryIconName, type IconKey } from '$lib/app/category-visuals';
+  import { categoryColor, categoryIconName, type GlyphKey } from '$lib/app/category-visuals';
   import CategoryIcon from '$components/CategoryIcon.svelte';
   import CategoryRenameSheet from '$components/CategoryRenameSheet.svelte';
 
@@ -271,8 +271,8 @@
   /** Resolve a category's display icon: respect explicit override; else
    *  auto-map by name.  Single source of truth used by every row + the
    *  rename preview. */
-  function iconFor(c: Category): IconKey {
-    return c.icon && c.icon.length > 0 ? (c.icon as IconKey) : categoryIconName(c.name);
+  function iconFor(c: Category): GlyphKey {
+    return c.icon && c.icon.length > 0 ? (c.icon as GlyphKey) : categoryIconName(c.name);
   }
   function cancelDelete(): void {
     confirmDeleteId = null;

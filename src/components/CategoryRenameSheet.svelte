@@ -14,7 +14,7 @@
     ICON_OPTIONS,
     categoryColor,
     categoryIconName,
-    type IconKey
+    type GlyphKey
   } from '$lib/app/category-visuals';
   import CategoryIcon from '$components/CategoryIcon.svelte';
   import type { Category } from '$lib/app/categorization';
@@ -40,10 +40,10 @@
   });
 
   /** Live-suggested icon based on the current name (used when no override). */
-  const suggested = $derived<IconKey>(categoryIconName(name));
+  const suggested = $derived<GlyphKey>(categoryIconName(name));
   /** The icon currently used to preview the saved state. */
-  const effective = $derived<IconKey>(
-    (iconOverride !== '' ? (iconOverride as IconKey) : suggested) as IconKey
+  const effective = $derived<GlyphKey>(
+    iconOverride !== '' ? (iconOverride as GlyphKey) : suggested
   );
   const color = $derived(category ? categoryColor(category.id) : 'var(--color-muted)');
 

@@ -40,7 +40,7 @@
     saveLastUsedAccount
   } from '$lib/app/accounts';
   import { accountDisplayName } from '$lib/app/account-nicknames';
-  import { categoryColor, categoryIconName, type IconKey } from '$lib/app/category-visuals';
+  import { categoryColor, categoryIconName, type GlyphKey } from '$lib/app/category-visuals';
   import CategoryIcon from '$components/CategoryIcon.svelte';
   import CategoryPicker from '$components/CategoryPicker.svelte';
   import AccountPicker from '$components/AccountPicker.svelte';
@@ -341,10 +341,10 @@
   /** Parent category's icon — drives the "Category" button.  When the
    *  user has picked a sub, the button still shows the PARENT icon
    *  (the sub identity is on the sub-button beside it). */
-  const selectedCategoryIcon = $derived<IconKey>(
+  const selectedCategoryIcon = $derived<GlyphKey>(
     effectiveParent
       ? effectiveParent.icon && effectiveParent.icon.length > 0
-        ? (effectiveParent.icon as IconKey)
+        ? (effectiveParent.icon as GlyphKey)
         : categoryIconName(effectiveParent.name)
       : 'tag'
   );

@@ -4,6 +4,8 @@
  * colour-coded categories + a pictogram library). Pure + deterministic — the
  * same category id always maps to the same colour, no storage needed.
  */
+import { BRAND_KEYWORDS, type BrandKey } from './brand-logos';
+import { FOOD_KEYWORDS, type FoodKey } from './food-icons';
 
 /** Vibrant, evenly-spaced hues — distinct from the semantic green(in)/red(out). */
 export const CATEGORY_PALETTE = [
@@ -111,9 +113,57 @@ export const ICON_OPTIONS: ReadonlyArray<{ key: IconKey; label: string }> = [
   { key: 'tag', label: 'Other' }
 ];
 
-/** Map a category NAME (keywords) to a pictogram. Description/structure-based,
- *  never amount-based. Falls back to a generic tag. */
-export function categoryIconName(name: string): IconKey {
+/**
+ * A renderable glyph: a generic stroke icon, a branded merchant logo
+ * (`brand:<key>`), or a distinct dish illustration (`food:<key>`).
+ */
+export type GlyphKey = IconKey | `brand:${BrandKey}` | `food:${FoodKey}`;
+
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/** Whole-word (boundary = non-alphanumeric), case-insensitive match. Handles
+ *  multi-word keywords ("prime video") and symbols ("disney+"); avoids matching
+ *  "appam" inside "idiyappam" or "cred" inside "credit". */
+function hasWord(haystackLower: string, kw: string): boolean {
+  const re = new RegExp(`(?:^|[^a-z0-9])${escapeRe(kw)}(?:$|[^a-z0-9])`, 'i');
+  return re.test(haystackLower);
+}
+
+const glyphCache = new Map<string, GlyphKey>();
+
+/**
+ * Resolve a category / merchant NAME to a glyph. Brand logos and dish icons take
+ * precedence over the generic keyword fallback, both matched longest-keyword-
+ * first (most specific wins). Never amount-based. Memoized per name.
+ */
+export function categoryIconName(name: string): GlyphKey {
+  const cached = glyphCache.get(name);
+  if (cached !== undefined) return cached;
+  const n = name.toLowerCase();
+  let result: GlyphKey | null = null;
+  for (const [kw, key] of BRAND_KEYWORDS) {
+    if (hasWord(n, kw)) {
+      result = `brand:${key}`;
+      break;
+    }
+  }
+  if (result === null) {
+    for (const [kw, key] of FOOD_KEYWORDS) {
+      if (hasWord(n, kw)) {
+        result = `food:${key}`;
+        break;
+      }
+    }
+  }
+  if (result === null) result = genericIconName(name);
+  glyphCache.set(name, result);
+  return result;
+}
+
+/** Generic keyword → stroke-icon fallback (used when no brand/dish matches). */
+function genericIconName(name: string): IconKey {
   const n = name.toLowerCase();
   const has = (...words: string[]): boolean => words.some((w) => n.includes(w));
   // Order matters — more specific keywords first so "ice cream gift card"

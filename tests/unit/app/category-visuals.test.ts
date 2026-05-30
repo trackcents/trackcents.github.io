@@ -30,52 +30,66 @@ describe('categoryIconName', () => {
     expect(categoryIconName('Miscellaneous xyz')).toBe('tag');
   });
 
-  test('streaming services map to the generic streaming icon (NOT brand logos)', () => {
-    // We never bundle the official trademarked logos; every OTT service shares
-    // one generic "play" glyph and is told apart by its NAME.
-    for (const name of [
-      'Netflix',
-      'Hotstar',
-      'Disney+',
-      'Hulu',
-      'Zee5',
-      'SonyLIV',
-      'JioCinema',
-      'Amazon Prime Video',
-      'HBO',
-      'Crunchyroll',
-      'Sun NXT'
-    ]) {
-      expect(categoryIconName(name)).toBe('play');
+  test('merchant / service names resolve to their brand logo', () => {
+    const cases: Array<[string, string]> = [
+      ['Netflix', 'brand:netflix'],
+      ['Hotstar', 'brand:hotstar'],
+      ['Disney+', 'brand:disneyplus'],
+      ['Hulu', 'brand:hulu'],
+      ['ZEE5', 'brand:zee5'],
+      ['SonyLIV', 'brand:sonyliv'],
+      ['JioCinema', 'brand:jiocinema'],
+      ['Amazon Prime Video', 'brand:primevideo'], // "prime video" beats bare "amazon"
+      ['Spotify', 'brand:spotify'],
+      ['Uber', 'brand:uber'],
+      ['Ola', 'brand:ola'],
+      ['Rapido', 'brand:rapido'],
+      ['Swiggy', 'brand:swiggy'],
+      ['Zomato', 'brand:zomato'],
+      ['PhonePe', 'brand:phonepe']
+    ];
+    for (const [name, expected] of cases) {
+      expect(categoryIconName(name)).toBe(expected);
     }
   });
 
-  test('music / generic memberships stay on the repeat (loop) icon', () => {
-    expect(categoryIconName('Spotify')).toBe('repeat');
+  test('word-boundary matching avoids brand false positives', () => {
+    // "cred" must not fire inside "credit"; "grab" only as a whole word.
+    expect(categoryIconName('Credit card')).not.toBe('brand:cred');
+    expect(categoryIconName('Groceries')).toBe('cart'); // not "grab"
+  });
+
+  test('generic memberships keep the repeat (loop) icon', () => {
     expect(categoryIconName('Gym Membership')).toBe('repeat');
     expect(categoryIconName('Subscriptions')).toBe('repeat');
   });
 
-  test('South-Indian savoury dishes share the curry-bowl glyph', () => {
-    for (const name of [
-      'Idli',
-      'Dosa',
-      'Upma',
-      'Pongal',
-      'Poori',
-      'Biryani',
-      'Paratha',
-      'Uttapam',
-      'Meals',
-      'Thali'
-    ]) {
-      expect(categoryIconName(name)).toBe('bowl');
+  test('each South-Indian dish gets its OWN distinct icon (not one generic glyph)', () => {
+    const cases: Array<[string, string]> = [
+      ['Idli', 'food:idli'],
+      ['Dosa', 'food:dosa'],
+      ['Masala Dosa', 'food:dosa'],
+      ['Medu Vada', 'food:vada'],
+      ['Poori', 'food:poori'],
+      ['Upma', 'food:upma'],
+      ['Pongal', 'food:pongal'],
+      ['Uttapam', 'food:uttapam'],
+      ['Appam', 'food:appam'],
+      ['Idiyappam', 'food:idiyappam'], // not mis-read as "appam"
+      ['Samosa', 'food:samosa'],
+      ['Sambar', 'food:sambar']
+    ];
+    const seen = new Set<string>();
+    for (const [name, expected] of cases) {
+      expect(categoryIconName(name)).toBe(expected);
+      seen.add(expected);
     }
+    // They are genuinely distinct, not all collapsed to one icon.
+    expect(seen.size).toBe(new Set(cases.map((c) => c[1])).size);
   });
 
-  test('round fried snacks share the donut ring glyph', () => {
-    for (const name of ['Vada', 'Medu Vada', 'Bonda', 'Bajji', 'Pakora']) {
-      expect(categoryIconName(name)).toBe('donut');
-    }
+  test('dishes without a dedicated icon still fall back to a sensible glyph', () => {
+    expect(categoryIconName('Biryani')).toBe('bowl');
+    expect(categoryIconName('Gulab Jamun')).toBe('donut');
   });
 });
