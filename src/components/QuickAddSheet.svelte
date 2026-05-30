@@ -70,7 +70,9 @@
     onSaved: (info: { learned: boolean; rulePattern?: string | null }) => void;
     /** Create a new category (parent persists).  parent_id is set when
      *  the user adds a SUB-category under an existing parent. */
-    onCreateCategory?: ((name: string, parentId?: string) => Promise<string> | string) | undefined;
+    onCreateCategory?:
+      | ((name: string, parentId?: string, icon?: string) => Promise<string> | string)
+      | undefined;
     /** Delete a category (parent persists). */
     onDeleteCategory?: ((id: string) => Promise<void> | void) | undefined;
     /** Rename + re-icon a category (parent persists). */
@@ -383,9 +385,13 @@
     return m;
   });
 
-  async function handleCreateCategory(name: string, parentId?: string): Promise<void> {
+  async function handleCreateCategory(
+    name: string,
+    parentId?: string,
+    icon?: string
+  ): Promise<void> {
     if (onCreateCategory === undefined) return;
-    const newId = await onCreateCategory(name, parentId);
+    const newId = await onCreateCategory(name, parentId, icon);
     // Only select the new category when it was created at the top level
     // (via "+ Create" in the search row).  When the user added a SUB
     // from the picker's edit mode, they're still managing categories —

@@ -12,7 +12,7 @@
  * here only to identify the service a user is tracking (nominative use); no
  * affiliation or endorsement is implied. See NOTICE-brands.md.
  *
- * Stats: 33 official marks, 32 lettermark tiles.
+ * Stats: 34 official marks, 31 lettermark tiles.
  */
 
 /** An official single-path mark drawn in the brand colour. */
@@ -114,7 +114,12 @@ export const BRAND_LOGOS: Record<BrandKey, BrandLogo> = {
     path: 'm5.398 0 8.348 23.602c2.346.059 4.856.398 4.856.398L10.113 0H5.398zm8.489 0v9.172l4.715 13.33V0h-4.715zM5.398 1.5V24c1.873-.225 2.81-.312 4.715-.398V14.83L5.398 1.5z'
   },
   primevideo: { kind: 'letter', title: 'Prime Video', hex: '#1399FF', text: 'PV', fg: '#FFFFFF' },
-  hotstar: { kind: 'letter', title: 'Hotstar', hex: '#1F80E0', text: 'hs', fg: '#FFFFFF' },
+  hotstar: {
+    kind: 'mark',
+    title: 'Hotstar',
+    hex: '#1F80E0',
+    path: 'M12 2L14.35 8.76L21.51 8.91L15.8 13.24L17.88 20.09L12 16L6.12 20.09L8.2 13.24L2.49 8.91L9.65 8.76Z'
+  },
   disneyplus: { kind: 'letter', title: 'Disney+', hex: '#113CCF', text: 'D+', fg: '#FFFFFF' },
   hulu: { kind: 'letter', title: 'Hulu', hex: '#1CE783', text: 'hulu', fg: '#0B0C0F' },
   zee5: { kind: 'letter', title: 'ZEE5', hex: '#6F2DA8', text: 'ZEE5', fg: '#FFFFFF' },
@@ -444,6 +449,7 @@ export const BRAND_KEYWORDS: ReadonlyArray<readonly [string, BrandKey]> = [
   ['gpay', 'googlepay'],
   ['cred', 'cred'],
   ['xbox', 'xbox'],
+  ['aha', 'aha'],
   ['hbo', 'hbomax'],
   ['ola', 'ola'],
   ['mcd', 'mcdonalds'],

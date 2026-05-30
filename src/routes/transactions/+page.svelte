@@ -172,7 +172,11 @@
   /** Create a new category from QuickAddSheet -> CategoryPicker.  Mirrors
    *  the implementation on the Today page.  Returns the new id so the
    *  form can select it immediately. */
-  async function handleCreateCategory(name: string, parentId?: string): Promise<string> {
+  async function handleCreateCategory(
+    name: string,
+    parentId?: string,
+    icon?: string
+  ): Promise<string> {
     const trimmed = name.trim();
     if (trimmed.length === 0) throw new Error('category name is empty');
     const existing = categories.find(
@@ -186,6 +190,7 @@
         : `cat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     const newCat: Category = { id: newId, name: trimmed };
     if (parentId !== undefined) newCat.parent_id = parentId;
+    if (icon !== undefined && icon !== '') newCat.icon = icon;
     categories = [...categories, newCat];
     await saveCategorization({ categories, rules, annotations });
     return newId;

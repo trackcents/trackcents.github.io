@@ -13,12 +13,13 @@
   //   • Delete is guarded behind the explicit toggle, so a normal pick
   //     can never drop a category by mistake.
 
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import type { Category } from '$lib/app/categorization';
   import { loadFavoriteCategoryIds, toggleFavoriteCategory } from '$lib/app/favorites';
   import { categoryColor, categoryIconName, type GlyphKey } from '$lib/app/category-visuals';
   import CategoryIcon from '$components/CategoryIcon.svelte';
   import CategoryRenameSheet from '$components/CategoryRenameSheet.svelte';
+  import IconPickerSheet from '$components/IconPickerSheet.svelte';
 
   interface Props {
     open: boolean;
@@ -29,7 +30,7 @@
     onSelect: (id: string | null) => void;
     /** Create a new category with the given name; caller persists.  When
      *  parentId is provided, the new category is a SUB of that parent. */
-    onCreate?: ((name: string, parentId?: string) => void) | undefined;
+    onCreate?: ((name: string, parentId?: string, icon?: string) => void) | undefined;
     /** Delete a category; caller persists.  Picker only calls this after
      *  the user confirms in the sub-sheet. */
     onDelete?: ((id: string) => void) | undefined;
@@ -78,26 +79,36 @@
    *  Tapping a parent row toggles it — see onRowTap. */
   let expandedIds = $state<Set<string>>(new Set());
 
+  /** Init ONLY on the rising edge of `open` (false→true). The reads inside are
+   *  untracked so that adding/renaming a category (which mutates `categories`)
+   *  does NOT re-run this and wipe the user's transient UI state — that bug
+   *  collapsed the parent and scrolled away the instant a sub was added
+   *  (Hemanth: "as soon as I added a sub and clicked OK it minimized the
+   *  category... user wonders what just happened"). */
+  let wasOpen = false;
   $effect(() => {
-    if (open) {
-      favIds = loadFavoriteCategoryIds();
-      query = '';
-      editMode = false;
-      confirmDeleteId = null;
-      renameId = null;
-      // Re-open with the currently-selected sub's parent expanded, so the user
-      // sees their current pick in context (Apple Recents / Notion keep-context).
-      const sel = categories.find((c) => c.id === selectedId);
-      expandedIds =
-        sel !== undefined && sel.parent_id !== undefined && sel.parent_id !== ''
-          ? new Set([sel.parent_id])
-          : new Set();
-      // Deliberately DO NOT auto-focus the search input — Hemanth's
-      // feedback: "when clicked on categories why to open keyboard? only
-      // when we click on that search or add new then it need to open".
-      // The picker slides up like a dropdown; if the user wants to search
-      // they tap the search field themselves.
+    const isOpen = open;
+    if (isOpen && !wasOpen) {
+      untrack(() => {
+        favIds = loadFavoriteCategoryIds();
+        query = '';
+        editMode = false;
+        confirmDeleteId = null;
+        renameId = null;
+        addSubParentId = null;
+        // Re-open with the currently-selected sub's parent expanded, so the user
+        // sees their current pick in context (Apple Recents / Notion keep-context).
+        const sel = categories.find((c) => c.id === selectedId);
+        expandedIds =
+          sel !== undefined && sel.parent_id !== undefined && sel.parent_id !== ''
+            ? new Set([sel.parent_id])
+            : new Set();
+        // Deliberately DO NOT auto-focus the search input — Hemanth's feedback:
+        // "when clicked on categories why to open keyboard? only when we click
+        // on search or add new then it need to open".
+      });
     }
+    wasOpen = isOpen;
   });
 
   /** Base list — when `restrictToParent` is set, only that parent's
@@ -145,34 +156,47 @@
     if (c.parent_id === undefined || c.parent_id === '') return null;
     return categories.find((p) => p.id === c.parent_id) ?? null;
   }
-  /** Non-favourite top-level categories, each followed by its children
-   *  in source order.  Sub-categories that appear in filtered without
-   *  their parent (orphans from a deleted parent, or matched by search
-   *  while the parent didn't match) come last so they're still tappable. */
-  const others = $derived.by<Category[]>(() => {
+  /** Non-favourite categories laid out as a DEPTH-aware tree (DFS): each parent
+   *  followed by its (expanded) children, recursively — so nesting works at any
+   *  level (Food › Breakfast › Idli). Collapsed parents hide their whole subtree.
+   *  Orphans (parent filtered out / deleted) appear at depth 0 so they stay
+   *  tappable. `kidCount` is the real child count (drives the caret). */
+  interface Row {
+    c: Category;
+    depth: number;
+    kidCount: number;
+  }
+  const others = $derived.by<Row[]>(() => {
     const nonFav = filtered.filter((c) => !favSet.has(c.id));
-    const byId = new Map(nonFav.map((c) => [c.id, c]));
-    const parents = nonFav.filter((c) => !c.parent_id);
-    const seen = new Set<string>();
-    const out: Category[] = [];
-    for (const p of parents) {
-      out.push(p);
-      seen.add(p.id);
-      for (const child of nonFav) {
-        if (child.parent_id === p.id && !seen.has(child.id)) {
-          out.push(child);
-          seen.add(child.id);
-        }
-      }
-    }
-    // Orphans (parent missing from filter set, or parent doesn't exist).
+    const idSet = new Set(nonFav.map((c) => c.id));
+    const childrenByParent = new Map<string, Category[]>();
     for (const c of nonFav) {
-      if (!seen.has(c.id)) {
-        out.push(c);
-        seen.add(c.id);
-      }
+      const pid = c.parent_id ?? '';
+      const arr = childrenByParent.get(pid);
+      if (arr) arr.push(c);
+      else childrenByParent.set(pid, [c]);
     }
-    void byId;
+    const out: Row[] = [];
+    const seen = new Set<string>();
+    const walk = (c: Category, depth: number): void => {
+      if (seen.has(c.id)) return; // cycle / re-entry guard
+      seen.add(c.id);
+      const kidCount = childCountByParent.get(c.id) ?? 0;
+      out.push({ c, depth, kidCount });
+      if (kidCount > 0 && isExpanded(c.id)) {
+        for (const k of childrenByParent.get(c.id) ?? []) walk(k, depth + 1);
+      }
+    };
+    // Roots = top-level, plus orphans whose parent isn't in the visible set.
+    // Children of a COLLAPSED (but present) parent are intentionally left unseen
+    // here — they stay hidden until the parent is expanded. We deliberately do
+    // NOT append "unseen" items, or a collapsed parent's children would leak to
+    // the bottom of the list (caught in live testing: Biryani showed under no
+    // parent while Food was collapsed).
+    for (const c of nonFav) {
+      const pid = c.parent_id ?? '';
+      if (pid === '' || !idSet.has(pid)) walk(c, 0);
+    }
     return out;
   });
 
@@ -207,8 +231,9 @@
    *  also open subs". A leaf (a sub, or a parent with no subs) selects + closes. */
   function onRowTap(c: Category): void {
     if (editMode) return;
-    const isParent = c.parent_id === undefined || c.parent_id === '';
-    const hasKids = isParent && (childCountByParent.get(c.id) ?? 0) > 0;
+    // Any category that HAS children expands (incl. a sub with sub-subs —
+    // Food › Breakfast › Idli). A leaf selects + closes.
+    const hasKids = (childCountByParent.get(c.id) ?? 0) > 0;
     if (hasKids) {
       onSelect(c.id);
       toggleExpand(c.id);
@@ -233,11 +258,14 @@
    *  the sub via onCreate(name, parentId). */
   let addSubParentId = $state<string | null>(null);
   let addSubName = $state('');
+  let addSubIcon = $state(''); // '' = auto-pick from the typed name
+  let addSubIconPickerOpen = $state(false);
   let addSubInputEl = $state<HTMLInputElement | null>(null);
   function startAddSub(parentId: string, ev: MouseEvent): void {
     ev.stopPropagation();
     addSubParentId = parentId;
     addSubName = '';
+    addSubIcon = '';
     // Expand the parent so the new sub appears under it once created.
     expandedIds = new Set(expandedIds).add(parentId);
     tick().then(() => {
@@ -251,14 +279,29 @@
   function cancelAddSub(): void {
     addSubParentId = null;
     addSubName = '';
+    addSubIcon = '';
   }
+  /** Create the sub and KEEP the input open + focused so the user can add
+   *  several in a row (Breakfast, Lunch, Dinner, Snacks) without re-tapping.
+   *  The parent stays expanded so the just-added sub appears immediately under
+   *  it — fixing "after adding, the category minimized / I can't see what
+   *  happened". Tap ✕ / Done to finish. */
   function submitAddSub(): void {
     if (onCreate === undefined || addSubParentId === null) return;
     const name = addSubName.trim();
     if (name.length === 0) return;
-    onCreate(name, addSubParentId);
-    addSubParentId = null;
+    const parentId = addSubParentId;
+    onCreate(name, parentId, addSubIcon === '' ? undefined : addSubIcon);
     addSubName = '';
+    addSubIcon = '';
+    expandedIds = new Set(expandedIds).add(parentId);
+    tick().then(() => {
+      try {
+        addSubInputEl?.focus();
+      } catch {
+        /* noop */
+      }
+    });
   }
   const renameTarget = $derived(
     renameId === null ? null : (categories.find((c) => c.id === renameId) ?? null)
@@ -414,115 +457,134 @@
         </div>
       {/if}
 
-      {#each others as c (c.id)}
-        {@const isChild = c.parent_id !== undefined && c.parent_id !== ''}
-        {@const kidCount = isChild ? 0 : (childCountByParent.get(c.id) ?? 0)}
-        {#if !isChild || isExpanded(c.parent_id ?? '')}
-          <div class="row" class:selected={c.id === selectedId} class:child={isChild}>
-            <button
-              type="button"
-              class="row-main"
-              onclick={() => onRowTap(c)}
-              disabled={editMode}
-              aria-expanded={kidCount > 0 ? isExpanded(c.id) : undefined}
-            >
-              {#if isChild}
-                <span class="indent-rail" aria-hidden="true"></span>
-              {/if}
-              <span class="icon">
-                <CategoryIcon
-                  icon={iconFor(c)}
-                  color={categoryColor(isChild ? (c.parent_id ?? c.id) : c.id)}
-                  tint
-                />
-              </span>
-              <span class="name">{c.name}</span>
-              {#if kidCount > 0}
-                <span class="caret" aria-hidden="true">{isExpanded(c.id) ? '▾' : '▸'}</span>
-              {/if}
-            </button>
-            {#if editMode}
-              {#if !isChild && onCreate !== undefined}
-                <button
-                  type="button"
-                  class="addsub"
-                  aria-label="Add subcategory under {c.name}"
-                  onclick={(ev) => startAddSub(c.id, ev)}
-                >
-                  ＋
-                </button>
-              {/if}
-              {#if onRename !== undefined}
-                <button
-                  type="button"
-                  class="pencil"
-                  aria-label="Rename {c.name}"
-                  onclick={(ev) => startRename(c.id, ev)}
-                >
-                  ✏
-                </button>
-              {/if}
+      {#each others as row (row.c.id)}
+        {@const c = row.c}
+        {@const depth = row.depth}
+        {@const kidCount = row.kidCount}
+        {@const isChild = depth > 0}
+        <div class="row" class:selected={c.id === selectedId} class:child={isChild}>
+          <button
+            type="button"
+            class="row-main"
+            style:padding-left={`${0.55 + depth * 1.05}rem`}
+            onclick={() => onRowTap(c)}
+            disabled={editMode}
+            aria-expanded={kidCount > 0 ? isExpanded(c.id) : undefined}
+          >
+            {#if isChild}
+              <span class="indent-rail" aria-hidden="true"></span>
+            {/if}
+            <span class="icon">
+              <CategoryIcon
+                icon={iconFor(c)}
+                color={categoryColor(isChild ? (c.parent_id ?? c.id) : c.id)}
+                tint
+              />
+            </span>
+            <span class="name">{c.name}</span>
+            {#if kidCount > 0}
+              <span class="caret" aria-hidden="true">{isExpanded(c.id) ? '▾' : '▸'}</span>
+            {/if}
+          </button>
+          {#if editMode}
+            {#if onCreate !== undefined}
               <button
                 type="button"
-                class="trash"
-                aria-label="Delete {c.name}"
-                onclick={(ev) => startDelete(c.id, ev)}
+                class="addsub"
+                aria-label="Add sub-category under {c.name}"
+                onclick={(ev) => startAddSub(c.id, ev)}
               >
-                🗑
-              </button>
-            {:else}
-              {#if !isChild && onCreate !== undefined}
-                <button
-                  type="button"
-                  class="addsub-pill"
-                  aria-label="Add a sub-category under {c.name}"
-                  onclick={(ev) => startAddSub(c.id, ev)}
-                >
-                  ＋ sub
-                </button>
-              {/if}
-              <button
-                type="button"
-                class="star"
-                aria-label="Favorite {c.name}"
-                onclick={(ev) => toggleFav(c.id, ev)}
-              >
-                ☆
+                ＋
               </button>
             {/if}
-          </div>
-          {#if addSubParentId === c.id}
-            <!-- Inline input for a new sub-category under this parent. -->
-            <div class="addsub-row">
-              <span class="indent-rail" aria-hidden="true"></span>
-              <input
-                type="text"
-                bind:value={addSubName}
-                bind:this={addSubInputEl}
-                placeholder="Sub-category name (e.g. Biryani, Ice cream)"
-                class="addsub-input"
-                autocomplete="off"
-                onkeydown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    submitAddSub();
-                  } else if (e.key === 'Escape') {
-                    e.preventDefault();
-                    cancelAddSub();
-                  }
-                }}
-              />
-              <button type="button" class="addsub-cancel" onclick={cancelAddSub}>✕</button>
+            {#if onRename !== undefined}
               <button
                 type="button"
-                class="addsub-save"
-                onclick={submitAddSub}
-                disabled={addSubName.trim().length === 0}
+                class="pencil"
+                aria-label="Rename {c.name}"
+                onclick={(ev) => startRename(c.id, ev)}
               >
-                Add
+                ✏
               </button>
-            </div>
+            {/if}
+            <button
+              type="button"
+              class="trash"
+              aria-label="Delete {c.name}"
+              onclick={(ev) => startDelete(c.id, ev)}
+            >
+              🗑
+            </button>
+          {:else}
+            {#if onCreate !== undefined}
+              <button
+                type="button"
+                class="addsub-pill"
+                aria-label="Add a sub-category under {c.name}"
+                onclick={(ev) => startAddSub(c.id, ev)}
+              >
+                ＋ sub
+              </button>
+            {/if}
+            <button
+              type="button"
+              class="star"
+              aria-label="Favorite {c.name}"
+              onclick={(ev) => toggleFav(c.id, ev)}
+            >
+              ☆
+            </button>
           {/if}
+        </div>
+        {#if addSubParentId === c.id}
+          <!-- Inline input + icon chip for a new sub under this row. Stays open
+               after each Add so several subs can be added in a row. -->
+          <div class="addsub-row" style:padding-left={`${0.4 + (depth + 1) * 1.05}rem`}>
+            <button
+              type="button"
+              class="addsub-iconchip"
+              aria-label="Choose an icon for the new sub-category"
+              onclick={() => (addSubIconPickerOpen = true)}
+            >
+              <CategoryIcon
+                icon={addSubIcon !== '' ? (addSubIcon as GlyphKey) : categoryIconName(addSubName)}
+                color={categoryColor(c.id)}
+                tint
+                size={20}
+              />
+            </button>
+            <input
+              type="text"
+              bind:value={addSubName}
+              bind:this={addSubInputEl}
+              placeholder="Sub-category name…"
+              class="addsub-input"
+              autocomplete="off"
+              onkeydown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  submitAddSub();
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  cancelAddSub();
+                }
+              }}
+            />
+            <button
+              type="button"
+              class="addsub-cancel"
+              onclick={cancelAddSub}
+              aria-label="Done adding sub-categories">✕</button
+            >
+            <button
+              type="button"
+              class="addsub-save"
+              onclick={submitAddSub}
+              disabled={addSubName.trim().length === 0}
+            >
+              Add
+            </button>
+          </div>
         {/if}
       {/each}
 
@@ -555,6 +617,16 @@
     category={renameTarget}
     onSave={handleRenameSave}
     onClose={() => (renameId = null)}
+  />
+
+  <!-- Icon picker for the new sub-category being typed (stacks ABOVE the picker) -->
+  <IconPickerSheet
+    open={addSubIconPickerOpen}
+    value={addSubIcon}
+    name={addSubName}
+    color={addSubParentId !== null ? categoryColor(addSubParentId) : 'var(--color-muted)'}
+    onPick={(g) => (addSubIcon = g)}
+    onClose={() => (addSubIconPickerOpen = false)}
   />
 
   <!-- Confirm-delete sub-sheet (stacks ABOVE the picker sheet) -->
@@ -893,6 +965,20 @@
     background: var(--color-accent-soft);
     border-radius: 12px;
     margin: 0.2rem 0;
+  }
+  .addsub-iconchip {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    background: var(--color-surface);
+    cursor: pointer;
+  }
+  .addsub-iconchip:hover {
+    border-color: var(--color-accent);
   }
   .addsub-input {
     flex: 1;

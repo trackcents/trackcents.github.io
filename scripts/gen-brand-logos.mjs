@@ -51,9 +51,10 @@ const BRANDS = [
     key: 'hotstar',
     title: 'Hotstar',
     keywords: ['hotstar', 'disney+ hotstar'],
-    text: 'hs',
-    color: '#1F80E0',
-    fg: '#FFFFFF'
+    // A plain 5-point star (the brand's visual cue) in Hotstar blue.
+    customPath:
+      'M12 2L14.35 8.76L21.51 8.91L15.8 13.24L17.88 20.09L12 16L6.12 20.09L8.2 13.24L2.49 8.91L9.65 8.76Z',
+    color: '#1F80E0'
   },
   {
     key: 'disneyplus',
@@ -107,7 +108,7 @@ const BRANDS = [
   {
     key: 'aha',
     title: 'aha',
-    keywords: ['aha video'],
+    keywords: ['aha video', 'aha'],
     text: 'aha',
     color: '#FF5A1F',
     fg: '#FFFFFF'
@@ -377,6 +378,12 @@ for (const b of BRANDS) {
   if (b.slug && bySlug[b.slug]) {
     const ic = bySlug[b.slug];
     entry = { kind: 'mark', title: b.title, hex: `#${ic.hex}`, path: ic.path };
+    nMark++;
+  } else if (b.customPath) {
+    // A brand-evocative GENERIC shape (e.g. a plain star) in the brand colour —
+    // used when Simple Icons has no mark but a simple geometric glyph reads far
+    // better than a lettermark. Not a reproduction of the brand's own artwork.
+    entry = { kind: 'mark', title: b.title, hex: b.color, path: b.customPath };
     nMark++;
   } else {
     if (b.slug) missingRequested.push(b.slug); // asked for a real mark but not available

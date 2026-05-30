@@ -34,6 +34,7 @@ describe('categoryIconName', () => {
     const cases: Array<[string, string]> = [
       ['Netflix', 'brand:netflix'],
       ['Hotstar', 'brand:hotstar'],
+      ['Aha', 'brand:aha'],
       ['Disney+', 'brand:disneyplus'],
       ['Hulu', 'brand:hulu'],
       ['ZEE5', 'brand:zee5'],

@@ -258,7 +258,11 @@
   /** Create a new category from the QuickAddSheet -> CategoryPicker flow.
    *  Generates a stable id, persists, returns the new id so the form can
    *  select it immediately. */
-  async function handleCreateCategory(name: string, parentId?: string): Promise<string> {
+  async function handleCreateCategory(
+    name: string,
+    parentId?: string,
+    icon?: string
+  ): Promise<string> {
     const trimmed = name.trim();
     if (trimmed.length === 0) throw new Error('category name is empty');
     // Avoid silent collisions WITHIN THE SAME PARENT — if a category
@@ -277,6 +281,7 @@
         : `cat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     const newCat: import('$lib/app/categorization').Category = { id: newId, name: trimmed };
     if (parentId !== undefined) newCat.parent_id = parentId;
+    if (icon !== undefined && icon !== '') newCat.icon = icon;
     cat = {
       ...cat,
       categories: [...cat.categories, newCat]

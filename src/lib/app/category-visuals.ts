@@ -4,8 +4,8 @@
  * colour-coded categories + a pictogram library). Pure + deterministic — the
  * same category id always maps to the same colour, no storage needed.
  */
-import { BRAND_KEYWORDS, type BrandKey } from './brand-logos';
-import { FOOD_KEYWORDS, type FoodKey } from './food-icons';
+import { BRAND_KEYWORDS, BRAND_LOGOS, type BrandKey } from './brand-logos';
+import { FOOD_KEYWORDS, FOOD_ICONS, type FoodKey } from './food-icons';
 
 /** Vibrant, evenly-spaced hues — distinct from the semantic green(in)/red(out). */
 export const CATEGORY_PALETTE = [
@@ -320,3 +320,28 @@ function genericIconName(name: string): IconKey {
   if (has('transfer', 'move')) return 'repeat';
   return 'tag';
 }
+
+export interface GlyphOption {
+  glyph: GlyphKey;
+  label: string;
+  group: 'General' | 'Food' | 'Brands';
+}
+
+/**
+ * Full catalog for the searchable icon picker: every generic icon + every dish
+ * + every brand logo. Lets the user browse/search ALL glyphs (not just whatever
+ * the name auto-matched). Order: General, then Food, then Brands.
+ */
+export const ALL_GLYPH_OPTIONS: ReadonlyArray<GlyphOption> = [
+  ...ICON_OPTIONS.map((o) => ({ glyph: o.key, label: o.label, group: 'General' as const })),
+  ...Object.entries(FOOD_ICONS).map(([k, v]) => ({
+    glyph: `food:${k}` as GlyphKey,
+    label: v.label,
+    group: 'Food' as const
+  })),
+  ...Object.entries(BRAND_LOGOS).map(([k, v]) => ({
+    glyph: `brand:${k}` as GlyphKey,
+    label: v.title,
+    group: 'Brands' as const
+  }))
+];

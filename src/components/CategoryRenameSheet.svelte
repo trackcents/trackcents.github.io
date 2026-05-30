@@ -10,13 +10,9 @@
   //     first and tracks the name-derived suggestion in real time — pick
   //     it to clear any manual override; pick any other tile to pin it.
 
-  import {
-    ICON_OPTIONS,
-    categoryColor,
-    categoryIconName,
-    type GlyphKey
-  } from '$lib/app/category-visuals';
+  import { categoryColor, categoryIconName, type GlyphKey } from '$lib/app/category-visuals';
   import CategoryIcon from '$components/CategoryIcon.svelte';
+  import IconPickerSheet from '$components/IconPickerSheet.svelte';
   import type { Category } from '$lib/app/categorization';
 
   interface Props {
@@ -57,11 +53,9 @@
   function cancel(): void {
     onClose();
   }
-  function pick(key: string): void {
-    iconOverride = key;
-  }
-  function pickAuto(): void {
-    iconOverride = '';
+  let iconPickerOpen = $state(false);
+  function chooseIcon(glyph: string): void {
+    iconOverride = glyph;
   }
 </script>
 
@@ -97,33 +91,16 @@
       />
     </label>
 
-    <!-- Icon grid: Auto first, then every IconKey -->
+    <!-- Icon: tap to open the searchable picker (all icons + dishes + brands) -->
     <div class="crs-block">
       <span class="crs-lbl">Icon</span>
-      <div class="crs-grid">
-        <button
-          type="button"
-          class="crs-tile auto"
-          class:selected={iconOverride === ''}
-          onclick={pickAuto}
-          aria-label="Auto-pick from name"
-        >
-          <CategoryIcon icon={suggested} {color} tint size={22} />
-          <span class="crs-tile-label">Auto</span>
-        </button>
-        {#each ICON_OPTIONS as opt (opt.key)}
-          <button
-            type="button"
-            class="crs-tile"
-            class:selected={iconOverride === opt.key}
-            onclick={() => pick(opt.key)}
-            aria-label={opt.label}
-          >
-            <CategoryIcon icon={opt.key} {color} tint size={22} />
-            <span class="crs-tile-label">{opt.label}</span>
-          </button>
-        {/each}
-      </div>
+      <button type="button" class="crs-icon-choose" onclick={() => (iconPickerOpen = true)}>
+        <CategoryIcon icon={effective} {color} tint size={24} />
+        <span class="crs-icon-choose-text">
+          {iconOverride === '' ? 'Auto — picked from the name' : 'Custom icon'}
+        </span>
+        <span class="crs-icon-choose-cta">Change ›</span>
+      </button>
     </div>
 
     <div class="crs-actions">
@@ -133,6 +110,15 @@
       </button>
     </div>
   </div>
+
+  <IconPickerSheet
+    open={iconPickerOpen}
+    value={iconOverride}
+    {name}
+    {color}
+    onPick={chooseIcon}
+    onClose={() => (iconPickerOpen = false)}
+  />
 {/if}
 
 <style>
@@ -251,42 +237,30 @@
     outline: none;
     border-color: var(--color-accent);
   }
-  .crs-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
-    gap: 0.4rem;
-  }
-  .crs-tile {
+  .crs-icon-choose {
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 0.2rem;
-    border: 1px solid var(--color-border);
+    gap: 0.75rem;
+    width: 100%;
+    padding: 0.65rem 0.9rem;
     background: var(--color-bg);
+    border: 1px solid var(--color-border);
     border-radius: 12px;
-    padding: 0.55rem 0.3rem;
     cursor: pointer;
-    transition:
-      background-color 0.14s ease,
-      border-color 0.14s ease;
+    text-align: left;
   }
-  .crs-tile:hover {
+  .crs-icon-choose:hover {
     background: var(--color-elevated);
-  }
-  .crs-tile.selected {
     border-color: var(--color-accent);
-    background: var(--color-accent-soft);
   }
-  .crs-tile.auto {
-    border-style: dashed;
+  .crs-icon-choose-text {
+    flex: 1;
+    font-size: 0.9rem;
+    color: var(--color-text);
   }
-  .crs-tile-label {
-    font-size: 0.66rem;
-    font-weight: 500;
-    color: var(--color-muted);
-    line-height: 1.1;
-  }
-  .crs-tile.selected .crs-tile-label {
+  .crs-icon-choose-cta {
+    font-size: 0.85rem;
+    font-weight: 600;
     color: var(--color-accent);
   }
   .crs-actions {
