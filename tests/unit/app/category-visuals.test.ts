@@ -29,4 +29,53 @@ describe('categoryIconName', () => {
   test('falls back to a generic tag for unknown names', () => {
     expect(categoryIconName('Miscellaneous xyz')).toBe('tag');
   });
+
+  test('streaming services map to the generic streaming icon (NOT brand logos)', () => {
+    // We never bundle the official trademarked logos; every OTT service shares
+    // one generic "play" glyph and is told apart by its NAME.
+    for (const name of [
+      'Netflix',
+      'Hotstar',
+      'Disney+',
+      'Hulu',
+      'Zee5',
+      'SonyLIV',
+      'JioCinema',
+      'Amazon Prime Video',
+      'HBO',
+      'Crunchyroll',
+      'Sun NXT'
+    ]) {
+      expect(categoryIconName(name)).toBe('play');
+    }
+  });
+
+  test('music / generic memberships stay on the repeat (loop) icon', () => {
+    expect(categoryIconName('Spotify')).toBe('repeat');
+    expect(categoryIconName('Gym Membership')).toBe('repeat');
+    expect(categoryIconName('Subscriptions')).toBe('repeat');
+  });
+
+  test('South-Indian savoury dishes share the curry-bowl glyph', () => {
+    for (const name of [
+      'Idli',
+      'Dosa',
+      'Upma',
+      'Pongal',
+      'Poori',
+      'Biryani',
+      'Paratha',
+      'Uttapam',
+      'Meals',
+      'Thali'
+    ]) {
+      expect(categoryIconName(name)).toBe('bowl');
+    }
+  });
+
+  test('round fried snacks share the donut ring glyph', () => {
+    for (const name of ['Vada', 'Medu Vada', 'Bonda', 'Bajji', 'Pakora']) {
+      expect(categoryIconName(name)).toBe('donut');
+    }
+  });
 });

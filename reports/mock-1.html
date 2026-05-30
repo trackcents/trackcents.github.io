@@ -1,0 +1,248 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+  body{margin:0;font-family:-apple-system,'Segoe UI',Roboto,sans-serif;background:#cfc8bd;padding:30px;display:flex;gap:46px;align-items:flex-start;}
+  .col{display:flex;flex-direction:column;align-items:center;gap:12px;}
+  .cap{font-size:15px;font-weight:800;color:#332e27;text-align:center;}
+  .cap small{display:block;font-weight:500;color:#5f574c;font-size:12px;margin-top:3px;}
+  .phone{width:320px;height:568px;background:#f7f2ea;border-radius:32px;overflow:hidden;position:relative;box-shadow:0 16px 40px rgba(0,0,0,.3);border:8px solid #15130f;}
+  .typing-area{position:absolute;left:0;right:0;top:0;height:310px;overflow:hidden;}
+  .picker-area{position:absolute;inset:0;overflow:hidden;}
+  .kbd{position:absolute;left:0;right:0;bottom:0;height:258px;background:linear-gradient(#dbd6cd,#cdc7bd);border-top:1px solid #b7b0a4;padding:22px 6px 10px;}
+  .kbd-lbl{position:absolute;top:6px;left:0;right:0;text-align:center;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#857e72;}
+  .keys{height:100%;display:flex;flex-direction:column;gap:8px;}
+  .krow{flex:1;display:flex;gap:5px;justify-content:center;}
+  .key{flex:1;background:#fff;border-radius:6px;box-shadow:0 1px 0 #b3aca0;max-width:30px;}
+  .key.wide{max-width:none;flex:5;}
+  .title{font-size:20px;font-weight:800;color:#2b2620;margin:0 0 16px;}
+</style></head><body>
+  <div class="col">
+    <div class="cap">① While you type<small>top boxes update as you type</small></div>
+    <div class="phone"><div class="typing-area"><div class="aca-wrap">
+  <style>
+    .aca-wrap{
+      --bg:#f7f2ea;--surface:#ffffff;--text:#2c2722;--muted:#9a8d7d;
+      --accent:#c2703d;--accent-soft:#f6e7d8;--border:#ece4d8;
+      box-sizing:border-box;width:100%;height:100%;padding:10px 12px 8px;
+      background:#f7f2ea;color:#2c2722;
+      font-family:-apple-system,'Segoe UI',Roboto,sans-serif;
+      display:flex;flex-direction:column;gap:8px;overflow:hidden;
+    }
+    .aca-wrap *{box-sizing:border-box;}
+    .aca-ml{font-size:.6rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#9a8d7d;}
+    /* type toggle */
+    .aca-toggle{display:flex;gap:3px;background:#fff;border:1px solid #ece4d8;border-radius:11px;padding:3px;}
+    .aca-seg{flex:1;border:0;border-radius:8px;padding:6px 0;font:inherit;font-size:.78rem;font-weight:700;color:#9a8d7d;background:transparent;cursor:pointer;}
+    .aca-seg.on{background:linear-gradient(135deg,#c2703d,#d98a4f);color:#fff;box-shadow:0 2px 6px rgba(194,112,61,.32);}
+    /* auto summary group */
+    .aca-summary{background:#fff;border:1px solid #ece4d8;border-radius:16px;padding:8px 10px 9px;box-shadow:0 6px 18px rgba(70,50,30,.06);display:flex;flex-direction:column;gap:7px;}
+    .aca-sumhead{display:flex;align-items:center;justify-content:space-between;}
+    .aca-sumhead .t{font-size:.6rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#9a8d7d;}
+    .aca-live{display:inline-flex;align-items:center;gap:4px;font-size:.58rem;font-weight:700;color:#c2703d;letter-spacing:.03em;text-transform:uppercase;}
+    .aca-live .pulse{width:6px;height:6px;border-radius:50%;background:#c2703d;box-shadow:0 0 0 0 rgba(194,112,61,.5);animation:acaPulse 1.4s ease-out infinite;}
+    @keyframes acaPulse{0%{box-shadow:0 0 0 0 rgba(194,112,61,.45);}70%{box-shadow:0 0 0 5px rgba(194,112,61,0);}100%{box-shadow:0 0 0 0 rgba(194,112,61,0);}}
+    /* amount hero */
+    .aca-amount{display:flex;align-items:baseline;gap:6px;padding:2px 0 4px;border-bottom:1px solid #ece4d8;}
+    .aca-amount .cur{font-size:1.25rem;font-weight:700;color:#9a8d7d;}
+    .aca-amount .val{font-size:2.05rem;font-weight:800;letter-spacing:-.02em;line-height:1;color:#2c2722;}
+    .aca-badge{margin-left:auto;align-self:center;}
+    .badge{display:inline-flex;align-items:center;gap:3px;background:#f6e7d8;color:#c2703d;border-radius:999px;padding:2px 7px;font-size:.55rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;}
+    .badge .spk{font-size:.6rem;}
+    /* category full-width row */
+    .aca-catrow{display:flex;align-items:center;gap:8px;}
+    .aca-cicon{width:26px;height:26px;border-radius:8px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:.95rem;background:#f6e7d8;}
+    .aca-ctext{min-width:0;flex:1;display:flex;flex-direction:column;gap:1px;}
+    .aca-cval{font-size:.86rem;font-weight:700;color:#2c2722;line-height:1.15;white-space:normal;word-break:break-word;}
+    .aca-cval .par{color:#9a8d7d;font-weight:600;}
+    /* triple row: account / date / time */
+    .aca-triple{display:grid;grid-template-columns:1fr 1fr;gap:7px;}
+    .aca-cell{background:#fbf7f1;border:1px solid #ece4d8;border-radius:11px;padding:6px 8px;display:flex;flex-direction:column;gap:2px;min-width:0;}
+    .aca-cell.full{grid-column:1 / -1;}
+    .aca-cellhead{display:flex;align-items:center;justify-content:space-between;gap:6px;}
+    .aca-cv{font-size:.82rem;font-weight:700;color:#2c2722;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center;gap:5px;}
+    .aca-cv .gly{font-size:.85rem;}
+    .badge.mini{padding:1px 5px;font-size:.5rem;}
+    /* description dock */
+    .aca-desc{margin-top:1px;}
+    .aca-descbox{display:flex;align-items:center;gap:8px;background:#fff;border:1.5px solid #c2703d;border-radius:13px;padding:9px 11px;box-shadow:0 3px 10px rgba(194,112,61,.14);}
+    .aca-descbox .typed{flex:1;min-width:0;font-size:.95rem;font-weight:600;color:#2c2722;white-space:nowrap;overflow:hidden;}
+    .aca-caret{display:inline-block;width:2px;height:1.05em;background:#c2703d;vertical-align:-2px;margin-left:1px;animation:acaBlink 1s steps(1) infinite;}
+    @keyframes acaBlink{50%{opacity:0;}}
+    .aca-send{flex:0 0 auto;width:34px;height:34px;border-radius:50%;border:0;background:linear-gradient(135deg,#c2703d,#d98a4f);color:#fff;font-size:1rem;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 3px 8px rgba(194,112,61,.4);}
+    .aca-desclbl{display:flex;align-items:center;justify-content:space-between;margin:0 2px 3px;}
+    .aca-hint{font-size:.58rem;color:#9a8d7d;font-weight:600;}
+  </style>
+
+  <!-- Expense / Income / Transfer -->
+  <div class="aca-toggle" role="tablist" aria-label="Type">
+    <button class="aca-seg on" type="button">Expense</button>
+    <button class="aca-seg" type="button">Income</button>
+    <button class="aca-seg" type="button">Transfer</button>
+  </div>
+
+  <!-- AUTO summary group — five live read-only cards, out of keyboard reach -->
+  <div class="aca-summary">
+    <div class="aca-sumhead">
+      <span class="t">Auto-filled from what you type</span>
+      <span class="aca-live"><span class="pulse"></span>Live</span>
+    </div>
+
+    <!-- 1. Amount -->
+    <div class="aca-amount">
+      <span class="cur">₹</span>
+      <span class="val">450</span>
+      <span class="aca-badge"><span class="badge"><span class="spk">✦</span>Auto</span></span>
+    </div>
+
+    <!-- 2. Category > Sub (full, never truncated) -->
+    <div class="aca-catrow">
+      <span class="aca-cicon">🍛</span>
+      <span class="aca-ctext">
+        <span class="aca-ml">Category</span>
+        <span class="aca-cval"><span class="par">Food&nbsp;›&nbsp;</span>Hyderabadi Dum Biryani</span>
+      </span>
+      <span class="badge"><span class="spk">✦</span>Auto</span>
+    </div>
+
+    <!-- 3,4,5. Account (full row, now auto) + Date + Time -->
+    <div class="aca-triple">
+      <div class="aca-cell full">
+        <div class="aca-cellhead">
+          <span class="aca-ml">Account</span>
+          <span class="badge mini"><span class="spk">✦</span>Auto</span>
+        </div>
+        <span class="aca-cv"><span class="gly">🏦</span>HDFC</span>
+      </div>
+      <div class="aca-cell">
+        <div class="aca-cellhead">
+          <span class="aca-ml">Date</span>
+          <span class="badge mini">Auto</span>
+        </div>
+        <span class="aca-cv">Today, 29 May</span>
+      </div>
+      <div class="aca-cell">
+        <div class="aca-cellhead">
+          <span class="aca-ml">Time</span>
+          <span class="badge mini">Auto</span>
+        </div>
+        <span class="aca-cv">7:40 PM</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Description docked just above the keyboard -->
+  <div class="aca-desc">
+    <div class="aca-desclbl">
+      <span class="aca-ml">Description</span>
+      <span class="aca-hint">type naturally — we fill the rest</span>
+    </div>
+    <div class="aca-descbox">
+      <span class="typed">dum biryani 450 hdfc<span class="aca-caret"></span></span>
+      <button class="aca-send" type="button" aria-label="Save">➤</button>
+    </div>
+  </div>
+</div></div><div class="kbd"><span class="kbd-lbl">— keyboard —</span><div class="keys">
+    <div class="krow"><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span></div><div class="krow"><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span></div><div class="krow"><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span></div>
+    <div class="krow"><span class="key" style="flex:1.6"></span><span class="key wide"></span><span class="key" style="flex:1.6"></span></div>
+  </div></div></div>
+  </div>
+  <div class="col">
+    <div class="cap">② Tap “Food” → its subs open<small>no keyboard while picking</small></div>
+    <div class="phone"><div class="picker-area"><div class="acp-wrap">
+  <style>
+    .acp-wrap{
+      --bg:#f7f2ea;--surface:#ffffff;--text:#2c2722;--muted:#9a8d7d;
+      --accent:#c2703d;--accent-soft:#f6e7d8;--border:#ece4d8;
+      box-sizing:border-box;width:100%;height:100%;padding:12px 12px 10px;
+      background:#f7f2ea;color:#2c2722;
+      font-family:-apple-system,'Segoe UI',Roboto,sans-serif;
+      display:flex;flex-direction:column;gap:10px;overflow:hidden;
+    }
+    .acp-wrap *{box-sizing:border-box;}
+    .acp-grab{width:38px;height:4px;border-radius:999px;background:#ece4d8;margin:0 auto 2px;}
+    .acp-title{font-size:1rem;font-weight:800;color:#2c2722;}
+    .acp-search{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #ece4d8;border-radius:12px;padding:9px 11px;}
+    .acp-search .ic{color:#9a8d7d;font-size:.9rem;}
+    .acp-search .ph{color:#9a8d7d;font-size:.88rem;font-weight:500;}
+    .acp-list{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:4px;margin:-2px -2px 0;padding:2px;}
+    .acp-ml{font-size:.6rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#9a8d7d;margin:4px 2px 1px;}
+    .acp-row{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #ece4d8;border-radius:12px;padding:9px 11px;cursor:pointer;}
+    .acp-row.sub{margin-left:18px;border-style:dashed;background:#fffdfa;}
+    .acp-row.open{border-color:#c2703d;box-shadow:0 3px 10px rgba(194,112,61,.14);}
+    .acp-ic{width:28px;height:28px;border-radius:9px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;font-size:1rem;background:#f6e7d8;}
+    .acp-nm{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;}
+    .acp-nm .main{font-size:.9rem;font-weight:700;color:#2c2722;white-space:normal;word-break:break-word;line-height:1.15;}
+    .acp-nm .sub2{font-size:.66rem;font-weight:600;color:#9a8d7d;}
+    .acp-nm .path{font-size:.62rem;font-weight:600;color:#9a8d7d;}
+    .acp-star{flex:0 0 auto;font-size:1rem;color:#c2703d;}
+    .acp-star.off{color:#d8cdbd;}
+    .acp-caret{flex:0 0 auto;color:#9a8d7d;font-size:.85rem;transition:transform .15s;}
+    .acp-caret.down{transform:rotate(90deg);}
+    .acp-addsub{display:flex;align-items:center;gap:7px;margin-left:18px;border:1px dashed #d8cdbd;border-radius:12px;padding:8px 11px;background:transparent;color:#c2703d;font:inherit;font-size:.8rem;font-weight:700;cursor:pointer;}
+    .acp-addsub .plus{font-size:.95rem;}
+  </style>
+
+  <div class="acp-grab"></div>
+  <div class="acp-title">Choose category</div>
+
+  <div class="acp-search">
+    <span class="ic">🔍</span>
+    <span class="ph">Search or add a category…</span>
+  </div>
+
+  <div class="acp-list">
+    <!-- Favourites -->
+    <div class="acp-ml">★ Favourites</div>
+    <div class="acp-row">
+      <span class="acp-ic">🍛</span>
+      <span class="acp-nm">
+        <span class="main">Hyderabadi Dum Biryani</span>
+        <span class="path">Food › Biryani</span>
+      </span>
+      <span class="acp-star">★</span>
+    </div>
+
+    <!-- All categories -->
+    <div class="acp-ml">All categories</div>
+
+    <!-- Food — open -->
+    <div class="acp-row open">
+      <span class="acp-ic">🍽️</span>
+      <span class="acp-nm"><span class="main">Food</span></span>
+      <span class="acp-star off">☆</span>
+      <span class="acp-caret down">›</span>
+    </div>
+    <div class="acp-row sub">
+      <span class="acp-ic">🍛</span>
+      <span class="acp-nm"><span class="main">Biryani</span></span>
+      <span class="acp-star">★</span>
+    </div>
+    <div class="acp-row sub">
+      <span class="acp-ic">🍨</span>
+      <span class="acp-nm"><span class="main">Ice cream</span></span>
+      <span class="acp-star off">☆</span>
+    </div>
+    <div class="acp-row sub">
+      <span class="acp-ic">🛒</span>
+      <span class="acp-nm"><span class="main">Groceries</span></span>
+      <span class="acp-star off">☆</span>
+    </div>
+    <button class="acp-addsub" type="button"><span class="plus">＋</span>Add sub-category</button>
+
+    <!-- Rent — collapsed -->
+    <div class="acp-row">
+      <span class="acp-ic">🏠</span>
+      <span class="acp-nm"><span class="main">Rent</span></span>
+      <span class="acp-star off">☆</span>
+      <span class="acp-caret">›</span>
+    </div>
+
+    <!-- Transport — collapsed -->
+    <div class="acp-row">
+      <span class="acp-ic">🚕</span>
+      <span class="acp-nm"><span class="main">Transport</span></span>
+      <span class="acp-star off">☆</span>
+      <span class="acp-caret">›</span>
+    </div>
+  </div>
+</div></div></div>
+  </div>
+</body></html>

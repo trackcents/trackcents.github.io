@@ -65,6 +65,7 @@ export type IconKey =
   | 'bus'
   | 'train'
   | 'medical'
+  | 'play'
   | 'tag';
 
 /** Every IconKey + a friendly label.  Used by the IconPicker (Batch B —
@@ -101,6 +102,7 @@ export const ICON_OPTIONS: ReadonlyArray<{ key: IconKey; label: string }> = [
   { key: 'wallet', label: 'Salary' },
   { key: 'card', label: 'Card' },
   { key: 'repeat', label: 'Subscription' },
+  { key: 'play', label: 'Streaming' },
   { key: 'chart-up', label: 'Investment' },
   { key: 'undo', label: 'Refund' },
   { key: 'percent', label: 'Fees' },
@@ -119,7 +121,38 @@ export function categoryIconName(name: string): IconKey {
   if (has('grocer', 'supermarket', 'whole food')) return 'cart';
   if (has('rent', 'mortgage', 'housing')) return 'home';
   if (has('gas', 'fuel', 'shell', 'chevron')) return 'fuel';
-  if (has('subscription', 'netflix', 'spotify', 'membership')) return 'repeat';
+  // Video-streaming services → a GENERIC streaming icon. We deliberately do NOT
+  // bundle the brands' official logos (Netflix / Hotstar / Zee5 / Prime Video …
+  // are trademarked; shipping them in a public AGPL app is an IP risk). The
+  // service NAME the user types is the label; the icon just signals "streaming".
+  if (
+    has(
+      'netflix',
+      'hotstar',
+      'disney',
+      'hulu',
+      'zee5',
+      'sonyliv',
+      'sony liv',
+      'jiocinema',
+      'jio cinema',
+      'prime video',
+      'hbo',
+      'max ',
+      'peacock',
+      'crunchyroll',
+      'voot',
+      'sun nxt',
+      'sunnxt',
+      'apple tv',
+      'paramount',
+      'streaming',
+      'ott'
+    )
+  )
+    return 'play';
+  // Music / generic recurring memberships keep the repeat (loop) icon.
+  if (has('subscription', 'spotify', 'gaana', 'saavn', 'wynk', 'membership')) return 'repeat';
   // Specific food sub-categories first — more specific than the
   // generic "food/utensils" fallback that catches "Food" itself.
   if (has('pizza')) return 'pizza';
@@ -128,9 +161,30 @@ export function categoryIconName(name: string): IconKey {
     return 'cup';
   if (has('ice cream', 'icecream', 'gelato', 'kulfi', 'sundae')) return 'icecream';
   if (has('cake', 'pastry', 'muffin', 'cupcake', 'tart')) return 'cake';
-  if (has('donut', 'doughnut', 'vada')) return 'donut';
+  // Round / ring-shaped fried snacks share the donut ring glyph.
+  if (
+    has(
+      'donut',
+      'doughnut',
+      'vada',
+      'vadai',
+      'bonda',
+      'bajji',
+      'bhaji',
+      'pakora',
+      'pakoda',
+      'medu',
+      'punugulu',
+      'gulab jamun',
+      'jamun'
+    )
+  )
+    return 'donut';
   if (has('sushi', 'sashimi', 'maki')) return 'sushi';
   if (has('salad', 'wrap', 'sandwich')) return 'salad';
+  // Savoury cooked dishes (South-Indian breakfast/meals + common bowls) all
+  // share the curry-bowl glyph — distinct per-dish art for idli vs dosa vs upma
+  // isn't feasible with a stroke icon set, so we group by "plated savoury meal".
   if (
     has(
       'biryani',
@@ -144,8 +198,48 @@ export function categoryIconName(name: string): IconKey {
       'pasta',
       'noodle',
       'idli',
+      'idly',
       'dosa',
-      'rice'
+      'dosai',
+      'rice',
+      'puri',
+      'poori',
+      'upma',
+      'uppma',
+      'pongal',
+      'paratha',
+      'parotta',
+      'porotta',
+      'poha',
+      'uttapam',
+      'uthappam',
+      'appam',
+      'idiyappam',
+      'khichdi',
+      'kichdi',
+      'meals',
+      'thali',
+      'sevai',
+      'semiya',
+      'rava',
+      'chapati',
+      'chapathi',
+      'roti',
+      'naan',
+      'korma',
+      'kurma',
+      'kootu',
+      'poriyal',
+      'samosa',
+      'kachori',
+      'chaat',
+      'paniyaram',
+      'pulao',
+      'pulav',
+      'khakhra',
+      'dhokla',
+      'pesarattu',
+      'chutney'
     )
   )
     return 'bowl';

@@ -1,0 +1,271 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+  body{margin:0;font-family:-apple-system,'Segoe UI',Roboto,sans-serif;background:#cfc8bd;padding:30px;display:flex;gap:46px;align-items:flex-start;}
+  .col{display:flex;flex-direction:column;align-items:center;gap:12px;}
+  .cap{font-size:15px;font-weight:800;color:#332e27;text-align:center;}
+  .cap small{display:block;font-weight:500;color:#5f574c;font-size:12px;margin-top:3px;}
+  .phone{width:320px;height:568px;background:#f7f2ea;border-radius:32px;overflow:hidden;position:relative;box-shadow:0 16px 40px rgba(0,0,0,.3);border:8px solid #15130f;}
+  .typing-area{position:absolute;left:0;right:0;top:0;height:310px;overflow:hidden;}
+  .picker-area{position:absolute;inset:0;overflow:hidden;}
+  .kbd{position:absolute;left:0;right:0;bottom:0;height:258px;background:linear-gradient(#dbd6cd,#cdc7bd);border-top:1px solid #b7b0a4;padding:22px 6px 10px;}
+  .kbd-lbl{position:absolute;top:6px;left:0;right:0;text-align:center;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#857e72;}
+  .keys{height:100%;display:flex;flex-direction:column;gap:8px;}
+  .krow{flex:1;display:flex;gap:5px;justify-content:center;}
+  .key{flex:1;background:#fff;border-radius:6px;box-shadow:0 1px 0 #b3aca0;max-width:30px;}
+  .key.wide{max-width:none;flex:5;}
+  .title{font-size:20px;font-weight:800;color:#2b2620;margin:0 0 16px;}
+</style></head><body>
+  <div class="col">
+    <div class="cap">① While you type<small>full-screen, big and roomy</small></div>
+    <div class="phone"><div class="typing-area"><![CDATA[
+<style>
+  .tc-c { --bg:#f7f2ea; --surface:#ffffff; --text:#2c2722; --muted:#9a8d7d; --accent:#c2703d; --accent-soft:#f6e7d8; --border:#ece4d8; --grad:linear-gradient(135deg,#c2703d,#d98a4f);
+    box-sizing:border-box; width:320px; height:300px; background:var(--bg); color:var(--text);
+    font-family:-apple-system,'Segoe UI',Roboto,sans-serif; display:flex; flex-direction:column;
+    padding:8px 12px 0; overflow:hidden; position:relative; }
+  .tc-c *{ box-sizing:border-box; margin:0; }
+  .tc-c .micro{ font-size:.58rem; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--muted); }
+
+  /* live auto badge — shared by every auto field */
+  .tc-c .badge{ display:inline-flex; align-items:center; gap:3px; font-size:.5rem; font-weight:800;
+    letter-spacing:.06em; text-transform:uppercase; color:#fff; background-image:var(--grad);
+    padding:2px 6px; border-radius:6px; flex-shrink:0; box-shadow:0 1px 2px rgba(194,112,61,.3); }
+  .tc-c .badge .dot{ width:5px; height:5px; border-radius:999px; background:#fff;
+    animation:tc-pulse 1.2s ease-in-out infinite; }
+  @keyframes tc-pulse{ 0%,100%{opacity:.4;transform:scale(.7)} 50%{opacity:1;transform:scale(1.2)} }
+
+  /* row 1 — toggle */
+  .tc-c .toggle{ display:flex; gap:2px; border:1px solid var(--border); border-radius:11px;
+    padding:2px; background:var(--surface); margin-bottom:6px; }
+  .tc-c .toggle button{ flex:1; border:0; border-radius:9px; padding:5px 0; font-size:.74rem;
+    font-weight:700; color:var(--muted); background:transparent; font-family:inherit; }
+  .tc-c .toggle button.on{ background-image:var(--grad); color:#fff; box-shadow:0 1px 3px rgba(194,112,61,.32); }
+
+  /* row 2 — giant amount */
+  .tc-c .amt{ background:var(--surface); border:1px solid var(--border); border-radius:14px;
+    padding:6px 12px; display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+  .tc-c .amt-l{ display:flex; flex-direction:column; gap:1px; }
+  .tc-c .amt-val{ font-size:1.9rem; font-weight:800; letter-spacing:-.02em; line-height:1; }
+  .tc-c .amt-val .cur{ color:var(--muted); font-weight:700; font-size:1.15rem; margin-right:2px; }
+  .tc-c .amt .badge{ align-self:center; }
+
+  /* row 3 — category > sub (two-line chip, full, never truncated) */
+  .tc-c .cat{ background:var(--surface); border:1.5px solid var(--accent); border-radius:14px;
+    padding:7px 10px; display:flex; align-items:center; gap:9px; margin-bottom:6px;
+    box-shadow:0 2px 8px rgba(194,112,61,.14); }
+  .tc-c .cat-ic{ width:30px; height:30px; flex-shrink:0; border-radius:9px; background:var(--accent-soft);
+    display:flex; align-items:center; justify-content:center; font-size:1rem; }
+  .tc-c .cat-txt{ flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; }
+  .tc-c .crumb{ font-size:.6rem; font-weight:700; color:var(--muted); letter-spacing:.02em; }
+  .tc-c .crumb .chev{ color:var(--accent); }
+  .tc-c .cat-sub{ font-size:.9rem; font-weight:700; color:var(--text); line-height:1.12;
+    white-space:normal; word-break:break-word; }
+  .tc-c .cat .badge{ align-self:flex-start; }
+
+  /* row 4 — account + date + time, all badged */
+  .tc-c .auto-row{ display:flex; gap:6px; margin-bottom:7px; }
+  .tc-c .ac{ flex:1; min-width:0; background:var(--surface); border:1px solid var(--border);
+    border-radius:11px; padding:6px 8px; display:flex; flex-direction:column; gap:2px; }
+  .tc-c .ac.lit{ border-color:var(--accent); box-shadow:0 1px 6px rgba(194,112,61,.12); }
+  .tc-c .ac-top{ display:flex; align-items:center; justify-content:space-between; gap:4px; }
+  .tc-c .ac-val{ font-size:.8rem; font-weight:700; color:var(--text); line-height:1.1;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tc-c .ac-val .g{ font-size:.74rem; margin-right:3px; }
+  .tc-c .badge.mini{ padding:1px 4px; font-size:.44rem; }
+
+  /* row 5 — description dock (where typing happens) */
+  .tc-c .dock{ margin-top:auto; background:var(--surface); border-top:1px solid var(--border);
+    margin-inline:-12px; padding:7px 12px 9px; box-shadow:0 -4px 14px rgba(44,39,34,.06); }
+  .tc-c .dock .micro{ display:block; margin-bottom:4px; }
+  .tc-c .field{ display:flex; align-items:center; gap:8px; border:1.5px solid var(--accent);
+    background:var(--bg); border-radius:12px; padding:8px 10px; }
+  .tc-c .typed{ flex:1; font-size:.95rem; font-weight:600; color:var(--text);
+    white-space:nowrap; overflow:hidden; }
+  .tc-c .caret{ display:inline-block; width:2px; height:1.05rem; background:var(--accent);
+    vertical-align:middle; animation:tc-caret 1s step-end infinite; }
+  @keyframes tc-caret{ 50%{opacity:0} }
+  .tc-c .send{ flex-shrink:0; width:30px; height:30px; border-radius:999px; background-image:var(--grad);
+    display:flex; align-items:center; justify-content:center; color:#fff; font-size:.95rem;
+    box-shadow:0 2px 6px rgba(194,112,61,.34); }
+</style>
+
+<div class="tc-c">
+  <div class="toggle">
+    <button class="on">Expense</button>
+    <button>Income</button>
+    <button>Transfer</button>
+  </div>
+
+  <div class="amt">
+    <div class="amt-l">
+      <span class="micro">Amount</span>
+      <span class="amt-val"><span class="cur">₹</span>450</span>
+    </div>
+    <span class="badge"><span class="dot"></span>Auto</span>
+  </div>
+
+  <div class="cat">
+    <span class="cat-ic">🍛</span>
+    <span class="cat-txt">
+      <span class="crumb">Food <span class="chev">›</span></span>
+      <span class="cat-sub">Hyderabadi Dum Biryani</span>
+    </span>
+    <span class="badge"><span class="dot"></span>Auto</span>
+  </div>
+
+  <div class="auto-row">
+    <div class="ac lit">
+      <div class="ac-top">
+        <span class="micro">Account</span>
+        <span class="badge mini"><span class="dot"></span>Auto</span>
+      </div>
+      <span class="ac-val"><span class="g">🏦</span>HDFC</span>
+    </div>
+    <div class="ac">
+      <div class="ac-top">
+        <span class="micro">Date</span>
+        <span class="badge mini">Auto</span>
+      </div>
+      <span class="ac-val">Today, 29 May</span>
+    </div>
+    <div class="ac">
+      <div class="ac-top">
+        <span class="micro">Time</span>
+        <span class="badge mini">Auto</span>
+      </div>
+      <span class="ac-val">7:40 PM</span>
+    </div>
+  </div>
+
+  <div class="dock">
+    <span class="micro">Describe it — we fill the rest</span>
+    <div class="field">
+      <span class="typed">dum biryani 450 hdfc<span class="caret"></span></span>
+      <span class="send">↑</span>
+    </div>
+  </div>
+</div>
+]]></div><div class="kbd"><span class="kbd-lbl">— keyboard —</span><div class="keys">
+    <div class="krow"><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span></div><div class="krow"><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span></div><div class="krow"><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span></div>
+    <div class="krow"><span class="key" style="flex:1.6"></span><span class="key wide"></span><span class="key" style="flex:1.6"></span></div>
+  </div></div></div>
+  </div>
+  <div class="col">
+    <div class="cap">② Tap “Food” → its subs open<small>no keyboard while picking</small></div>
+    <div class="phone"><div class="picker-area"><![CDATA[
+<style>
+  .tc-p { --bg:#f7f2ea; --surface:#ffffff; --text:#2c2722; --muted:#9a8d7d; --accent:#c2703d; --accent-soft:#f6e7d8; --border:#ece4d8; --grad:linear-gradient(135deg,#c2703d,#d98a4f);
+    box-sizing:border-box; width:320px; height:520px; background:var(--surface); color:var(--text);
+    font-family:-apple-system,'Segoe UI',Roboto,sans-serif; display:flex; flex-direction:column;
+    overflow:hidden; border-radius:18px; }
+  .tc-p *{ box-sizing:border-box; margin:0; }
+  .tc-p .grab{ width:38px; height:4px; border-radius:999px; background:var(--border); margin:8px auto 6px; }
+  .tc-p .head{ display:flex; align-items:center; justify-content:space-between; padding:2px 14px 8px; }
+  .tc-p .head h2{ font-size:1rem; font-weight:800; }
+  .tc-p .head .edit{ height:28px; padding:0 12px; border-radius:999px; background:var(--bg);
+    border:1px solid var(--border); color:var(--text); font-size:.72rem; font-weight:700;
+    display:inline-flex; align-items:center; }
+
+  .tc-p .search-wrap{ padding:0 14px 8px; }
+  .tc-p .search{ display:flex; align-items:center; gap:8px; border:1px solid var(--border);
+    background:var(--bg); border-radius:12px; padding:9px 12px; }
+  .tc-p .search .mag{ color:var(--muted); font-size:.9rem; }
+  .tc-p .search .ph{ color:var(--muted); font-size:.9rem; }
+
+  .tc-p .body{ flex:1; overflow-y:auto; padding:0 10px 12px; }
+  .tc-p .sec{ font-size:.6rem; font-weight:800; letter-spacing:.07em; text-transform:uppercase;
+    color:var(--accent); margin:8px 6px 4px; }
+  .tc-p .sec.muted{ color:var(--muted); }
+
+  .tc-p .row{ display:flex; align-items:center; gap:10px; border-radius:12px; padding:9px 8px; }
+  .tc-p .row+.row{ margin-top:1px; }
+  .tc-p .row .ic{ width:30px; height:30px; flex-shrink:0; border-radius:9px; background:var(--accent-soft);
+    display:flex; align-items:center; justify-content:center; font-size:.98rem; }
+  .tc-p .row .nm{ flex:1; font-size:.92rem; font-weight:600; line-height:1.1; min-width:0; }
+  .tc-p .row .nm .crumb{ display:block; font-size:.6rem; font-weight:700; color:var(--muted);
+    text-transform:uppercase; letter-spacing:.04em; }
+  .tc-p .row .nm .crumb .chev{ color:var(--accent); }
+  .tc-p .row .star{ color:var(--accent); font-size:1.05rem; flex-shrink:0; }
+  .tc-p .row .caret{ color:var(--muted); font-size:.85rem; flex-shrink:0; transition:transform .15s; }
+  .tc-p .row.open .caret{ transform:rotate(180deg); color:var(--accent); }
+
+  .tc-p .row.fav{ background:var(--bg); border:1px solid var(--border); }
+  .tc-p .row.parent.open{ background:var(--accent-soft); }
+  .tc-p .row.parent.open .nm{ color:var(--accent); font-weight:800; }
+
+  .tc-p .sub{ display:flex; align-items:center; gap:9px; padding:8px 8px 8px 14px;
+    border-radius:11px; position:relative; }
+  .tc-p .sub .rail{ width:16px; height:18px; flex-shrink:0; border-left:2px solid var(--border);
+    margin-left:8px; position:relative; }
+  .tc-p .sub .rail::before{ content:''; position:absolute; top:50%; left:0; width:9px; border-top:2px solid var(--border); }
+  .tc-p .sub .ic{ width:26px; height:26px; flex-shrink:0; border-radius:8px; background:var(--accent-soft);
+    display:flex; align-items:center; justify-content:center; font-size:.85rem; }
+  .tc-p .sub .nm{ flex:1; font-size:.88rem; font-weight:600; }
+  .tc-p .sub .star{ color:var(--muted); font-size:1rem; }
+  .tc-p .sub.starred .star{ color:var(--accent); }
+
+  .tc-p .addsub{ display:inline-flex; align-items:center; gap:5px; margin:3px 0 4px 38px;
+    padding:5px 10px; border:1px dashed var(--border); border-radius:999px; color:var(--accent);
+    font-size:.72rem; font-weight:700; }
+  .tc-p .divider{ height:1px; background:var(--border); margin:6px 8px; }
+</style>
+
+<div class="tc-p">
+  <div class="grab"></div>
+  <div class="head">
+    <h2>Pick a category</h2>
+    <span class="edit">Edit</span>
+  </div>
+
+  <div class="search-wrap">
+    <div class="search"><span class="mag">🔍</span><span class="ph">Search or add new…</span></div>
+  </div>
+
+  <div class="body">
+    <div class="sec">★ Favorites</div>
+    <div class="row fav">
+      <span class="ic">🍛</span>
+      <span class="nm"><span class="crumb">Food <span class="chev">›</span></span>Biryani</span>
+      <span class="star">★</span>
+    </div>
+
+    <div class="sec muted">All categories</div>
+
+    <div class="row parent open">
+      <span class="ic">🍽️</span>
+      <span class="nm">Food</span>
+      <span class="caret">▾</span>
+    </div>
+    <div class="sub starred">
+      <span class="rail"></span><span class="ic">🍛</span>
+      <span class="nm">Biryani</span>
+      <span class="star">★</span>
+    </div>
+    <div class="sub">
+      <span class="rail"></span><span class="ic">🍨</span>
+      <span class="nm">Ice cream</span>
+      <span class="star">☆</span>
+    </div>
+    <div class="sub">
+      <span class="rail"></span><span class="ic">🛒</span>
+      <span class="nm">Groceries</span>
+      <span class="star">☆</span>
+    </div>
+    <span class="addsub">＋ sub</span>
+
+    <div class="divider"></div>
+
+    <div class="row parent">
+      <span class="ic">🏠</span>
+      <span class="nm">Rent</span>
+      <span class="caret">▾</span>
+    </div>
+    <div class="row parent">
+      <span class="ic">🚌</span>
+      <span class="nm">Transport</span>
+      <span class="caret">▾</span>
+    </div>
+  </div>
+</div>
+]]></div></div>
+  </div>
+</body></html>

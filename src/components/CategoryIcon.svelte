@@ -219,6 +219,15 @@
     medical: {
       // Pill capsule split + sparkle.
       p: ['M10 4 4 10a4 4 0 0 0 5.6 5.6L14 11', 'M14 11l4-4a4 4 0 0 0-5.6-5.6L8 6', 'M9 9l5 5']
+    },
+    play: {
+      // Streaming: a screen with a play triangle. GENERIC on purpose — we never
+      // bundle brand logos (Netflix/Hotstar/Zee5/etc. are trademarked); the
+      // service name is the label instead.
+      p: [
+        'M3 5h18a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z',
+        'M10 9.5l5 2.5-5 2.5z'
+      ]
     }
   };
 </script>

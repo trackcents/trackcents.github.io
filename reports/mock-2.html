@@ -1,0 +1,499 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+  body{margin:0;font-family:-apple-system,'Segoe UI',Roboto,sans-serif;background:#cfc8bd;padding:30px;display:flex;gap:46px;align-items:flex-start;}
+  .col{display:flex;flex-direction:column;align-items:center;gap:12px;}
+  .cap{font-size:15px;font-weight:800;color:#332e27;text-align:center;}
+  .cap small{display:block;font-weight:500;color:#5f574c;font-size:12px;margin-top:3px;}
+  .phone{width:320px;height:568px;background:#f7f2ea;border-radius:32px;overflow:hidden;position:relative;box-shadow:0 16px 40px rgba(0,0,0,.3);border:8px solid #15130f;}
+  .typing-area{position:absolute;left:0;right:0;top:0;height:310px;overflow:hidden;}
+  .picker-area{position:absolute;inset:0;overflow:hidden;}
+  .kbd{position:absolute;left:0;right:0;bottom:0;height:258px;background:linear-gradient(#dbd6cd,#cdc7bd);border-top:1px solid #b7b0a4;padding:22px 6px 10px;}
+  .kbd-lbl{position:absolute;top:6px;left:0;right:0;text-align:center;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#857e72;}
+  .keys{height:100%;display:flex;flex-direction:column;gap:8px;}
+  .krow{flex:1;display:flex;gap:5px;justify-content:center;}
+  .key{flex:1;background:#fff;border-radius:6px;box-shadow:0 1px 0 #b3aca0;max-width:30px;}
+  .key.wide{max-width:none;flex:5;}
+  .title{font-size:20px;font-weight:800;color:#2b2620;margin:0 0 16px;}
+</style></head><body>
+  <div class="col">
+    <div class="cap">① While you type<small>live line under the description</small></div>
+    <div class="phone"><div class="typing-area"><div class="b-quickadd">
+  <div class="bq-toggle">
+    <button class="bq-seg active">Expense</button>
+    <button class="bq-seg">Income</button>
+    <button class="bq-seg">Transfer</button>
+  </div>
+
+  <div class="bq-amount">
+    <span class="bq-cur">₹</span>
+    <span class="bq-amt-val">450</span>
+    <span class="bq-badge"><span class="bq-spark">✦</span>Auto</span>
+  </div>
+
+  <div class="bq-desc-wrap">
+    <label class="bq-microlabel">Description</label>
+    <div class="bq-desc-row">
+      <div class="bq-desc-field">
+        <span class="bq-desc-text">dum biryani 450 hdfc</span><span class="bq-caret"></span>
+      </div>
+      <button class="bq-send" aria-label="Save">➤</button>
+    </div>
+  </div>
+
+  <div class="bq-ribbon">
+    <div class="bq-ribbon-head">
+      <span class="bq-ribbon-title">Auto-filled as you type</span>
+      <span class="bq-ribbon-pulse"></span>
+    </div>
+
+    <div class="bq-catblock">
+      <span class="bq-cat-icon">🍛</span>
+      <div class="bq-cat-lines">
+        <div class="bq-cat-top">
+          <span class="bq-microlabel bq-ml-tight">Category</span>
+          <span class="bq-badge bq-badge-sm"><span class="bq-spark">✦</span>Auto</span>
+        </div>
+        <div class="bq-cat-pair">Food&nbsp;<span class="bq-arrow">›</span>&nbsp;Hyderabadi Dum Biryani</div>
+      </div>
+    </div>
+
+    <div class="bq-trio">
+      <div class="bq-cell">
+        <div class="bq-cell-head">
+          <span class="bq-microlabel bq-ml-tight">Account</span>
+          <span class="bq-dot-badge" title="Auto">✦</span>
+        </div>
+        <div class="bq-cell-val">💳 HDFC</div>
+      </div>
+      <div class="bq-cell">
+        <div class="bq-cell-head">
+          <span class="bq-microlabel bq-ml-tight">Date</span>
+          <span class="bq-dot-badge" title="Auto">✦</span>
+        </div>
+        <div class="bq-cell-val">Today, 29 May</div>
+      </div>
+      <div class="bq-cell">
+        <div class="bq-cell-head">
+          <span class="bq-microlabel bq-ml-tight">Time</span>
+          <span class="bq-dot-badge" title="Auto">✦</span>
+        </div>
+        <div class="bq-cell-val">7:40 PM</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .b-quickadd {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 0.4rem 0.85rem 0.55rem;
+    background: #ffffff;
+    font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+    color: #2c2722;
+    display: flex;
+    flex-direction: column;
+    gap: 0.42rem;
+  }
+  .b-quickadd *, .b-quickadd *::before, .b-quickadd *::after { box-sizing: border-box; }
+
+  .bq-toggle {
+    display: flex;
+    gap: 0.18rem;
+    border: 1px solid #ece4d8;
+    border-radius: 12px;
+    padding: 0.16rem;
+    background: #f7f2ea;
+  }
+  .bq-seg {
+    flex: 1;
+    border: 0;
+    background: transparent;
+    border-radius: 9px;
+    padding: 0.34rem 0.3rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #9a8d7d;
+    font-family: inherit;
+    cursor: pointer;
+  }
+  .bq-seg.active {
+    background: linear-gradient(135deg, #c2703d, #d98a4f);
+    color: #ffffff;
+    box-shadow: 0 2px 6px rgba(194, 112, 61, 0.32);
+  }
+
+  .bq-amount {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    background: #f7f2ea;
+    border: 1px solid #ece4d8;
+    border-radius: 13px;
+    padding: 0.4rem 0.8rem;
+  }
+  .bq-cur { font-size: 1.25rem; font-weight: 600; color: #9a8d7d; line-height: 1; }
+  .bq-amt-val {
+    flex: 1;
+    font-size: 1.7rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: #2c2722;
+    line-height: 1;
+  }
+
+  .bq-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.16rem;
+    background: #f6e7d8;
+    color: #c2703d;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 0.16rem 0.4rem;
+    border-radius: 999px;
+    border: 1px solid rgba(194, 112, 61, 0.22);
+    white-space: nowrap;
+  }
+  .bq-badge-sm { font-size: 0.55rem; padding: 0.12rem 0.34rem; }
+  .bq-spark { font-size: 0.62em; line-height: 1; }
+  .bq-dot-badge {
+    width: 14px; height: 14px;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: #f6e7d8;
+    color: #c2703d;
+    border: 1px solid rgba(194, 112, 61, 0.22);
+    border-radius: 999px;
+    font-size: 0.5rem;
+    flex-shrink: 0;
+  }
+
+  .bq-microlabel {
+    font-size: 0.6rem;
+    font-weight: 600;
+    color: #9a8d7d;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .bq-ml-tight { letter-spacing: 0.04em; }
+
+  .bq-desc-wrap { display: flex; flex-direction: column; gap: 0.22rem; }
+  .bq-desc-row { display: flex; align-items: stretch; gap: 0.42rem; }
+  .bq-desc-field {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    border: 1.5px solid #c2703d;
+    background: #ffffff;
+    border-radius: 11px;
+    padding: 0.52rem 0.7rem;
+    font-size: 0.95rem;
+    box-shadow: 0 0 0 3px rgba(194, 112, 61, 0.1);
+    min-width: 0;
+  }
+  .bq-desc-text { color: #2c2722; white-space: nowrap; overflow: hidden; }
+  .bq-caret {
+    width: 1.5px;
+    height: 1.05rem;
+    background: #c2703d;
+    margin-left: 2px;
+    border-radius: 1px;
+    animation: bqblink 1.05s step-end infinite;
+    flex-shrink: 0;
+  }
+  @keyframes bqblink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+  .bq-send {
+    width: 44px;
+    flex-shrink: 0;
+    border: 0;
+    border-radius: 11px;
+    background: linear-gradient(135deg, #c2703d, #d98a4f);
+    color: #ffffff;
+    font-size: 0.95rem;
+    cursor: pointer;
+    box-shadow: 0 2px 7px rgba(194, 112, 61, 0.34);
+  }
+
+  .bq-ribbon {
+    border: 1px solid #ece4d8;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #fffdf9 0%, #faf4ec 100%);
+    padding: 0.5rem 0.6rem 0.55rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    box-shadow: 0 1px 2px rgba(44, 39, 34, 0.04);
+  }
+  .bq-ribbon-head { display: flex; align-items: center; gap: 0.4rem; }
+  .bq-ribbon-title {
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: #c2703d;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .bq-ribbon-pulse {
+    width: 7px; height: 7px;
+    border-radius: 999px;
+    background: #c2703d;
+    box-shadow: 0 0 0 0 rgba(194, 112, 61, 0.5);
+    animation: bqpulse 1.6s ease-out infinite;
+  }
+  @keyframes bqpulse {
+    0% { box-shadow: 0 0 0 0 rgba(194, 112, 61, 0.45); }
+    70% { box-shadow: 0 0 0 6px rgba(194, 112, 61, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(194, 112, 61, 0); }
+  }
+
+  .bq-catblock {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    background: #ffffff;
+    border: 1px solid #ece4d8;
+    border-radius: 11px;
+    padding: 0.45rem 0.55rem;
+  }
+  .bq-cat-icon {
+    width: 30px; height: 30px;
+    flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: #f6e7d8;
+    border-radius: 9px;
+    font-size: 1rem;
+  }
+  .bq-cat-lines { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.12rem; }
+  .bq-cat-top { display: flex; align-items: center; justify-content: space-between; gap: 0.3rem; }
+  .bq-cat-pair {
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #2c2722;
+    line-height: 1.22;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .bq-arrow { color: #c2703d; font-weight: 700; }
+
+  .bq-trio {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0.4rem;
+  }
+  .bq-cell {
+    background: #ffffff;
+    border: 1px solid #ece4d8;
+    border-radius: 10px;
+    padding: 0.36rem 0.42rem 0.4rem;
+    min-width: 0;
+  }
+  .bq-cell-head { display: flex; align-items: center; justify-content: space-between; gap: 0.2rem; margin-bottom: 0.16rem; }
+  .bq-cell-val {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #2c2722;
+    line-height: 1.18;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+</style></div><div class="kbd"><span class="kbd-lbl">— keyboard —</span><div class="keys">
+    <div class="krow"><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span></div><div class="krow"><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span></div><div class="krow"><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span><span class="key" ></span></div>
+    <div class="krow"><span class="key" style="flex:1.6"></span><span class="key wide"></span><span class="key" style="flex:1.6"></span></div>
+  </div></div></div>
+  </div>
+  <div class="col">
+    <div class="cap">② Tap “Food” → its subs open<small>no keyboard while picking</small></div>
+    <div class="phone"><div class="picker-area"><div class="b-catpick">
+  <div class="cp-search">
+    <span class="cp-search-icon">🔍</span>
+    <span class="cp-search-ph">Search categories</span>
+  </div>
+
+  <div class="cp-section-label">Favorites</div>
+  <div class="cp-fav-row">
+    <button class="cp-fav">
+      <span class="cp-star">★</span>
+      <span class="cp-fav-text">Food <span class="cp-fav-sub">› Biryani</span></span>
+    </button>
+    <button class="cp-fav">
+      <span class="cp-star">★</span>
+      <span class="cp-fav-text">Transport <span class="cp-fav-sub">› Auto</span></span>
+    </button>
+  </div>
+
+  <div class="cp-divider"></div>
+
+  <button class="cp-parent open">
+    <span class="cp-p-icon">🍛</span>
+    <span class="cp-p-name">Food</span>
+    <span class="cp-caret">⌄</span>
+  </button>
+  <div class="cp-subs">
+    <button class="cp-sub selected">
+      <span class="cp-sub-dot"></span>Biryani
+      <span class="cp-check">✓</span>
+    </button>
+    <button class="cp-sub"><span class="cp-sub-dot"></span>Ice cream</button>
+    <button class="cp-sub"><span class="cp-sub-dot"></span>Groceries</button>
+    <button class="cp-addsub">＋ sub</button>
+  </div>
+
+  <button class="cp-parent">
+    <span class="cp-p-icon">🏠</span>
+    <span class="cp-p-name">Rent</span>
+    <span class="cp-caret cp-caret-closed">›</span>
+  </button>
+
+  <button class="cp-parent">
+    <span class="cp-p-icon">🚕</span>
+    <span class="cp-p-name">Transport</span>
+    <span class="cp-caret cp-caret-closed">›</span>
+  </button>
+</div>
+
+<style>
+  .b-catpick {
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    padding: 0.7rem 0.8rem;
+    background: #f7f2ea;
+    font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+    color: #2c2722;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    overflow-y: auto;
+  }
+  .b-catpick *, .b-catpick *::before, .b-catpick *::after { box-sizing: border-box; }
+
+  .cp-search {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    background: #ffffff;
+    border: 1px solid #ece4d8;
+    border-radius: 12px;
+    padding: 0.55rem 0.7rem;
+  }
+  .cp-search-icon { font-size: 0.85rem; opacity: 0.7; }
+  .cp-search-ph { color: #9a8d7d; font-size: 0.9rem; }
+
+  .cp-section-label {
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: #9a8d7d;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    margin: 0.1rem 0.1rem -0.05rem;
+  }
+  .cp-fav-row { display: flex; gap: 0.4rem; }
+  .cp-fav {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: #ffffff;
+    border: 1px solid #ece4d8;
+    border-radius: 11px;
+    padding: 0.46rem 0.5rem;
+    cursor: pointer;
+    text-align: left;
+    min-width: 0;
+    font-family: inherit;
+  }
+  .cp-star { color: #c2703d; font-size: 0.82rem; flex-shrink: 0; }
+  .cp-fav-text {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #2c2722;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  .cp-fav-sub { font-weight: 600; color: #9a8d7d; }
+
+  .cp-divider { height: 1px; background: #ece4d8; margin: 0.15rem 0; }
+
+  .cp-parent {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    width: 100%;
+    background: #ffffff;
+    border: 1px solid #ece4d8;
+    border-radius: 12px;
+    padding: 0.6rem 0.65rem;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+  }
+  .cp-parent.open {
+    border-color: rgba(194, 112, 61, 0.5);
+    box-shadow: 0 0 0 3px rgba(194, 112, 61, 0.08);
+  }
+  .cp-p-icon {
+    width: 28px; height: 28px;
+    flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    background: #f6e7d8;
+    border-radius: 8px;
+    font-size: 0.95rem;
+  }
+  .cp-p-name { flex: 1; font-size: 0.95rem; font-weight: 700; color: #2c2722; }
+  .cp-caret { color: #c2703d; font-size: 1rem; font-weight: 700; line-height: 1; }
+  .cp-caret-closed { color: #9a8d7d; font-size: 0.95rem; }
+
+  .cp-subs {
+    display: flex;
+    flex-direction: column;
+    gap: 0.32rem;
+    margin: -0.1rem 0 0.1rem 1.25rem;
+    padding-left: 0.55rem;
+    border-left: 2px solid #ece4d8;
+  }
+  .cp-sub {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    background: #ffffff;
+    border: 1px solid #ece4d8;
+    border-radius: 10px;
+    padding: 0.48rem 0.6rem;
+    cursor: pointer;
+    text-align: left;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #2c2722;
+    font-family: inherit;
+  }
+  .cp-sub.selected {
+    border-color: #c2703d;
+    background: #f6e7d8;
+    color: #c2703d;
+  }
+  .cp-sub-dot {
+    width: 8px; height: 8px;
+    border-radius: 999px;
+    background: #c2703d;
+    flex-shrink: 0;
+  }
+  .cp-check { margin-left: auto; color: #c2703d; font-weight: 700; }
+  .cp-addsub {
+    align-self: flex-start;
+    background: transparent;
+    border: 1px dashed rgba(194, 112, 61, 0.5);
+    border-radius: 9px;
+    padding: 0.34rem 0.6rem;
+    color: #c2703d;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+  }
+</style></div></div>
+  </div>
+</body></html>

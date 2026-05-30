@@ -1,0 +1,430 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      :root {
+        --bg: #f7f2ea;
+        --surface: #fff;
+        --text: #2c2722;
+        --muted: #9a8d7d;
+        --accent: #c2703d;
+        --soft: #f6e7d8;
+        --border: #ece4d8;
+        --grad: linear-gradient(135deg, #c2703d, #d98a4f);
+      }
+      * {
+        box-sizing: border-box;
+        font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+      }
+      body {
+        margin: 0;
+        background: #cfc8bd;
+        padding: 28px;
+        display: flex;
+        gap: 30px;
+        align-items: flex-start;
+      }
+      .col {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+      }
+      .cap {
+        font-size: 15px;
+        font-weight: 800;
+        color: #332e27;
+        text-align: center;
+      }
+      .cap small {
+        display: block;
+        font-weight: 500;
+        color: #5f574c;
+        font-size: 12px;
+        margin-top: 3px;
+      }
+      .phone {
+        width: 320px;
+        height: 568px;
+        background: var(--bg);
+        border-radius: 32px;
+        overflow: hidden;
+        position: relative;
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
+        border: 8px solid #15130f;
+      }
+      .scr {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        padding: 10px 12px 0;
+        gap: 8px;
+      }
+      .ml {
+        font-size: 0.6rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .toggle {
+        display: flex;
+        gap: 3px;
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        padding: 3px;
+      }
+      .seg {
+        flex: 1;
+        text-align: center;
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: var(--muted);
+        padding: 6px 0;
+        border-radius: 8px;
+      }
+      .seg.on {
+        background: var(--grad);
+        color: #fff;
+      }
+      /* AUTO group pinned on top */
+      .auto {
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 9px 11px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        box-shadow: 0 6px 16px rgba(70, 50, 30, 0.06);
+      }
+      .ahead {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .ahead .t {
+        font-size: 0.62rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--muted);
+      }
+      .live {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.55rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+      .live .d {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
+      }
+      .badge {
+        font-size: 0.5rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--accent);
+        background: var(--soft);
+        border-radius: 999px;
+        padding: 2px 6px;
+        flex-shrink: 0;
+      }
+      .amt {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 7px;
+        border-bottom: 1px solid var(--border);
+      }
+      .amt .v {
+        font-size: 1.7rem;
+        font-weight: 800;
+        letter-spacing: -0.01em;
+      }
+      .amt .v .c {
+        color: var(--muted);
+        font-size: 1.05rem;
+        font-weight: 700;
+      }
+      .cat {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+      }
+      .cat .ic {
+        width: 30px;
+        height: 30px;
+        border-radius: 9px;
+        background: var(--soft);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        flex-shrink: 0;
+      }
+      .cat .body {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+      }
+      .cat .crumb {
+        font-size: 0.62rem;
+        font-weight: 700;
+        color: var(--muted);
+      }
+      .cat .sub {
+        font-size: 0.92rem;
+        font-weight: 700;
+        line-height: 1.18;
+        word-break: break-word;
+      }
+      .triple {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 6px;
+      }
+      .cell {
+        background: #fbf7f1;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 6px 7px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+      }
+      .cell .lbl {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        font-size: 0.52rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      .cell .lbl .b {
+        font-size: 0.42rem;
+        color: var(--accent);
+        font-weight: 800;
+      }
+      .cell .val {
+        font-size: 0.74rem;
+        font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .spacer {
+        flex: 1;
+      }
+      .typehint {
+        text-align: center;
+        font-size: 0.58rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--accent);
+      }
+      .dock {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: #fff;
+        border: 1.5px solid var(--accent);
+        border-radius: 14px;
+        padding: 9px 9px 9px 12px;
+        margin-bottom: 8px;
+        box-shadow: 0 3px 12px rgba(194, 112, 61, 0.15);
+      }
+      .dock .typed {
+        flex: 1;
+        font-size: 0.95rem;
+        font-weight: 600;
+      }
+      .dock .cursor {
+        display: inline-block;
+        width: 2px;
+        height: 1em;
+        background: var(--accent);
+        vertical-align: -2px;
+      }
+      .send {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: var(--grad);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.05rem;
+        flex-shrink: 0;
+      }
+      /* keyboard */
+      .kbd {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 250px;
+        background: linear-gradient(#dbd6cd, #cdc7bd);
+        border-top: 1px solid #b7b0a4;
+        padding: 22px 6px 10px;
+      }
+      .kbd .lbl {
+        position: absolute;
+        top: 6px;
+        left: 0;
+        right: 0;
+        text-align: center;
+        font-size: 10px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #857e72;
+      }
+      .keys {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .krow {
+        flex: 1;
+        display: flex;
+        gap: 5px;
+        justify-content: center;
+      }
+      .key {
+        flex: 1;
+        background: #fff;
+        border-radius: 6px;
+        box-shadow: 0 1px 0 #b3aca0;
+        max-width: 30px;
+      }
+      .key.wide {
+        max-width: none;
+        flex: 5;
+      }
+      /* side annotations */
+      .note {
+        font-size: 12px;
+        color: #4a443b;
+        max-width: 250px;
+        line-height: 1.5;
+      }
+      .note b {
+        color: #c2703d;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="col">
+      <div class="cap">
+        Option 1 — while you type<small>auto-cards on top · type at the bottom</small>
+      </div>
+      <div class="phone">
+        <!-- content above keyboard (~318px) -->
+        <div class="scr" style="bottom: 250px">
+          <div class="toggle">
+            <div class="seg on">Expense</div>
+            <div class="seg">Income</div>
+            <div class="seg">Transfer</div>
+          </div>
+
+          <div class="auto">
+            <div class="ahead">
+              <span class="t">Auto-filled from what you type</span>
+              <span class="live"><span class="d"></span>Live</span>
+            </div>
+
+            <div class="amt">
+              <span class="ml">Amount</span>
+              <span class="v"><span class="c">₹</span>450</span>
+              <span class="badge">Auto</span>
+            </div>
+
+            <div class="cat">
+              <span class="ic">🍛</span>
+              <span class="body">
+                <span class="crumb">Food ›</span>
+                <span class="sub">Hyderabadi Dum Biryani</span>
+              </span>
+              <span class="badge">Auto</span>
+            </div>
+
+            <div class="triple">
+              <div class="cell">
+                <span class="lbl">Acct <span class="b">✦</span></span>
+                <span class="val">🏦 HDFC</span>
+              </div>
+              <div class="cell">
+                <span class="lbl">Date <span class="b">✦</span></span>
+                <span class="val">29 May</span>
+              </div>
+              <div class="cell">
+                <span class="lbl">Time <span class="b">✦</span></span>
+                <span class="val">7:40 PM</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="spacer"></div>
+
+          <div class="typehint">↓ You type here ↓</div>
+          <div class="dock">
+            <span class="typed">dum biryani 450 hdfc<span class="cursor"></span></span>
+            <span class="send">↑</span>
+          </div>
+        </div>
+
+        <!-- keyboard -->
+        <div class="kbd">
+          <span class="lbl">— keyboard —</span>
+          <div class="keys">
+            <div class="krow">
+              <span class="key"></span><span class="key"></span><span class="key"></span
+              ><span class="key"></span><span class="key"></span><span class="key"></span
+              ><span class="key"></span><span class="key"></span><span class="key"></span
+              ><span class="key"></span>
+            </div>
+            <div class="krow">
+              <span class="key"></span><span class="key"></span><span class="key"></span
+              ><span class="key"></span><span class="key"></span><span class="key"></span
+              ><span class="key"></span><span class="key"></span><span class="key"></span>
+            </div>
+            <div class="krow">
+              <span class="key"></span><span class="key"></span><span class="key"></span
+              ><span class="key"></span><span class="key"></span><span class="key"></span
+              ><span class="key"></span>
+            </div>
+            <div class="krow">
+              <span class="key" style="flex: 1.6"></span><span class="key wide"></span
+              ><span class="key" style="flex: 1.6"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <p><b>① The top group fills itself</b> as you type — Amount, Category › Sub (full name, 2
+        lines), Account, Date, Time. It's pinned at the top, so the keyboard can never cover it.</p>
+      <p><b>② You type one line at the bottom</b> (just above the keyboard) and tap the round
+        send button — or just press enter.</p>
+      <p>Same fields and same auto-fill you already have — only rearranged so nothing hides
+        under the keyboard.</p>
+    </div>
+  </body>
+</html>
