@@ -8,7 +8,8 @@ import type { ImportRecord } from '../db/store';
 import {
   transactionCategoryKey,
   type CategorizableTransaction,
-  type TransactionAnnotation
+  type TransactionAnnotation,
+  type TransactionSplit
 } from './categorization';
 import type { SummaryTransaction } from './spending-summary';
 import { SPEND_INTENTS, INCOME_INTENTS, REFUND_INTENTS, type FlowIntent } from './flow-intent';
@@ -138,41 +139,56 @@ export function summaryByFlowIntent(
       const intent: FlowIntent = flowIntents.get(key) ?? 'unknown';
       const split = ann?.split;
 
-      const baseRows: SummaryTransaction[] = [];
+      // Each emitted row carries its OWN intent: a split part may override the
+      // parent's intent (e.g. cap a paycheck → $4000 stays income, $1000 leftover
+      // becomes movement). The remainder row keeps the parent intent. Amounts are
+      // emitted verbatim (+ remainder), so the grand total is conserved exactly —
+      // only the bucket routing changes.
+      const tagged: Array<{ row: SummaryTransaction; intent: FlowIntent }> = [];
       if (split !== undefined && split.length > 0) {
         let partsSum = 0n;
         for (const part of split) {
-          baseRows.push({
-            posted_date: t.posted_date,
-            amount_minor: part.amount_minor,
-            category_id: part.category_id
+          const partIntent = (part.flow_intent as FlowIntent | undefined) ?? intent;
+          tagged.push({
+            row: {
+              posted_date: t.posted_date,
+              amount_minor: part.amount_minor,
+              category_id: part.category_id
+            },
+            intent: partIntent
           });
           partsSum += part.amount_minor;
         }
         const remainder = t.amount_minor - partsSum;
         if (remainder !== 0n) {
-          baseRows.push({
-            posted_date: t.posted_date,
-            amount_minor: remainder,
-            category_id: resolveEffectiveCategory(annotations, key)
+          tagged.push({
+            row: {
+              posted_date: t.posted_date,
+              amount_minor: remainder,
+              category_id: resolveEffectiveCategory(annotations, key)
+            },
+            intent
           });
         }
       } else {
-        baseRows.push({
-          posted_date: t.posted_date,
-          amount_minor: t.amount_minor,
-          category_id: resolveEffectiveCategory(annotations, key)
+        tagged.push({
+          row: {
+            posted_date: t.posted_date,
+            amount_minor: t.amount_minor,
+            category_id: resolveEffectiveCategory(annotations, key)
+          },
+          intent
         });
       }
 
-      for (const r of baseRows) {
-        all.push(r);
-        if (SPEND_INTENTS.has(intent) || REFUND_INTENTS.has(intent)) {
-          spend.push(r);
-        } else if (INCOME_INTENTS.has(intent)) {
-          income.push(r);
+      for (const { row, intent: ri } of tagged) {
+        all.push(row);
+        if (SPEND_INTENTS.has(ri) || REFUND_INTENTS.has(ri)) {
+          spend.push(row);
+        } else if (INCOME_INTENTS.has(ri)) {
+          income.push(row);
         } else {
-          movement.push(r);
+          movement.push(row);
         }
       }
     });
@@ -334,10 +350,16 @@ export interface IncomeRow {
   posted_date: string;
   /** Display name: the user's rename (custom_name) if set, else cleaned description. */
   description: string;
-  /** The deposit's signed amount (always > 0 here). */
+  /** The deposit's FULL signed amount (always > 0 here). */
   amount_minor: bigint;
+  /** How much of this deposit actually counts as income — equals amount_minor
+   *  unless the user CAPPED it (e.g. $5000 deposit, only $4000 income). The sum
+   *  of income_minor over the list reconciles to the BudgetBox income number. */
+  income_minor: bigint;
   /** Inferred flow intent (salary / gift_in / interest_earned / cash_in). */
   flow_intent: FlowIntent;
+  /** Current split, if the deposit is capped — so the cap UI shows the state. */
+  split?: TransactionSplit[];
 }
 
 /**
@@ -384,13 +406,35 @@ export function incomeRowsForMonth(
         renamed !== undefined && renamed.trim().length > 0
           ? renamed
           : cleanDescription(t.description);
-      out.push({
+      // How much of this deposit counts as income — same per-part rule as
+      // summaryByFlowIntent, so the listed total matches the headline even when
+      // capped: income parts (+ remainder if the parent intent is income).
+      const split = ann?.split;
+      let incomeMinor = 0n;
+      if (split !== undefined && split.length > 0) {
+        let partsSum = 0n;
+        for (const part of split) {
+          const partIntent = (part.flow_intent as FlowIntent | undefined) ?? intent;
+          if (INCOME_INTENTS.has(partIntent) && part.amount_minor > 0n) {
+            incomeMinor += part.amount_minor;
+          }
+          partsSum += part.amount_minor;
+        }
+        const remainder = t.amount_minor - partsSum;
+        if (remainder > 0n) incomeMinor += remainder; // remainder keeps parent (income) intent
+      } else {
+        incomeMinor = t.amount_minor;
+      }
+      const incomeRow: IncomeRow = {
         key,
         posted_date: t.posted_date,
         description,
         amount_minor: t.amount_minor,
+        income_minor: incomeMinor,
         flow_intent: intent
-      });
+      };
+      if (split !== undefined && split.length > 0) incomeRow.split = split;
+      out.push(incomeRow);
     });
   }
   out.sort((a, b) => (a.posted_date < b.posted_date ? 1 : a.posted_date > b.posted_date ? -1 : 0));

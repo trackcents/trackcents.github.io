@@ -12,7 +12,11 @@
  *   - net_minor     = $3000 − $75 = $2925
  */
 import { describe, expect, test } from 'vitest';
-import { spendableFlowByMonth, incomeRowsForMonth } from '../../../src/lib/app/categorization-glue';
+import {
+  spendableFlowByMonth,
+  incomeRowsForMonth,
+  summaryByFlowIntent
+} from '../../../src/lib/app/categorization-glue';
 import type { ImportRecord } from '../../../src/lib/db/store';
 import type { ParsedTransaction } from '../../../src/lib/adapters/types';
 
@@ -153,5 +157,60 @@ describe('incomeRowsForMonth — the deposits behind the income number', () => {
 
   test('a different month returns no rows', () => {
     expect(incomeRowsForMonth([checkingImport], {}, '2026-04')).toHaveLength(0);
+  });
+});
+
+describe('income cap via split (only part counts as income)', () => {
+  // Cap the $3,000 salary to $2,000 income; the $1,000 leftover -> savings
+  // (investment_out = money movement, neither income nor spend).
+  const capped = {
+    'hash-chase-may#0': {
+      category_id: null,
+      source: 'manual' as const,
+      split: [
+        { category_id: null, amount_minor: 2000_00n },
+        { category_id: null, amount_minor: 1000_00n, flow_intent: 'investment_out' }
+      ]
+    }
+  };
+
+  test('headline income drops to the capped amount ($2,000, not $3,000)', () => {
+    const may = spendableFlowByMonth([checkingImport], capped).get('2026-05');
+    expect(may!.inflow_minor).toBe(2000_00n);
+  });
+
+  test('the income row reports capped income but the full deposit amount', () => {
+    const row = incomeRowsForMonth([checkingImport], capped, '2026-05')[0]!;
+    expect(row.income_minor).toBe(2000_00n);
+    expect(row.amount_minor).toBe(3000_00n);
+  });
+
+  test('the listed income total still reconciles to the headline', () => {
+    const rows = incomeRowsForMonth([checkingImport], capped, '2026-05');
+    const listed = rows.reduce((s, r) => s + r.income_minor, 0n);
+    expect(listed).toBe(
+      spendableFlowByMonth([checkingImport], capped).get('2026-05')!.inflow_minor
+    );
+  });
+
+  test('CONSERVATION: every part + remainder is emitted; total is unchanged', () => {
+    // Intent map empty -> all default to one bucket, but `all` must still carry
+    // every row and sum to the raw signed total regardless of splitting.
+    const { all } = summaryByFlowIntent([checkingImport], capped, new Map());
+    const emitted = all.reduce((s, r) => s + r.amount_minor, 0n);
+    const raw = checkingImport.transactions.reduce((s, t) => s + t.amount_minor, 0n);
+    expect(emitted).toBe(raw);
+  });
+
+  test('capping to $0 income removes it from income entirely', () => {
+    const zero = {
+      'hash-chase-may#0': {
+        category_id: null,
+        source: 'manual' as const,
+        split: [{ category_id: null, amount_minor: 3000_00n, flow_intent: 'investment_out' }]
+      }
+    };
+    expect(incomeRowsForMonth([checkingImport], zero, '2026-05')[0]!.income_minor).toBe(0n);
+    expect(spendableFlowByMonth([checkingImport], zero).get('2026-05')!.inflow_minor).toBe(0n);
   });
 });

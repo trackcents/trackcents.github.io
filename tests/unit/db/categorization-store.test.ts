@@ -52,6 +52,49 @@ describe('categorization-store', () => {
     expect(await loadCategorization()).toEqual(sample);
   });
 
+  test('round-trips a split with bigint cents (regression: JSON.stringify threw on bigint)', async () => {
+    const withSplit: CategorizationState = {
+      categories: [],
+      rules: [],
+      annotations: {
+        'hash#0': {
+          category_id: null,
+          source: 'manual',
+          split: [
+            { category_id: null, amount_minor: 4000_00n },
+            { category_id: null, amount_minor: 1000_00n, flow_intent: 'investment_out' }
+          ]
+        }
+      }
+    };
+    // Must NOT throw (bigint in the blob), and the bigints must survive verbatim.
+    await saveCategorization(withSplit);
+    const loaded = await loadCategorization();
+    expect(loaded).toEqual(withSplit);
+    const parts = loaded.annotations['hash#0']!.split!;
+    expect(typeof parts[0]!.amount_minor).toBe('bigint');
+    expect(parts[0]!.amount_minor).toBe(4000_00n);
+    expect(parts[1]!.amount_minor).toBe(1000_00n);
+  });
+
+  test('encrypted split with bigint cents round-trips too', async () => {
+    const key = await deriveKey('pw', generateSalt(), { iterations: 1000 });
+    setSessionKey(key);
+    const withSplit: CategorizationState = {
+      categories: [],
+      rules: [],
+      annotations: {
+        'hash#1': {
+          category_id: null,
+          source: 'manual',
+          split: [{ category_id: null, amount_minor: 250n }]
+        }
+      }
+    };
+    await saveCategorization(withSplit);
+    expect(await loadCategorization()).toEqual(withSplit);
+  });
+
   test('returns empty (not a throw) when data is encrypted but locked', async () => {
     const key = await deriveKey('pw', generateSalt(), { iterations: 1000 });
     setSessionKey(key);

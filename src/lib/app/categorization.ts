@@ -97,6 +97,17 @@ export interface TransactionSplit {
   category_id: string | null;
   /** Signed cents (same sign as the parent transaction). */
   amount_minor: bigint;
+  /**
+   * Optional per-part flow_intent override (one of the FlowIntent literals,
+   * kept as a string to avoid a module cycle). Lets ONE deposit be split across
+   * buckets — e.g. cap a $5000 paycheck to $4000 income and route the $1000
+   * leftover to savings (`investment_out`) or set-aside (`transfer_self`).
+   * Absent → the part inherits the parent transaction's intent. Affects ONLY
+   * which bucket the part lands in (spend / income / movement) in
+   * summaryByFlowIntent — never the amount, so summaryFromImports conservation
+   * is untouched.
+   */
+  flow_intent?: string;
 }
 
 /** The user-extra fields, as present on an annotation (omitting empty ones). */
@@ -109,6 +120,11 @@ function extrasOf(a: TransactionAnnotation): Partial<TransactionAnnotation> {
   if (a.is_recurring) e.is_recurring = true;
   if (a.refund_of !== undefined) e.refund_of = a.refund_of;
   if (a.split !== undefined && a.split.length > 0) e.split = a.split;
+  // A manual flow_intent override (e.g. "this deposit is NOT income") is a user
+  // extra and MUST survive a rule re-apply — applyRules runs on every load, and
+  // an override on a transaction with no category/other-extras was being dropped
+  // (the deposit reverted to income). Same class of bug as pruneAnnotation.
+  if (a.flow_intent !== undefined && a.flow_intent !== '') e.flow_intent = a.flow_intent;
   return e;
 }
 function hasExtras(a: TransactionAnnotation): boolean {

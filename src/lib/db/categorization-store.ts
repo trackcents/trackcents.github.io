@@ -24,6 +24,28 @@ function empty(): CategorizationState {
   return { categories: [], rules: [], annotations: {} };
 }
 
+/**
+ * Bigint-safe JSON for the categorization blob. `TransactionSplit.amount_minor`
+ * is a bigint (signed cents); a plain `JSON.stringify` THROWS on it, so before
+ * this fix saving any split crashed silently. We round-trip bigints through a
+ * tagged sentinel `{ "$bigint": "<decimal>" }`. Generic (handles any bigint),
+ * and a no-op for the common split-free state, so existing data loads unchanged.
+ */
+function bigintReplacer(_key: string, value: unknown): unknown {
+  return typeof value === 'bigint' ? { $bigint: value.toString() } : value;
+}
+function bigintReviver(_key: string, value: unknown): unknown {
+  if (
+    value !== null &&
+    typeof value === 'object' &&
+    '$bigint' in value &&
+    typeof (value as { $bigint: unknown }).$bigint === 'string'
+  ) {
+    return BigInt((value as { $bigint: string }).$bigint);
+  }
+  return value;
+}
+
 /** Load the categorization state; returns empty if absent, unparseable, or locked. */
 export async function loadCategorization(): Promise<CategorizationState> {
   if (typeof localStorage === 'undefined') return empty();
@@ -32,7 +54,7 @@ export async function loadCategorization(): Promise<CategorizationState> {
   const decoded = await decodeStateFromStorage(stored);
   if (decoded.kind === 'locked') return empty();
   try {
-    const parsed = JSON.parse(decoded.json) as Partial<CategorizationState>;
+    const parsed = JSON.parse(decoded.json, bigintReviver) as Partial<CategorizationState>;
     return {
       categories: parsed.categories ?? [],
       rules: parsed.rules ?? [],
@@ -46,5 +68,5 @@ export async function loadCategorization(): Promise<CategorizationState> {
 /** Persist the categorization state, encrypted at rest when a session key is loaded. */
 export async function saveCategorization(state: CategorizationState): Promise<void> {
   if (typeof localStorage === 'undefined') return;
-  localStorage.setItem(LS_KEY, await encodeStateForStorage(JSON.stringify(state)));
+  localStorage.setItem(LS_KEY, await encodeStateForStorage(JSON.stringify(state, bigintReplacer)));
 }

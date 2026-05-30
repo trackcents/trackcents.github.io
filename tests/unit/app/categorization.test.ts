@@ -129,6 +129,21 @@ describe('applyRules', () => {
     expect(out.has('h#1')).toBe(false);
   });
 
+  test('preserves a flow_intent-only override across re-apply (regression: was dropped on load)', () => {
+    // "Not income" sets flow_intent with no category/other extras. applyRules
+    // runs on every load; the override must survive or the deposit reverts to
+    // income. RENT matches no rule, so without the fix this entry vanishes.
+    const existing = new Map<string, TransactionAnnotation>([
+      ['h#1', { category_id: null, source: 'manual', flow_intent: 'transfer_self' }]
+    ]);
+    const out = applyRules([rule()], txns, existing);
+    expect(out.get('h#1')).toEqual({
+      category_id: null,
+      source: 'manual',
+      flow_intent: 'transfer_self'
+    });
+  });
+
   test('is idempotent for a fixed rule set', () => {
     const once = applyRules([rule()], txns, new Map());
     const twice = applyRules([rule()], txns, once);

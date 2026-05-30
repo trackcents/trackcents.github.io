@@ -2,9 +2,12 @@
   // "Manage income" drill-down — opened from the Home BudgetBox income line.
   // Shows ONLY the income deposits that make up this month's income number
   // (Hemanth: tapping "other inflows" must NOT dump me into all transactions —
-  // show only the income ones, and let me edit them here). Slice 1: rename +
-  // remove-from-income + exclude. The amount cap/split is the next slice.
-  import { formatMoney } from '$lib/util/money';
+  // show only the income ones, and let me edit them here). Per deposit: rename,
+  // remove-from-income, exclude, and CAP how much counts as income ("$5000
+  // deposit but only $4000 is income"), routing the leftover to savings or
+  // exclude. Carry-to-next-month is the next step.
+  import { formatMoney, parseMoney } from '$lib/util/money';
+  import { centsToDecimal } from '$lib/app/export-csv';
   import type { IncomeRow } from '$lib/app/categorization-glue';
   import type { TransactionAnnotation } from '$lib/app/categorization';
   import type { FlowIntent } from '$lib/app/flow-intent';
@@ -27,6 +30,10 @@
 
   let expandedKey = $state<string | null>(null);
   let draftName = $state('');
+  // Cap editor state (per the currently-expanded row).
+  let capDraft = $state(''); // decimal string of "counts as income"
+  let capDest = $state<'investment_out' | 'transfer_self'>('investment_out');
+  let capError = $state('');
 
   const INTENT_LABEL: Record<string, string> = {
     salary: 'Paycheck',
@@ -64,6 +71,11 @@
     } else {
       expandedKey = row.key;
       draftName = row.description;
+      capDraft = centsToDecimal(row.income_minor);
+      capError = '';
+      // Pre-select the destination from the existing leftover part, if capped.
+      const leftover = row.split?.find((p) => p.flow_intent !== undefined);
+      capDest = leftover?.flow_intent === 'transfer_self' ? 'transfer_self' : 'investment_out';
     }
   }
   function saveName(key: string): void {
@@ -73,6 +85,40 @@
   function removeFromIncome(key: string): void {
     // Keep the transaction, but stop it counting as income (money movement).
     onUpdate(key, { flow_intent: 'transfer_self' });
+    expandedKey = null;
+  }
+  /** Cap how much of a deposit counts as income; route the leftover to the
+   *  chosen bucket (savings = investment_out, exclude = transfer_self) as a
+   *  split. Conserved: the two parts sum to the full deposit. */
+  function applyCap(row: IncomeRow): void {
+    let cap: bigint;
+    try {
+      cap = parseMoney(capDraft);
+    } catch {
+      capError = 'Enter a valid amount.';
+      return;
+    }
+    if (cap < 0n) cap = 0n;
+    if (cap >= row.amount_minor) {
+      // Counting the whole deposit → no cap; clear any existing split ([] is
+      // dropped by pruneAnnotation).
+      onUpdate(row.key, { split: [] });
+      expandedKey = null;
+      return;
+    }
+    const leftover = row.amount_minor - cap;
+    const parts =
+      cap === 0n
+        ? [{ category_id: null, amount_minor: leftover, flow_intent: capDest }]
+        : [
+            { category_id: null, amount_minor: cap },
+            { category_id: null, amount_minor: leftover, flow_intent: capDest }
+          ];
+    onUpdate(row.key, { split: parts });
+    expandedKey = null;
+  }
+  function removeCap(key: string): void {
+    onUpdate(key, { split: [] });
     expandedKey = null;
   }
   function exclude(key: string): void {
@@ -110,11 +156,57 @@
                 >{prettyDate(row.posted_date)} · {intentLabel(row.flow_intent)}</span
               >
             </span>
-            <span class="mi-amount">+{formatMoney(row.amount_minor)}</span>
+            <span class="mi-amount-wrap">
+              <span class="mi-amount">+{formatMoney(row.income_minor)}</span>
+              {#if row.income_minor !== row.amount_minor}
+                <span class="mi-amount-of">of {formatMoney(row.amount_minor)}</span>
+              {/if}
+            </span>
           </button>
 
           {#if expandedKey === row.key}
             <div class="mi-edit">
+              <div class="mi-cap">
+                <span class="mi-lbl">Counts as income</span>
+                <div class="mi-cap-row">
+                  <input
+                    type="text"
+                    bind:value={capDraft}
+                    class="mi-input mi-cap-input"
+                    inputmode="decimal"
+                    autocomplete="off"
+                    aria-label="Amount of this deposit that counts as income"
+                  />
+                  <span class="mi-cap-of">of {formatMoney(row.amount_minor)} deposit</span>
+                </div>
+                {#if capError !== ''}<span class="mi-cap-err">{capError}</span>{/if}
+                <div class="mi-leftover">
+                  <span class="mi-leftover-lbl">Leftover →</span>
+                  <div class="mi-seg">
+                    <button
+                      type="button"
+                      class:active={capDest === 'investment_out'}
+                      onclick={() => (capDest = 'investment_out')}>Savings</button
+                    >
+                    <button
+                      type="button"
+                      class:active={capDest === 'transfer_self'}
+                      onclick={() => (capDest = 'transfer_self')}>Exclude</button
+                    >
+                  </div>
+                </div>
+                <div class="mi-actions">
+                  <button type="button" class="mi-save" onclick={() => applyCap(row)}>
+                    {row.split ? 'Update cap' : 'Cap income'}
+                  </button>
+                  {#if row.split}
+                    <button type="button" class="mi-secondary" onclick={() => removeCap(row.key)}>
+                      Remove cap
+                    </button>
+                  {/if}
+                </div>
+              </div>
+
               <label class="mi-field">
                 <span class="mi-lbl">Rename this income</span>
                 <input
@@ -275,12 +367,81 @@
     font-size: 0.72rem;
     color: var(--color-muted);
   }
-  .mi-amount {
+  .mi-amount-wrap {
     flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    line-height: 1.1;
+  }
+  .mi-amount {
     font-size: 0.98rem;
     font-weight: 700;
     color: var(--color-success);
     font-variant-numeric: tabular-nums;
+  }
+  .mi-amount-of {
+    font-size: 0.68rem;
+    color: var(--color-muted);
+    text-decoration: line-through;
+  }
+  /* ── Cap editor ──────────────────────────────────────────────── */
+  .mi-cap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.65rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+  }
+  .mi-cap-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .mi-cap-input {
+    width: 7.5rem;
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+  }
+  .mi-cap-of {
+    font-size: 0.78rem;
+    color: var(--color-muted);
+  }
+  .mi-cap-err {
+    font-size: 0.72rem;
+    color: var(--color-danger);
+  }
+  .mi-leftover {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .mi-leftover-lbl {
+    font-size: 0.78rem;
+    color: var(--color-muted);
+  }
+  .mi-seg {
+    display: inline-flex;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .mi-seg button {
+    border: 0;
+    background: transparent;
+    color: var(--color-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.35rem 0.8rem;
+    cursor: pointer;
+  }
+  .mi-seg button.active {
+    background: var(--color-accent);
+    color: var(--color-accent-fg);
   }
   .mi-edit {
     padding: 0 0.85rem 0.8rem;
