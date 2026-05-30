@@ -68,38 +68,69 @@ function containsWord(text: string, token: string): boolean {
  * @returns the matched account's display name (verbatim from `accounts`), or
  *          null when nothing matches.
  */
-export function guessAccount(description: string, accounts: readonly string[]): string | null {
-  const desc = description.trim().toLowerCase();
+export interface AccountMatch {
+  /** The matched account's display name (verbatim from `accounts`). */
+  account: string;
+  /** The description with the matched account text removed, so the account's
+   *  card number doesn't get parsed as the amount — Hemanth typed "Chicken Dum
+   *  Biryani Chase Bank 1797" and got amount 1797. */
+  rest: string;
+}
+
+/**
+ * Detect which saved account a description refers to, AND return the
+ * description with the matched account text stripped out.
+ */
+export function detectAccount(
+  description: string,
+  accounts: readonly string[]
+): AccountMatch | null {
+  const original = description.trim();
+  const desc = original.toLowerCase();
   if (desc.length === 0) return null;
 
   let best: string | null = null;
   let bestLen = 0;
+  let bestMatch = '';
 
   for (const acc of accounts) {
     const name = acc.trim();
     if (name.length === 0) continue;
+    const lowerName = name.toLowerCase();
 
-    // 1. Whole account name as a word — strongest signal.
-    if (name.length >= 2 && containsWord(desc, name) && name.length > bestLen) {
+    // 1. Whole account name as a phrase — strongest, and strips its number too.
+    if (lowerName.length >= 2 && containsWord(desc, lowerName) && lowerName.length > bestLen) {
       best = acc;
-      bestLen = name.length;
+      bestLen = lowerName.length;
+      bestMatch = lowerName;
       continue;
     }
 
     // 2. A distinctive (non-generic, non-numeric, >=3 char) word of the name.
-    for (const word of name
-      .toLowerCase()
-      .split(/[^a-z0-9]+/)
-      .filter((w) => w.length > 0)) {
+    for (const word of lowerName.split(/[^a-z0-9]+/).filter((w) => w.length > 0)) {
       if (word.length < 3) continue;
       if (GENERIC_ACCOUNT_WORDS.has(word)) continue;
       if (/^\d+$/.test(word)) continue;
       if (containsWord(desc, word) && word.length > bestLen) {
         best = acc;
         bestLen = word.length;
+        bestMatch = word;
       }
     }
   }
 
-  return best;
+  if (best === null) return null;
+
+  // Remove the matched text (word-bounded) from the ORIGINAL description.
+  const re = new RegExp(`(?:^|\\s)${escapeRegExp(bestMatch)}(?=\\s|$)`, 'i');
+  const rest = original
+    .replace(re, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return { account: best, rest };
+}
+
+/** Convenience: just the matched account name (or null). */
+export function guessAccount(description: string, accounts: readonly string[]): string | null {
+  return detectAccount(description, accounts)?.account ?? null;
 }

@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { guessAccount } from '../../../src/lib/app/account-guess';
+import { guessAccount, detectAccount } from '../../../src/lib/app/account-guess';
 
 const ACCOUNTS = ['Cash', 'HDFC UPI', 'ICICI UPI', 'Chase Checking 9535', 'Amex Card'];
 
@@ -65,5 +65,22 @@ describe('guessAccount — most-specific wins', () => {
 
   test('amex distinctive word over the generic "card"', () => {
     expect(guessAccount('dinner amex 1500', ACCOUNTS)).toBe('Amex Card');
+  });
+});
+
+describe('detectAccount — strips the matched account so its number is not the amount', () => {
+  test('whole account name (with number) is removed from the rest', () => {
+    const r = detectAccount('Chicken Dum Biryani Chase Bank 1797', ['Cash', 'Chase Bank 1797']);
+    expect(r).toEqual({ account: 'Chase Bank 1797', rest: 'Chicken Dum Biryani' });
+  });
+
+  test('null when no account matches', () => {
+    expect(detectAccount('dum biryani 450', ['Cash', 'Chase Bank 1797'])).toBeNull();
+  });
+
+  test('a distinctive-word match strips just that word', () => {
+    const r = detectAccount('coffee 80 hdfc', ['Cash', 'HDFC UPI']);
+    expect(r?.account).toBe('HDFC UPI');
+    expect(r?.rest).toBe('coffee 80');
   });
 });

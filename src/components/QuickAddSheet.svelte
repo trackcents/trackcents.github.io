@@ -17,7 +17,7 @@
   import { untrack } from 'svelte';
   import { parseQuickAddText, type ParsedQuickAdd } from '$lib/app/nl-quick-add';
   import { guessCategoryId } from '$lib/app/category-guess';
-  import { guessAccount } from '$lib/app/account-guess';
+  import { detectAccount } from '$lib/app/account-guess';
   import { buildSuggestTerms, suggestCompletion } from '$lib/app/autosuggest';
   import { extractRulePattern, isDuplicateRule } from '$lib/app/rule-from-desc';
   import { makeManualImport, newManualId, ManualEntryError } from '$lib/app/manual-entry';
@@ -257,7 +257,11 @@
       });
       return;
     }
-    const p: ParsedQuickAdd = parseQuickAddText(desc, today());
+    // Detect the account FIRST and strip its text (incl any card number) so the
+    // account's digits don't get parsed as the amount (Hemanth: typed "Chicken
+    // Dum Biryani Chase Bank 1797" and the 1797 became the amount).
+    const acct = userTouchedAccount ? null : detectAccount(desc, allAccounts);
+    const p: ParsedQuickAdd = parseQuickAddText(acct ? acct.rest : desc, today());
     const guess = guessCategoryId(p.description, categories, rules);
     untrack(() => {
       // Date follows the description on every change (like Amount), unless
@@ -295,7 +299,7 @@
       // Match the typed text against the user's saved accounts; a match wins,
       // else fall back to the direction default — unless the user picked one.
       if (!userTouchedAccount) {
-        account = guessAccount(desc, allAccounts) ?? defaultAccount(direction);
+        account = acct ? acct.account : defaultAccount(direction);
       }
     });
   });
