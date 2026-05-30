@@ -693,7 +693,11 @@
               class="flex items-center gap-3 py-2"
               style="border-top: 1px solid var(--color-border);"
             >
-              <CategoryIcon icon={categoryIconName(catName(r.category_id))} {color} tint />
+              <CategoryIcon
+                icon={categoryIconName(r.category_id ? catName(r.category_id) : r.description)}
+                {color}
+                tint
+              />
               <div class="min-w-0 flex-1">
                 <div class="truncate text-sm font-medium">{r.description}</div>
                 <div class="text-xs" style:color="var(--color-muted)">

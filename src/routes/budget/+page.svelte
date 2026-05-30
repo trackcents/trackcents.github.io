@@ -17,7 +17,8 @@
   import { loadBudgets, saveBudgets, type CategoryLimits } from '$lib/db/budget-store';
   import { parseAmountToCents } from '$lib/app/csv-import';
   import { centsToDecimal } from '$lib/app/export-csv';
-  import { categoryColor } from '$lib/app/category-visuals';
+  import { categoryColor, categoryIconName } from '$lib/app/category-visuals';
+  import CategoryIcon from '$components/CategoryIcon.svelte';
   import { formatMoney, getDisplayCurrency, getDisplayCurrencySymbol } from '$lib/util/money';
   const currencySymbol = getDisplayCurrencySymbol();
   // The paycheck-window UI is designed around the US biweekly cadence (two
@@ -332,12 +333,16 @@
           {@const limitStr = limits[c.id] !== undefined ? centsToDecimal(limits[c.id]!) : ''}
           <div class="card rise p-4">
             <div class="flex items-center justify-between gap-3">
-              <div class="flex items-center gap-2">
-                <span
-                  class="h-2.5 w-2.5 shrink-0 rounded-full"
-                  style:background-color={categoryColor(c.id)}
-                ></span>
-                <span class="text-sm font-medium">{catName(c.id)}</span>
+              <div class="flex min-w-0 items-center gap-2">
+                <span class="shrink-0">
+                  <CategoryIcon
+                    icon={categoryIconName(catName(c.id))}
+                    color={categoryColor(c.id)}
+                    tint
+                    size={16}
+                  />
+                </span>
+                <span class="truncate text-sm font-medium">{catName(c.id)}</span>
                 {#if row?.over}
                   <span
                     class="rounded-full px-2 py-0.5 text-[10px] font-semibold"
