@@ -17,8 +17,11 @@
     summaryFromImports,
     detailedRowsFromImports,
     spendableFlowByMonth,
-    incomeRowsForMonth
+    incomeRowsForMonth,
+    summaryByFlowIntent,
+    flowIntentRowsFromImports
   } from '$lib/app/categorization-glue';
+  import { inferAllFlowIntents } from '$lib/app/flow-intent';
   import { runAutoCategorize } from '$lib/app/auto-categorize';
   import { seedCategoriesAndRules, shouldAutoSeed } from '$lib/app/default-categories';
   import {
@@ -195,12 +198,22 @@
 
   const txns = $derived(summaryFromImports(imports, cat.annotations));
   const hasData = $derived(txns.length > 0);
+
+  // "Top categories" + the month-over-month insight must use the HONEST spend
+  // projection (REQ-B0.1), not raw `txns`. Otherwise CC payments, investment
+  // transfers and inter-account moves show up as top "spending" categories — the
+  // exact thing the user flagged ("most went to CC Payment"). Same flow-intent
+  // projection the Dashboard already uses for its pie + Money-out.
+  const flowIntents = $derived(
+    inferAllFlowIntents(flowIntentRowsFromImports(imports, cat.annotations))
+  );
+  const spendTxns = $derived(summaryByFlowIntent(imports, cat.annotations, flowIntents).spend);
   // Flow-intent-aware month flow (REQ-B0.1): "Spent" EXCLUDES CC payments,
   // inter-account transfers, and investment transfers (which are money
   // movement, not life cash-flow).  "Income" EXCLUDES money-movement inflows.
   // This is what the BudgetBox renders as the headline.
   const nbm = $derived(spendableFlowByMonth(imports, cat.annotations));
-  const sbm = $derived(spendingByCategoryByMonth(txns));
+  const sbm = $derived(spendingByCategoryByMonth(spendTxns));
 
   /** Months the BudgetBox nav widget can step through.  Strictly months WITH
    *  imported transaction data, plus the device's current month so a brand-new
