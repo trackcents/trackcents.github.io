@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=390, initial-scale=1" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: oklch(0.965 0.013 78);
+        --surface: oklch(1 0 0);
+        --elevated: oklch(0.975 0.01 78);
+        --border: oklch(0.9 0.011 72);
+        --text: oklch(0.28 0.014 55);
+        --muted: oklch(0.53 0.018 58);
+        --accent: oklch(0.62 0.125 45);
+        --accent2: oklch(0.68 0.11 58);
+        --accent-soft: oklch(0.93 0.04 55);
+        --success: oklch(0.58 0.15 158);
+        --danger: oklch(0.57 0.21 22);
+        --grad: linear-gradient(135deg, oklch(0.62 0.13 44), oklch(0.69 0.11 60));
+      }
+      * { box-sizing: border-box; margin: 0; font-family: 'Inter', system-ui, sans-serif; }
+      body { width: 390px; background: var(--bg); color: var(--text); padding: 16px 16px 88px; }
+      h1 { font-size: 1.35rem; font-weight: 800; letter-spacing: -0.01em; margin-bottom: 12px; }
+      .summary { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 14px 16px; display: flex; justify-content: space-between; box-shadow: 0 2px 10px rgba(60,40,20,0.05); margin-bottom: 18px; }
+      .sm { text-align: center; flex: 1; }
+      .sm .v { font-size: 1.15rem; font-weight: 800; }
+      .sm .v.ok { color: var(--success); }
+      .sm .l { font-size: 0.66rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+      .sm + .sm { border-left: 1px solid var(--border); }
+      .sechead { display: flex; align-items: center; justify-content: space-between; margin: 0 4px 8px; }
+      .sectitle { font-size: 0.74rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+      .add { color: var(--accent); font-weight: 600; font-size: 0.8rem; }
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 4px 14px; box-shadow: 0 2px 10px rgba(60,40,20,0.05); margin-bottom: 20px; }
+      .row { display: flex; align-items: center; gap: 11px; padding: 12px 0; border-top: 1px solid var(--border); }
+      .row:first-child { border-top: 0; }
+      .status { width: 24px; height: 24px; border-radius: 8px; border: 1.5px solid var(--border); flex: none; display: grid; place-items: center; font-size: 13px; color: #fff; }
+      .status.paid { background: var(--success); border-color: var(--success); }
+      .logo { width: 32px; height: 32px; border-radius: 9px; flex: none; display: grid; place-items: center; font-size: 13px; font-weight: 800; color: #fff; }
+      .mid { flex: 1; min-width: 0; }
+      .nm { font-weight: 600; font-size: 0.95rem; }
+      .nm.paid { color: var(--muted); text-decoration: line-through; }
+      .sub { font-size: 0.72rem; color: var(--muted); margin-top: 1px; }
+      .amt { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; flex: none; }
+      .pk { font-size: 15px; flex: none; width: 20px; text-align: center; }
+      .tabbar { position: fixed; bottom: 0; left: 0; width: 390px; background: var(--surface); border-top: 1px solid var(--border); display: flex; justify-content: space-around; align-items: center; padding: 8px 0 12px; }
+      .tab { font-size: 0.6rem; color: var(--muted); text-align: center; }
+      .tab.on { color: var(--accent); font-weight: 600; }
+      .tab .ic { font-size: 17px; display: block; }
+      .fab { width: 46px; height: 46px; border-radius: 50%; background: var(--grad); color: #fff; display: grid; place-items: center; font-size: 24px; margin-top: -18px; box-shadow: 0 4px 12px rgba(180,90,40,0.4); }
+    </style>
+  </head>
+  <body>
+    <h1>Recurring</h1>
+    <div class="summary">
+      <div class="sm"><div class="v">$6,057</div><div class="l">due this cycle</div></div>
+      <div class="sm"><div class="v ok">$3,450</div><div class="l">paid</div></div>
+      <div class="sm"><div class="v">$2,607</div><div class="l">left</div></div>
+    </div>
+
+    <div class="sechead">
+      <div class="sectitle">📋 Bills due · 2 of 6 paid</div>
+      <div class="add">＋ Add</div>
+    </div>
+    <div class="card">
+      <div class="row">
+        <span class="status paid">✓</span>
+        <div class="mid"><div class="nm paid">House EMI</div><div class="sub">paid May 14</div></div>
+        <span class="amt">$2,200</span><span class="pk">💵</span>
+      </div>
+      <div class="row">
+        <span class="status paid">✓</span>
+        <div class="mid"><div class="nm paid">Car EMI</div><div class="sub">paid May 14</div></div>
+        <span class="amt">$1,250</span><span class="pk">💵</span>
+      </div>
+      <div class="row">
+        <span class="status"></span>
+        <div class="mid"><div class="nm">India</div><div class="sub">tap to pay</div></div>
+        <span class="amt">$1,550</span><span class="pk">💵</span>
+      </div>
+      <div class="row">
+        <span class="status"></span>
+        <div class="mid"><div class="nm">Robinhood (savings)</div><div class="sub">tap to pay</div></div>
+        <span class="amt">$2,200</span><span class="pk">🎁</span>
+      </div>
+    </div>
+
+    <div class="sechead">
+      <div class="sectitle">🔁 Subscriptions · $48/mo</div>
+      <div class="add">＋ Add</div>
+    </div>
+    <div class="card">
+      <div class="row">
+        <span class="logo" style="background: #e50914">N</span>
+        <div class="mid"><div class="nm">Netflix</div><div class="sub">renews Jun 3</div></div>
+        <span class="amt">$15.49</span><span class="pk">💵</span>
+      </div>
+      <div class="row">
+        <span class="logo" style="background: #1ed760; color: #000">♫</span>
+        <div class="mid"><div class="nm">Spotify</div><div class="sub">renews Jun 7</div></div>
+        <span class="amt">$9.99</span><span class="pk">💵</span>
+      </div>
+      <div class="row">
+        <span class="logo" style="background: #1f80e0">★</span>
+        <div class="mid"><div class="nm">Hotstar</div><div class="sub">renews Jun 9</div></div>
+        <span class="amt">$4.99</span><span class="pk">💵</span>
+      </div>
+      <div class="row">
+        <span class="logo" style="background: #00a8e1">P</span>
+        <div class="mid"><div class="nm">Prime</div><div class="sub">renews Jun 12</div></div>
+        <span class="amt">$14.99</span><span class="pk">🎁</span>
+      </div>
+    </div>
+
+    <div class="tabbar">
+      <div class="tab"><span class="ic">⌂</span>Home</div>
+      <div class="tab"><span class="ic">≣</span>Transactions</div>
+      <div class="fab">＋</div>
+      <div class="tab on"><span class="ic">🔁</span>Recurring</div>
+      <div class="tab"><span class="ic">☰</span>More</div>
+    </div>
+  </body>
+</html>

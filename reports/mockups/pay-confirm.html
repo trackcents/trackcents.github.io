@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=390, initial-scale=1" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: oklch(0.965 0.013 78);
+        --surface: oklch(1 0 0);
+        --elevated: oklch(0.975 0.01 78);
+        --border: oklch(0.9 0.011 72);
+        --text: oklch(0.28 0.014 55);
+        --muted: oklch(0.53 0.018 58);
+        --accent: oklch(0.62 0.125 45);
+        --success: oklch(0.58 0.15 158);
+        --grad: linear-gradient(135deg, oklch(0.62 0.13 44), oklch(0.69 0.11 60));
+      }
+      * { box-sizing: border-box; margin: 0; font-family: 'Inter', system-ui, sans-serif; }
+      body { width: 390px; height: 740px; background: var(--bg); color: var(--text); position: relative; overflow: hidden; }
+      .behind { padding: 16px; filter: blur(1px); opacity: 0.5; }
+      h1 { font-size: 1.35rem; font-weight: 800; margin-bottom: 12px; }
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 4px 14px; margin-bottom: 16px; }
+      .row { display: flex; align-items: center; gap: 11px; padding: 13px 0; border-top: 1px solid var(--border); }
+      .row:first-child { border-top: 0; }
+      .status { width: 24px; height: 24px; border-radius: 8px; border: 1.5px solid var(--border); flex: none; }
+      .status.paid { background: var(--success); border-color: var(--success); }
+      .status.hl { border-color: var(--accent); border-width: 2px; }
+      .nm { flex: 1; font-weight: 600; font-size: 0.95rem; }
+      .amt { font-weight: 700; }
+      .scrim { position: absolute; inset: 0; background: rgba(15, 20, 28, 0.45); }
+      .sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--surface); border-radius: 22px 22px 0 0; padding: 8px 20px 26px; box-shadow: 0 -8px 30px rgba(0,0,0,0.18); }
+      .grab { width: 38px; height: 4px; border-radius: 999px; background: var(--border); margin: 6px auto 16px; }
+      .sh-title { font-size: 0.78rem; color: var(--muted); font-weight: 600; }
+      .sh-name { font-size: 1.4rem; font-weight: 800; margin: 2px 0 16px; }
+      .field { margin-bottom: 14px; }
+      .flbl { font-size: 0.66rem; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
+      .input { display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; font-size: 1.05rem; font-weight: 700; }
+      .input .edit { color: var(--accent); font-size: 0.8rem; font-weight: 600; }
+      .selector { display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; }
+      .selector .left { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+      .selector .left .left2 { font-size: 0.72rem; color: var(--muted); font-weight: 500; }
+      .chev { color: var(--muted); }
+      .btn { width: 100%; padding: 15px; border-radius: 14px; background: var(--grad); color: #fff; font-weight: 700; font-size: 1rem; text-align: center; border: 0; margin-top: 6px; }
+      .cancel { text-align: center; color: var(--muted); font-size: 0.85rem; margin-top: 14px; font-weight: 500; }
+    </style>
+  </head>
+  <body>
+    <div class="behind">
+      <h1>Recurring</h1>
+      <div class="card">
+        <div class="row"><span class="status paid"></span><span class="nm">House EMI</span><span class="amt">$2,200</span></div>
+        <div class="row"><span class="status paid"></span><span class="nm">Car EMI</span><span class="amt">$1,250</span></div>
+        <div class="row"><span class="status hl"></span><span class="nm">India</span><span class="amt">$1,550</span></div>
+        <div class="row"><span class="status"></span><span class="nm">Robinhood</span><span class="amt">$2,200</span></div>
+      </div>
+    </div>
+
+    <div class="scrim"></div>
+    <div class="sheet">
+      <div class="grab"></div>
+      <div class="sh-title">Pay this bill 💸</div>
+      <div class="sh-name">India</div>
+
+      <div class="field">
+        <div class="flbl">Amount</div>
+        <div class="input"><span>$1,550.00</span><span class="edit">edit ✏️</span></div>
+      </div>
+
+      <div class="field">
+        <div class="flbl">Paid from</div>
+        <div class="selector">
+          <span class="left">💵 Paychecks <span class="left2">&nbsp; $2,000 left</span></span>
+          <span class="chev">▾</span>
+        </div>
+      </div>
+
+      <button class="btn">✓ Mark paid</button>
+      <div class="cancel">Cancel</div>
+    </div>
+  </body>
+</html>

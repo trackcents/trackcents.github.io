@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=390, initial-scale=1" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: oklch(0.965 0.013 78); --surface: oklch(1 0 0); --elevated: oklch(0.975 0.01 78);
+        --border: oklch(0.9 0.011 72); --text: oklch(0.28 0.014 55); --muted: oklch(0.53 0.018 58);
+        --accent: oklch(0.62 0.125 45); --accent-soft: oklch(0.93 0.04 55); --success: oklch(0.58 0.15 158);
+        --grad: linear-gradient(135deg, oklch(0.62 0.13 44), oklch(0.69 0.11 60));
+      }
+      * { box-sizing: border-box; margin: 0; font-family: 'Inter', system-ui, sans-serif; }
+      body { width: 390px; height: 760px; background: var(--bg); color: var(--text); position: relative; overflow: hidden; }
+      .behind { padding: 16px; filter: blur(1px); opacity: 0.45; }
+      h1 { font-size: 1.35rem; font-weight: 800; }
+      .scrim { position: absolute; inset: 0; background: rgba(15, 20, 28, 0.45); }
+      .sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--surface); border-radius: 22px 22px 0 0; padding: 8px 20px 24px; box-shadow: 0 -8px 30px rgba(0,0,0,0.18); }
+      .grab { width: 38px; height: 4px; border-radius: 999px; background: var(--border); margin: 6px auto 14px; }
+      .sh-name { font-size: 1.25rem; font-weight: 800; margin-bottom: 16px; }
+      .field { margin-bottom: 13px; }
+      .flbl { font-size: 0.66rem; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
+      .input { border: 1px solid var(--border); border-radius: 12px; padding: 11px 14px; font-size: 1rem; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+      .input .ph { color: var(--muted); font-weight: 500; }
+      .seg { display: flex; background: var(--elevated); border-radius: 12px; padding: 3px; }
+      .seg div { flex: 1; text-align: center; padding: 9px; border-radius: 9px; font-weight: 600; font-size: 0.9rem; color: var(--muted); }
+      .seg div.on { background: var(--surface); color: var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+      .twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .chips { display: flex; gap: 7px; flex-wrap: wrap; }
+      .chip { padding: 8px 13px; border-radius: 999px; border: 1px solid var(--border); font-size: 0.82rem; font-weight: 600; color: var(--muted); }
+      .chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+      .note { font-size: 0.74rem; color: var(--muted); background: var(--elevated); border-radius: 12px; padding: 10px 13px; line-height: 1.45; margin: 4px 0 14px; }
+      .note b { color: var(--text); }
+      .btn { width: 100%; padding: 15px; border-radius: 14px; background: var(--grad); color: #fff; font-weight: 700; font-size: 1rem; text-align: center; border: 0; }
+    </style>
+  </head>
+  <body>
+    <div class="behind"><h1>Recurring</h1></div>
+    <div class="scrim"></div>
+    <div class="sheet">
+      <div class="grab"></div>
+      <div class="sh-name">New bill 📋</div>
+
+      <div class="twocol">
+        <div class="field">
+          <div class="flbl">Name</div>
+          <div class="input">Car EMI</div>
+        </div>
+        <div class="field">
+          <div class="flbl">Amount</div>
+          <div class="input">$1,250.00</div>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="flbl">Repeats?</div>
+        <div class="seg"><div>One-time</div><div class="on">Recurring 🔁</div></div>
+      </div>
+
+      <div class="field">
+        <div class="flbl">Every</div>
+        <div class="chips">
+          <span class="chip on">Month</span><span class="chip">3 months</span>
+          <span class="chip">6 months</span><span class="chip">Year</span><span class="chip">Custom</span>
+        </div>
+      </div>
+
+      <div class="twocol">
+        <div class="field">
+          <div class="flbl">First due date</div>
+          <div class="input">Jun 14 <span class="ph">▾</span></div>
+        </div>
+        <div class="field">
+          <div class="flbl">Paid from</div>
+          <div class="input">💵 Paychecks <span class="ph">▾</span></div>
+        </div>
+      </div>
+
+      <div class="note">
+        🔁 After each payment the <b>next due date is set automatically</b> (+1 month
+        here). Pick <b>One-time</b> and it's just for this month — no repeat.
+      </div>
+
+      <button class="btn">Add bill</button>
+    </div>
+  </body>
+</html>

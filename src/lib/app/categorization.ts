@@ -90,6 +90,15 @@ export interface TransactionAnnotation {
    * `FlowIntent` literals from `src/lib/app/flow-intent.ts`.
    */
   flow_intent?: string;
+  /**
+   * Which income POCKET this expense is paid from (spec 002-income-pockets §4).
+   * Value is a `Pocket.id` (e.g. 'paychecks' | 'extra' | a user-added id). Absent
+   * → the expense draws from the default Paychecks pocket (the 90% rule). Like
+   * `flow_intent`, this is a user extra that MUST survive rule re-apply and
+   * normalization (see extrasOf / pruneAnnotation), or the pocket choice would
+   * silently revert on the next load.
+   */
+  paid_from?: string;
 }
 
 /** One leg of a split transaction (US-SPLIT). */
@@ -125,6 +134,9 @@ function extrasOf(a: TransactionAnnotation): Partial<TransactionAnnotation> {
   // an override on a transaction with no category/other-extras was being dropped
   // (the deposit reverted to income). Same class of bug as pruneAnnotation.
   if (a.flow_intent !== undefined && a.flow_intent !== '') e.flow_intent = a.flow_intent;
+  // The paid-from pocket is a user choice (§4) and must outlive a rule re-apply,
+  // exactly like flow_intent — otherwise an expense's pocket reverts on next load.
+  if (a.paid_from !== undefined && a.paid_from !== '') e.paid_from = a.paid_from;
   return e;
 }
 function hasExtras(a: TransactionAnnotation): boolean {
@@ -277,6 +289,9 @@ export function pruneAnnotation(a: TransactionAnnotation): TransactionAnnotation
   // from the Manage-income sheet, or an intent flip from the row drawer) must
   // survive normalization. This was previously dropped, silently undoing the edit.
   if (a.flow_intent !== undefined && a.flow_intent !== '') cleaned.flow_intent = a.flow_intent;
+  // The paid-from pocket must survive normalization too (§4) — same class of bug
+  // as flow_intent: an edit setting the pocket would otherwise be silently undone.
+  if (a.paid_from !== undefined && a.paid_from !== '') cleaned.paid_from = a.paid_from;
   // An uncategorized, manual annotation with no extras carries nothing — drop it.
   if (
     cleaned.category_id === null &&

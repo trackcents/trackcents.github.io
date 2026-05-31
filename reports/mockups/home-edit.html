@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=390, initial-scale=1" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: oklch(0.965 0.013 78); --surface: oklch(1 0 0); --elevated: oklch(0.975 0.01 78);
+        --border: oklch(0.9 0.011 72); --text: oklch(0.28 0.014 55); --muted: oklch(0.53 0.018 58);
+        --accent: oklch(0.62 0.125 45); --accent2: oklch(0.68 0.11 58); --accent-soft: oklch(0.93 0.04 55);
+        --success: oklch(0.58 0.15 158); --danger: oklch(0.57 0.21 22);
+        --grad: linear-gradient(135deg, oklch(0.62 0.13 44), oklch(0.69 0.11 60));
+      }
+      * { box-sizing: border-box; margin: 0; font-family: 'Inter', system-ui, sans-serif; }
+      body { width: 390px; background: var(--bg); color: var(--text); padding: 16px 16px 88px; }
+      .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+      .month { background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; font-weight: 600; font-size: 0.88rem; }
+      .done { font-size: 0.85rem; font-weight: 700; color: #fff; background: var(--grad); border-radius: 999px; padding: 6px 16px; }
+      .hint { font-size: 0.74rem; color: var(--muted); margin: 8px 2px 16px; }
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 14px; margin-bottom: 12px; box-shadow: 0 2px 10px rgba(60,40,20,0.05); display: flex; align-items: center; gap: 11px; }
+      .del { width: 24px; height: 24px; border-radius: 999px; background: var(--danger); color: #fff; flex: none; display: grid; place-items: center; font-size: 17px; font-weight: 700; line-height: 1; }
+      .chip { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; font-size: 18px; flex: none; }
+      .mid { flex: 1; min-width: 0; }
+      .nm { font-weight: 700; font-size: 0.98rem; }
+      .meta { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+      .editicons { display: flex; gap: 6px; flex: none; }
+      .ei { width: 30px; height: 30px; border-radius: 9px; border: 1px solid var(--border); display: grid; place-items: center; font-size: 14px; color: var(--muted); }
+      .grip { color: var(--muted); font-size: 18px; flex: none; }
+      .addbox { border: 1.5px dashed var(--accent); border-radius: 16px; padding: 15px; text-align: center; color: var(--accent); font-weight: 700; font-size: 0.95rem; background: var(--accent-soft); margin-bottom: 12px; }
+      .note { font-size: 0.72rem; color: var(--muted); background: var(--elevated); border-radius: 12px; padding: 11px 13px; line-height: 1.45; }
+      .note b { color: var(--text); }
+      .tabbar { position: fixed; bottom: 0; left: 0; width: 390px; background: var(--surface); border-top: 1px solid var(--border); display: flex; justify-content: space-around; align-items: center; padding: 8px 0 12px; }
+      .tab { font-size: 0.6rem; color: var(--muted); text-align: center; } .tab.on { color: var(--accent); font-weight: 600; } .tab .ic { font-size: 17px; display: block; }
+      .fab { width: 46px; height: 46px; border-radius: 50%; background: var(--grad); color: #fff; display: grid; place-items: center; font-size: 24px; margin-top: -18px; box-shadow: 0 4px 12px rgba(180,90,40,0.4); }
+    </style>
+  </head>
+  <body>
+    <div class="head"><div class="month">May 2026 · this cycle</div><div class="done">Done</div></div>
+    <div class="hint">Editing your income boxes — rename, change logo, reorder or remove.</div>
+
+    <div class="card">
+      <span class="del">−</span>
+      <div class="chip" style="background: oklch(0.95 0.05 158); color: var(--success)">💵</div>
+      <div class="mid"><div class="nm">Paychecks</div><div class="meta">42 transactions</div></div>
+      <div class="editicons"><span class="ei">✎</span><span class="ei">🎨</span></div>
+      <span class="grip">≡</span>
+    </div>
+
+    <div class="card">
+      <span class="del">−</span>
+      <div class="chip" style="background: var(--accent-soft); color: var(--accent)">🎁</div>
+      <div class="mid"><div class="nm">Extra</div><div class="meta">7 transactions</div></div>
+      <div class="editicons"><span class="ei">✎</span><span class="ei">🎨</span></div>
+      <span class="grip">≡</span>
+    </div>
+
+    <div class="addbox">＋ Add income box</div>
+
+    <div class="note">
+      🛡️ Removing a box never loses data — it asks
+      <b>"move these 42 transactions to → [another box]"</b> first. And "Add box"
+      only shows here in Edit, so a normal tap can't create one by accident.
+    </div>
+
+    <div class="tabbar">
+      <div class="tab on"><span class="ic">⌂</span>Home</div>
+      <div class="tab"><span class="ic">≣</span>Transactions</div>
+      <div class="fab">＋</div>
+      <div class="tab"><span class="ic">🔁</span>Recurring</div>
+      <div class="tab"><span class="ic">☰</span>More</div>
+    </div>
+  </body>
+</html>

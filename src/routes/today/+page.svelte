@@ -40,7 +40,8 @@
   import { loadGoals } from '$lib/db/goals-store';
   import { formatMoney } from '$lib/util/money';
   import CategoryIcon from '$components/CategoryIcon.svelte';
-  import BudgetBox from '$components/BudgetBox.svelte';
+  import PocketCards from '$components/PocketCards.svelte';
+  import { pocketSummariesForMonth, DEFAULT_POCKETS } from '$lib/app/pockets';
   import MonthPickerSheet from '$components/MonthPickerSheet.svelte';
   import QuickAddSheet from '$components/QuickAddSheet.svelte';
   import ManageIncomeSheet from '$components/ManageIncomeSheet.svelte';
@@ -352,6 +353,13 @@
   const activeFlow = $derived(nbm.get(activeMonth));
   const activeMonthLabel = $derived(monthName(activeMonth));
 
+  // Income pockets for the active month (spec 002-income-pockets §2/§7.11) — the
+  // per-pocket carry-forward (±) math that replaces the single combined hero.
+  const activePockets = $derived(cat.pockets ?? DEFAULT_POCKETS);
+  const activePocketSummaries = $derived(
+    pocketSummariesForMonth(imports, cat.annotations, activeMonth, activePockets)
+  );
+
   // ── Manage-income drill-down ────────────────────────────────────────────
   // The exact income deposits behind the BudgetBox "of $X income" number, so
   // tapping the income line shows ONLY those (not all transactions) and lets
@@ -422,24 +430,6 @@
 
   const allDetailed = $derived(detailedRowsFromImports(imports, cat.annotations));
 
-  /**
-   * "Extra income" for the ACTIVE month, used only for the small green
-   * "+$X other inflows →" chip (a secondary entry into the income drill-down).
-   * Derived from the SAME flow-intent income rows as the drill-down (so marking
-   * a deposit "not income" / excluding it immediately updates this chip too),
-   * NOT from raw inflows. It is still "income beyond the single largest deposit"
-   * — a provisional split; the real "which deposit is the paycheck" decision
-   * arrives with the paycheck-selection flow.
-   */
-  const activeExtraIncomeMinor = $derived.by<bigint>(() => {
-    const amts = activeIncomeRows.map((r) => r.amount_minor);
-    if (amts.length < 2) return 0n;
-    amts.sort((a, b) => (a > b ? -1 : a < b ? 1 : 0));
-    let extra = 0n;
-    for (let i = 1; i < amts.length; i++) extra += amts[i]!;
-    return extra;
-  });
-
   // Recent rows within the active month (so the slider browses real history).
   const recent = $derived(
     allDetailed
@@ -461,21 +451,16 @@
   {#if loading}
     <p class="text-sm" style:color="var(--color-muted)">Loading…</p>
   {:else if !hasData}
-    <!-- BudgetBox carries its own ◀ pill ▶ widget — no outer MonthSlider needed.
-         (The MonthSlider was the OLD swipe wrapper that re-introduced the
-         left/right chevron buttons we deliberately killed in v1.) -->
-    <BudgetBox
-      monthKey={activeMonth}
+    <!-- PocketCards carries its own ◀ pill ▶ widget — no outer MonthSlider needed. -->
+    <PocketCards
+      summaries={activePocketSummaries}
       monthLabel={activeMonthLabel}
-      flow={activeFlow}
-      {todayIso}
-      extraIncomeMinor={activeExtraIncomeMinor}
       onPrevMonth={prevMonth}
       onNextMonth={nextMonth}
       canPrev={canPrevMonth}
       canNext={canNextMonth}
       onLabelClick={() => (pickerOpen = true)}
-      onManageIncome={() => (manageIncomeOpen = true)}
+      onManage={() => (manageIncomeOpen = true)}
     />
 
     <div class="card rise mt-4 p-8 text-center">
@@ -538,19 +523,16 @@
       </div>
     {/if}
 
-    <!-- BudgetBox carries its own ◀ pill ▶ widget — no outer MonthSlider needed. -->
-    <BudgetBox
-      monthKey={activeMonth}
+    <!-- PocketCards carries its own ◀ pill ▶ widget — no outer MonthSlider needed. -->
+    <PocketCards
+      summaries={activePocketSummaries}
       monthLabel={activeMonthLabel}
-      flow={activeFlow}
-      {todayIso}
-      extraIncomeMinor={activeExtraIncomeMinor}
       onPrevMonth={prevMonth}
       onNextMonth={nextMonth}
       canPrev={canPrevMonth}
       canNext={canNextMonth}
       onLabelClick={() => (pickerOpen = true)}
-      onManageIncome={() => (manageIncomeOpen = true)}
+      onManage={() => (manageIncomeOpen = true)}
     />
 
     {#if spentTodayMinor > 0n}

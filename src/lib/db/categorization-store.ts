@@ -10,6 +10,7 @@
  */
 import { encodeStateForStorage, decodeStateFromStorage } from './store-crypto';
 import type { Category, CategoryRule, TransactionAnnotation } from '../app/categorization';
+import { DEFAULT_POCKETS, type Pocket } from '../app/pockets';
 
 const LS_KEY = 'mtrb.categorization';
 
@@ -18,10 +19,18 @@ export interface CategorizationState {
   rules: CategoryRule[];
   /** Keyed by the stable transaction key `<pdf_source_hash>#<txIndex>`. */
   annotations: Record<string, TransactionAnnotation>;
+  /**
+   * Income pockets (spec 002-income-pockets §2). `loadCategorization` always
+   * populates this (defaulting to the two built-ins 💵 Paychecks / 🎁 Extra for any
+   * state saved before this field existed). Optional on the type so the many
+   * literal `{ categories, rules, annotations }` initialisers across the routes do
+   * not all have to change; treat an absent value as `DEFAULT_POCKETS`.
+   */
+  pockets?: Pocket[];
 }
 
 function empty(): CategorizationState {
-  return { categories: [], rules: [], annotations: {} };
+  return { categories: [], rules: [], annotations: {}, pockets: [...DEFAULT_POCKETS] };
 }
 
 /**
@@ -58,7 +67,11 @@ export async function loadCategorization(): Promise<CategorizationState> {
     return {
       categories: parsed.categories ?? [],
       rules: parsed.rules ?? [],
-      annotations: parsed.annotations ?? {}
+      annotations: parsed.annotations ?? {},
+      pockets:
+        parsed.pockets !== undefined && parsed.pockets.length > 0
+          ? parsed.pockets
+          : [...DEFAULT_POCKETS]
     };
   } catch {
     return empty();

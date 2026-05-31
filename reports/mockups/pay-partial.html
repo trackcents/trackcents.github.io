@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=390, initial-scale=1" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: oklch(0.965 0.013 78); --surface: oklch(1 0 0); --elevated: oklch(0.975 0.01 78);
+        --border: oklch(0.9 0.011 72); --text: oklch(0.28 0.014 55); --muted: oklch(0.53 0.018 58);
+        --accent: oklch(0.62 0.125 45); --accent-soft: oklch(0.93 0.04 55); --success: oklch(0.58 0.15 158);
+        --grad: linear-gradient(135deg, oklch(0.62 0.13 44), oklch(0.69 0.11 60));
+      }
+      * { box-sizing: border-box; margin: 0; font-family: 'Inter', system-ui, sans-serif; }
+      body { width: 390px; height: 760px; background: var(--bg); color: var(--text); position: relative; overflow: hidden; }
+      .behind { padding: 16px; filter: blur(1px); opacity: 0.5; }
+      h1 { font-size: 1.35rem; font-weight: 800; margin-bottom: 12px; }
+      .bcard { background: var(--surface); border: 1px solid var(--border); border-radius: 18px; padding: 4px 14px; }
+      .brow { display: flex; align-items: center; justify-content: space-between; padding: 13px 0; border-top: 1px solid var(--border); font-weight: 600; font-size: 0.95rem; }
+      .brow:first-child { border-top: 0; }
+      .scrim { position: absolute; inset: 0; background: rgba(15, 20, 28, 0.45); }
+      .sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--surface); border-radius: 22px 22px 0 0; padding: 8px 20px 24px; box-shadow: 0 -8px 30px rgba(0,0,0,0.18); }
+      .grab { width: 38px; height: 4px; border-radius: 999px; background: var(--border); margin: 6px auto 14px; }
+      .sh-title { font-size: 0.78rem; color: var(--muted); font-weight: 600; }
+      .sh-name { font-size: 1.4rem; font-weight: 800; margin: 2px 0 16px; }
+      .field { margin-bottom: 13px; }
+      .flbl { font-size: 0.66rem; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
+      .input { display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border); border-radius: 12px; padding: 11px 14px; font-size: 1.05rem; font-weight: 700; }
+      .input.focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+      .input .edit { color: var(--accent); font-size: 0.78rem; font-weight: 600; }
+      .selector { display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border); border-radius: 12px; padding: 11px 14px; font-weight: 600; }
+      .selector .l2 { font-size: 0.72rem; color: var(--muted); font-weight: 500; }
+      .twocol { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      .hint { background: var(--accent-soft); color: var(--accent); border-radius: 12px; padding: 10px 13px; font-size: 0.8rem; font-weight: 600; margin: 2px 0 14px; }
+      .btn { width: 100%; padding: 15px; border-radius: 14px; background: var(--grad); color: #fff; font-weight: 700; font-size: 1rem; text-align: center; border: 0; }
+      .cancel { text-align: center; color: var(--muted); font-size: 0.85rem; margin-top: 13px; font-weight: 500; }
+    </style>
+  </head>
+  <body>
+    <div class="behind">
+      <h1>Recurring</h1>
+      <div class="bcard">
+        <div class="brow"><span>House EMI</span><span>$2,200</span></div>
+        <div class="brow" style="color: var(--accent)"><span>India</span><span>$1,500</span></div>
+        <div class="brow"><span>Car EMI</span><span>$1,250</span></div>
+      </div>
+    </div>
+
+    <div class="scrim"></div>
+    <div class="sheet">
+      <div class="grab"></div>
+      <div class="sh-title">Pay this bill 💸</div>
+      <div class="sh-name">India</div>
+
+      <div class="field">
+        <div class="flbl">Total amount</div>
+        <div class="input"><span>$1,500.00</span><span class="edit">edit ✏️</span></div>
+      </div>
+
+      <div class="field">
+        <div class="flbl">Paying now</div>
+        <div class="input focus"><span>$500.00</span><span class="edit">editing…</span></div>
+      </div>
+
+      <div class="hint">→ Leaves $1,000 · this bill stays as “partially paid”</div>
+
+      <div class="twocol">
+        <div class="field">
+          <div class="flbl">Paid from</div>
+          <div class="selector"><span>💵 Paychecks</span><span>▾</span></div>
+        </div>
+        <div class="field">
+          <div class="flbl">Paid on</div>
+          <div class="selector"><span>Jun 3</span><span>▾</span></div>
+        </div>
+      </div>
+
+      <button class="btn">✓ Mark $500 paid</button>
+      <div class="cancel">Cancel</div>
+    </div>
+  </body>
+</html>

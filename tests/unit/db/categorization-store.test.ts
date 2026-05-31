@@ -8,6 +8,7 @@ import {
 import { setSessionKey, clearSessionKey } from '../../../src/lib/crypto/session';
 import { deriveKey } from '../../../src/lib/crypto/kdf';
 import { generateSalt } from '../../../src/lib/crypto/salt';
+import { DEFAULT_POCKETS } from '../../../src/lib/app/pockets';
 
 function stubLocalStorage(): Map<string, string> {
   const m = new Map<string, string>();
@@ -22,7 +23,8 @@ function stubLocalStorage(): Map<string, string> {
 const sample: CategorizationState = {
   categories: [{ id: 'groceries', name: 'Groceries' }],
   rules: [{ id: 'r1', contains: 'WHOLEFOODS', category_id: 'groceries' }],
-  annotations: { 'hash#0': { category_id: 'groceries', source: 'manual' } }
+  annotations: { 'hash#0': { category_id: 'groceries', source: 'manual' } },
+  pockets: [...DEFAULT_POCKETS]
 };
 
 beforeEach(() => {
@@ -35,8 +37,13 @@ afterEach(() => {
 });
 
 describe('categorization-store', () => {
-  test('empty when nothing stored', async () => {
-    expect(await loadCategorization()).toEqual({ categories: [], rules: [], annotations: {} });
+  test('empty when nothing stored (with the two default pockets)', async () => {
+    expect(await loadCategorization()).toEqual({
+      categories: [],
+      rules: [],
+      annotations: {},
+      pockets: DEFAULT_POCKETS
+    });
   });
 
   test('round-trips plaintext when no session key is loaded', async () => {
@@ -65,7 +72,8 @@ describe('categorization-store', () => {
             { category_id: null, amount_minor: 1000_00n, flow_intent: 'investment_out' }
           ]
         }
-      }
+      },
+      pockets: [...DEFAULT_POCKETS]
     };
     // Must NOT throw (bigint in the blob), and the bigints must survive verbatim.
     await saveCategorization(withSplit);
@@ -89,7 +97,8 @@ describe('categorization-store', () => {
           source: 'manual',
           split: [{ category_id: null, amount_minor: 250n }]
         }
-      }
+      },
+      pockets: [...DEFAULT_POCKETS]
     };
     await saveCategorization(withSplit);
     expect(await loadCategorization()).toEqual(withSplit);
@@ -100,6 +109,35 @@ describe('categorization-store', () => {
     setSessionKey(key);
     await saveCategorization(sample);
     clearSessionKey(); // now locked
-    expect(await loadCategorization()).toEqual({ categories: [], rules: [], annotations: {} });
+    expect(await loadCategorization()).toEqual({
+      categories: [],
+      rules: [],
+      annotations: {},
+      pockets: DEFAULT_POCKETS
+    });
+  });
+
+  test('pockets default in for pre-pocket states, and custom pockets round-trip', async () => {
+    // A state saved before pockets existed (no `pockets` key) gains the defaults.
+    const legacy = {
+      categories: [],
+      rules: [],
+      annotations: {}
+    } as unknown as CategorizationState;
+    await saveCategorization(legacy);
+    expect((await loadCategorization()).pockets).toEqual(DEFAULT_POCKETS);
+
+    // A user-customised pocket list survives verbatim.
+    const custom: CategorizationState = {
+      categories: [],
+      rules: [],
+      annotations: {},
+      pockets: [
+        ...DEFAULT_POCKETS,
+        { id: 'india', name: 'India', logo: '🇮🇳', color: 'accent', order: 2 }
+      ]
+    };
+    await saveCategorization(custom);
+    expect((await loadCategorization()).pockets).toEqual(custom.pockets);
   });
 });
