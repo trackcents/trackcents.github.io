@@ -313,6 +313,91 @@ describe('inferFlowIntent — real purchases stay purchases', () => {
   });
 });
 
+describe('inferFlowIntent — a POSITIVE credit-card row is NEVER income (spec §6)', () => {
+  // Regression for the bug that inflated the "Extra" income pocket: positive
+  // credit-card rows (merchant returns + card payments) were defaulting to
+  // gift_in (income). They must split into refund (merchant credit) vs cc_payment
+  // (payment to the card) — both EXCLUDED from income. Descriptions are verbatim
+  // from the user's real statements (temp3).
+
+  test('Amazon return credit on a CC → refund (not gift_in)', () => {
+    expect(
+      inferFlowIntent(
+        ctx({
+          description: 'AMAZON MKTPLACE PMTS Amzn.com/bill WA (Order Number 114-2788...)',
+          amount_minor: 28_24n,
+          is_credit_card_row: true
+        })
+      )
+    ).toBe('refund');
+  });
+
+  test('eBay / PayPal / store returns on a CC → refund', () => {
+    for (const desc of [
+      'PAYPAL *EBAY US 786-762-5150 CA',
+      '03/16 eBay O*26-14302-66303 800-4563229 CA',
+      'AEROPOSTALE 0872 ROUND ROCK TX',
+      'ROSS STORES #1487 GEORGETOWN TX',
+      '05/01 FEDEX MEMPHIS TN 1316 2050'
+    ]) {
+      expect(
+        inferFlowIntent(ctx({ description: desc, amount_minor: 84_37n, is_credit_card_row: true })),
+        desc
+      ).toBe('refund');
+    }
+  });
+
+  test('"BA ELECTRONIC PAYMENT" (payment TO the card) → cc_payment (not income)', () => {
+    expect(
+      inferFlowIntent(
+        ctx({
+          description: '03/02 BA ELECTRONIC PAYMENT 3037 2050',
+          amount_minor: 200_00n,
+          is_credit_card_row: true
+        })
+      )
+    ).toBe('cc_payment');
+  });
+
+  test('"ONLINE/MOBILE PAYMENT" on a CC → cc_payment (not income)', () => {
+    expect(
+      inferFlowIntent(
+        ctx({
+          description: '05/11 ONLINE/MOBILE PAYMENT CONF#25ri1myrc 4980 2050',
+          amount_minor: 242_52n,
+          is_credit_card_row: true
+        })
+      )
+    ).toBe('cc_payment');
+  });
+
+  test('the positive-CC default is refund, never gift_in (a bare credit)', () => {
+    const intent = inferFlowIntent(
+      ctx({
+        description: 'SOME UNKNOWN MERCHANT CREDIT',
+        amount_minor: 9_99n,
+        is_credit_card_row: true
+      })
+    );
+    expect(intent).toBe('refund');
+    expect(INCOME_INTENTS.has(intent)).toBe(false);
+  });
+
+  test('a positive BANK row is unchanged — still gift_in (real extra income)', () => {
+    // The fix must NOT touch bank-side inflows: Zelle from a person, a tax refund,
+    // etc. stay income. Only credit-card positives are reclassified.
+    expect(
+      inferFlowIntent(
+        ctx({
+          description: 'Irs Treas 310 Tax Ref PPD ID: 9111736959',
+          amount_minor: 9_260_00n,
+          is_credit_card_row: false
+        })
+      )
+    ).toBe('gift_in');
+  });
+});
+
 describe('classification sets — every intent is in exactly one bucket', () => {
   test('SPEND ∩ INCOME ∩ MOVEMENT = ∅', () => {
     const allSpend = [...SPEND_INTENTS];

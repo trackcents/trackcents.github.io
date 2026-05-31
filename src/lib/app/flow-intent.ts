@@ -420,5 +420,19 @@ export function inferFlowIntent(ctx: FlowIntentContext): FlowIntent {
 
   // 6. Default by sign.
   if (ctx.amount_minor < 0n) return ctx.is_credit_card_row ? 'purchase' : 'unknown';
+  // A POSITIVE row on a CREDIT-CARD statement is NEVER income (spec §6): on a card
+  // a credit is either a payment you made TO the card or a merchant refund — never
+  // salary or a gift. Counting these as income was the bug that inflated the
+  // "Extra" pocket (Amazon/eBay returns, "ONLINE/MOBILE PAYMENT", "BA ELECTRONIC
+  // PAYMENT" were all landing in income). Split them honestly:
+  //   - looks like a payment to the card  → cc_payment (money movement, neutral)
+  //   - otherwise (a merchant credit)      → refund      (nets that card's spend)
+  // The symmetric guard to the negative→`purchase` line above. Explicit
+  // "PAYMENT - THANK YOU" descriptors are already caught at step 5.
+  if (ctx.is_credit_card_row) {
+    return /\b(payment|autopay|ach|e-?pay(?:ment)?)\b/i.test(cleanDescription(ctx.description))
+      ? 'cc_payment'
+      : 'refund';
+  }
   return 'gift_in';
 }
