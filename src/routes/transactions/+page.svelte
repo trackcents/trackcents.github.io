@@ -15,6 +15,8 @@
   import QuickAddSheet from '$components/QuickAddSheet.svelte';
   import { loadImports } from '$lib/app/load-store';
   import { detectTransfers, type TransferTxn } from '$lib/app/transfer-detector';
+  import { suggestRefundLinks } from '$lib/app/refund-match';
+  import type { ImportRecord } from '$lib/db/store';
   import { formatMoney } from '$lib/util/money';
   import {
     toUnifiedRows,
@@ -292,6 +294,63 @@
     excludedNotice = null;
   }
 
+  // ── Likely returns (spec §7.6) — suggest refund → purchase links ───────────
+  let refundLinks = $derived(
+    // ImportSuccess ⊃ the fields suggestRefundLinks reads (bank_name, statement,
+    // pdf_source_hash, transactions) — the cast is safe (same as the Home page).
+    suggestRefundLinks(imports as unknown as ImportRecord[], annotations).filter(
+      (l) => !annotations[l.refundKey]?.ignored
+    )
+  );
+  let linkedNotice = $state<{ refundKey: string; amount: bigint } | null>(null);
+  let linkTimer: ReturnType<typeof setTimeout> | undefined;
+  function purchaseDesc(key: string): string {
+    for (const imp of imports) {
+      for (let i = 0; i < imp.transactions.length; i++) {
+        if (`${imp.pdf_source_hash}#${i}` === key) return imp.transactions[i]!.description;
+      }
+    }
+    return '';
+  }
+  async function linkRefund(refundKey: string, purchaseKey: string, amount: bigint): Promise<void> {
+    const next = setAnnotation(new Map(Object.entries(annotations)), refundKey, {
+      refund_of: purchaseKey
+    });
+    annotations = Object.fromEntries(next);
+    await saveCategorization({ categories, rules, annotations });
+    linkedNotice = { refundKey, amount };
+    clearTimeout(linkTimer);
+    linkTimer = setTimeout(() => (linkedNotice = null), 6000);
+  }
+  async function undoLink(): Promise<void> {
+    if (linkedNotice === null) return;
+    const next = setAnnotation(new Map(Object.entries(annotations)), linkedNotice.refundKey, {
+      refund_of: ''
+    });
+    annotations = Object.fromEntries(next);
+    await saveCategorization({ categories, rules, annotations });
+    clearTimeout(linkTimer);
+    linkedNotice = null;
+  }
+  const MONTHS = [
+    '',
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec'
+  ];
+  function shortDate(iso: string): string {
+    return `${MONTHS[Number(iso.slice(5, 7))]} ${Number(iso.slice(8, 10))}`;
+  }
+
   function clearFilter() {
     filter = {};
     selectedTag = null;
@@ -398,6 +457,55 @@
             <span>Excluded {formatMoney(excludedNotice.amount)} transfer from spending.</span>
             <button type="button" class="font-semibold underline" onclick={undoExclude}>Undo</button
             >
+          </div>
+        {/if}
+      </section>
+    {/if}
+
+    {#if refundLinks.length > 0}
+      <section class="card rise mt-3 p-4">
+        <h2 class="text-sm font-semibold">↩ Likely returns</h2>
+        <p class="mt-0.5 mb-2 text-xs text-[var(--color-muted)]">
+          These credits look like refunds of an earlier purchase. Link one and it nets that purchase
+          (a partial return shows "$X of $Y returned") — never counted as income.
+        </p>
+        <ul class="space-y-1.5">
+          {#each refundLinks.slice(0, 8) as l (l.refundKey)}
+            <li
+              class="flex flex-wrap items-center justify-between gap-2 text-sm"
+              transition:slide={{ duration: 200 }}
+            >
+              <span class="min-w-0">
+                <span class="num font-medium" style:color="var(--color-success)"
+                  >+{formatMoney(l.refundAmount)}</span
+                >
+                <span class="text-[var(--color-muted)]">
+                  · refund of your {formatMoney(l.purchaseAmount)}
+                  {purchaseDesc(l.purchaseKey).slice(0, 18) || l.merchant} buy ({shortDate(
+                    l.purchaseDate
+                  )}){#if l.confidence === 'high'}
+                    · order&nbsp;match{/if}
+                </span>
+              </span>
+              <button
+                type="button"
+                class="exclude-btn"
+                onclick={() => linkRefund(l.refundKey, l.purchaseKey, l.refundAmount)}
+              >
+                ↩ Link
+              </button>
+            </li>
+          {/each}
+        </ul>
+
+        {#if linkedNotice}
+          <div
+            class="mt-3 flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-xs"
+            style="background-color: var(--color-success-soft); color: var(--color-success);"
+            transition:slide={{ duration: 200 }}
+          >
+            <span>Linked {formatMoney(linkedNotice.amount)} refund to its purchase.</span>
+            <button type="button" class="font-semibold underline" onclick={undoLink}>Undo</button>
           </div>
         {/if}
       </section>

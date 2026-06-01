@@ -32,10 +32,7 @@
     type TransactionAnnotation
   } from '$lib/app/categorization';
   import { listAllAccounts } from '$lib/app/accounts';
-  import { detectPaychecks } from '$lib/app/paycheck-detector';
-  import type { ImportSuccess } from '$lib/app/import';
   import { spendingByCategoryByMonth } from '$lib/app/spending-summary';
-  import { getDisplayCurrency } from '$lib/util/money';
   import { today } from '$lib/util/date';
   import { monthOverMonthInsight, topMovers } from '$lib/app/spending-insights';
   import { categoryColor, categoryIconName } from '$lib/app/category-visuals';
@@ -241,43 +238,9 @@
   /** Months we have any transaction data for — drives the data-dot in the picker. */
   const monthsWithDataSet = $derived(new Set<string>(nbm.keys()));
 
-  // ── Biweekly-cadence detection (Murali's mode-detection ask) ─────────────
-  // If we see a ~14-day deposit cadence in the user's accounts, surface a one-
-  // time banner pointing them at the paycheck-window /budget route.  Dismissible
-  // via localStorage so it doesn't nag.  The HOME box still uses calendar months
-  // (changing that is a bigger architectural batch); this just *offers* the
-  // paycheck-window view to users who'd benefit.
-  const BIWEEKLY_BANNER_DISMISS_KEY = 'trackcents.biweeklyBannerDismissed';
-  let biweeklyBannerDismissed = $state<boolean>(false);
-  $effect(() => {
-    if (typeof localStorage !== 'undefined') {
-      biweeklyBannerDismissed = localStorage.getItem(BIWEEKLY_BANNER_DISMISS_KEY) === '1';
-    }
-  });
-  const biweeklyDetected = $derived.by<boolean>(() => {
-    if (imports.length === 0) return false;
-    // Suppress the "paid biweekly" nudge for INR users — Indian salaries are
-    // monthly, so this banner would only confuse Bhargav-type users (their
-    // round-3 feedback: "I'm paid MONTHLY in India.  This banner is the most
-    // 'US tech-bro' string in the app.  Suppress for INR users.").
-    if (getDisplayCurrency() === 'INR') return false;
-    try {
-      // ImportRecord ⊃ ImportSuccess for the fields detectPaychecks reads
-      // (statement.account_type, transactions[].posted_date / amount_minor /
-      // description / transaction_index).  Cast is safe.
-      const r = detectPaychecks(imports as unknown as ImportSuccess[]);
-      const c = r.detected_cadence_days;
-      return c !== null && c >= 13 && c <= 16;
-    } catch {
-      return false;
-    }
-  });
-  function dismissBiweeklyBanner(): void {
-    biweeklyBannerDismissed = true;
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem(BIWEEKLY_BANNER_DISMISS_KEY, '1');
-    }
-  }
+  // (The old "you're paid biweekly — try the paycheck-window /budget" nudge was
+  // removed: the real paycheck setup — the "Set up your paychecks" banner +
+  // PaycheckConfirmSheet — now owns this flow, so the old banner was redundant.)
 
   /** Account list for the quick-add sheet — combines imported accounts
    *  (with bank + last-4 distinguished), manually-added accounts (Bhargav
@@ -570,40 +533,6 @@
           Review →
         </span>
       </a>
-    {/if}
-
-    {#if biweeklyDetected && !biweeklyBannerDismissed}
-      <!-- Mode-detection banner: when we see a biweekly deposit cadence we
-           nudge the user toward the paycheck-window /budget view, where two
-           paychecks fund one month (the model Murali actually budgets by).
-           One-time; dismissed forever once tapped. -->
-      <div
-        class="card rise mb-4 flex items-center justify-between gap-3 p-4"
-        style="background-image: linear-gradient(to right, color-mix(in oklab, var(--color-success) 10%, transparent), transparent);"
-      >
-        <span class="text-sm">
-          💰 Looks like you're paid <strong>biweekly</strong> — try the
-          <strong>paycheck-window</strong> budget so two paychecks fund one month.
-        </span>
-        <div class="flex flex-none items-center gap-1">
-          <a
-            href="/budget"
-            class="rounded-full px-3 py-1 text-sm font-medium"
-            style="background-image: var(--grad-primary); color: var(--color-accent-fg);"
-          >
-            Open →
-          </a>
-          <button
-            type="button"
-            class="rounded-full px-2 py-1 text-xs"
-            style="color: var(--color-muted);"
-            onclick={dismissBiweeklyBanner}
-            aria-label="Dismiss biweekly banner"
-          >
-            ✕
-          </button>
-        </div>
-      </div>
     {/if}
 
     {#if needsPaycheckSetup}
