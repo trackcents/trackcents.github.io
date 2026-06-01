@@ -177,7 +177,7 @@
 
       <div class="pr-two">
         <div class="pr-field">
-          <span class="pr-lbl">Paid from</span>
+          <span class="pr-lbl">Pay from</span>
           <div class="pr-pockets">
             {#each ordered as p (p.id)}
               <button

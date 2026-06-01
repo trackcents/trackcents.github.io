@@ -335,7 +335,7 @@
         <input class="ar-date" type="date" bind:value={dueDate} onfocus={scrollIntoView} />
       </div>
       <div class="ar-field">
-        <span class="ar-lbl">Paid from</span>
+        <span class="ar-lbl">Pay from</span>
         <div class="ar-pockets">
           {#each ordered as p (p.id)}
             <button

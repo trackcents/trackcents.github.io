@@ -696,7 +696,7 @@
              overflow), so adding this option never costs a whole extra row and
              the form still fits above the keyboard. -->
         <div class="qas-paidfrom">
-          <span class="qas-lbl qas-paidfrom-lbl">Paid from</span>
+          <span class="qas-lbl qas-paidfrom-lbl">Pay from</span>
           <div class="qas-pockets">
             {#each orderedPockets as p (p.id)}
               <button
