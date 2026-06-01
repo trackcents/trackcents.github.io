@@ -197,6 +197,73 @@ export function summaryByFlowIntent(
 }
 
 /**
+ * Spend-projected DETAILED rows — the drill-down counterpart to
+ * `summaryByFlowIntent(...).spend`.  Same routing (split-expanded, `ignored`
+ * dropped, movement/CC-payment/transfer/investment excluded, refunds inherit
+ * the original purchase's category) but each row carries the DISPLAY fields
+ * (description, bank_name, key) so a drill-down list can show transactions that
+ * RECONCILE EXACTLY with `spendingByCategory(...)` over the same projection.
+ *
+ * Invariant (pinned by the unit suite): aggregating these by category equals
+ * `spendingByCategory(summaryByFlowIntent(...).spend)`, so a category's total
+ * and the transactions it reveals can never silently drift apart.
+ *
+ * Split parts get a unique key suffix (`<key>#<i>`, remainder `<key>#r`) so a
+ * keyed `{#each}` stays stable; `ignored` is always false on returned rows
+ * (ignored transactions are dropped, exactly as the total drops them).
+ */
+export function spendDetailRowsFromImports(
+  imports: ImportRecord[],
+  annotations: Record<string, TransactionAnnotation>,
+  flowIntents: ReadonlyMap<string, FlowIntent>
+): DetailedRow[] {
+  const inSpendBucket = (intent: FlowIntent): boolean =>
+    SPEND_INTENTS.has(intent) || REFUND_INTENTS.has(intent);
+  const out: DetailedRow[] = [];
+  for (const imp of imports) {
+    imp.transactions.forEach((t, i) => {
+      const key = transactionCategoryKey(imp.pdf_source_hash, i);
+      const ann = annotations[key];
+      if (ann?.ignored) return; // dropped from the total → dropped here too
+      const description = ann?.custom_name ?? cleanDescription(t.description);
+      const intent: FlowIntent = flowIntents.get(key) ?? 'unknown';
+      const push = (
+        rowKey: string,
+        amount: bigint,
+        categoryId: string | null,
+        rowIntent: FlowIntent
+      ): void => {
+        if (!inSpendBucket(rowIntent)) return; // movement / income are not spend
+        out.push({
+          key: rowKey,
+          posted_date: t.posted_date,
+          description,
+          amount_minor: amount,
+          category_id: categoryId,
+          bank_name: imp.bank_name,
+          ignored: false
+        });
+      };
+      const split = ann?.split;
+      if (split !== undefined && split.length > 0) {
+        let partsSum = 0n;
+        split.forEach((part, pi) => {
+          const partIntent = (part.flow_intent as FlowIntent | undefined) ?? intent;
+          push(`${key}#${pi}`, part.amount_minor, part.category_id, partIntent);
+          partsSum += part.amount_minor;
+        });
+        const remainder = t.amount_minor - partsSum;
+        if (remainder !== 0n)
+          push(`${key}#r`, remainder, resolveEffectiveCategory(annotations, key), intent);
+      } else {
+        push(key, t.amount_minor, resolveEffectiveCategory(annotations, key), intent);
+      }
+    });
+  }
+  return out;
+}
+
+/**
  * Stable account_id for a given import record.  Used by transfer-detector and
  * flow-intent inference so the same Chase Checking 9535 across multiple
  * statements is one account.  Format: `<bank_name>:<account_type>:<last4>`.

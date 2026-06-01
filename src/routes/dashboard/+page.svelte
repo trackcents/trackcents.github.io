@@ -11,7 +11,7 @@
   import { loadCategorization, type CategorizationState } from '$lib/db/categorization-store';
   import {
     summaryFromImports,
-    detailedRowsFromImports,
+    spendDetailRowsFromImports,
     flowIntentRowsFromImports,
     summaryByFlowIntent,
     spendableFlowByMonth
@@ -25,6 +25,14 @@
   } from '$lib/app/spending-summary';
   import { formatMoney } from '$lib/util/money';
   import { categoryColor } from '$lib/app/category-visuals';
+  import {
+    buildCategoryTree,
+    findNode,
+    levelRows,
+    sumTotals,
+    UNCATEGORIZED_ID,
+    type CatNode
+  } from '$lib/app/category-tree';
   import { themeMode } from '$lib/app/theme.svelte';
   import EChart from '$components/EChart.svelte';
 
@@ -88,23 +96,150 @@
   });
   const hasData = $derived(allTxns.length > 0);
 
-  // Drill-down: clicking a pie slice lists that category's spending below.
-  let drillCategory = $state<string | null>(null);
-  const detailed = $derived(detailedRowsFromImports(imports, cat.annotations));
-  const drillRows = $derived(
-    drillCategory === null
-      ? []
-      : detailed.filter((r) => r.amount_minor < 0n && catName(r.category_id) === drillCategory)
-  );
+  // ONE spend-projected, display-carrying row set feeds BOTH the category totals
+  // and the drill-down transaction panel, so a category's total and the
+  // transactions it reveals always reconcile — no CC-payment / transfer /
+  // investment / ignored / split drift. `spendingByCategory` sums the very rows
+  // the panel lists.
+  const spendDetail = $derived(spendDetailRowsFromImports(imports, cat.annotations, flowIntents));
+  const byCat = $derived(spendingByCategory(spendDetail));
+  const topCat = $derived([...byCat.entries()].sort((a, b) => (b[1] > a[1] ? 1 : -1))[0] ?? null);
 
-  // Spending-by-category uses ONLY the spend projection so CC payments + transfers
-  // don't pollute the pie slices.
-  const byCat = $derived(spendingByCategory(spendTxns));
-  /** Categories ranked by spend (desc) — drives the readable legend list below
-   *  the donut so every category + amount is visible at once (no pager). */
-  const byCatSorted = $derived([...byCat.entries()].sort((a, b) => (b[1] > a[1] ? 1 : -1)));
-  const topCat = $derived(byCatSorted[0] ?? null);
-  const catMax = $derived(topCat ? topCat[1] : 1n);
+  // ── Hierarchical drill (Hemanth: click a category → its sub-categories →
+  //    sub-sub → its transactions). The tree rolls each parent's total up from
+  //    its descendants; we navigate it with a path of ids + a breadcrumb. ──
+  const catTree = $derived(buildCategoryTree(cat.categories, byCat, catName));
+  const OTHER_ID = '__other__';
+  const OTHER_COLOR = '#94a3b8';
+  /** Category ids from root ([] = top). OTHER_ID may appear as a single top entry. */
+  let drillPath = $state<string[]>([]);
+  /** When set, the transactions panel shows this category's spend (catId null =
+   *  uncategorized). Identified by the row's unique `key`, never its display
+   *  name (category names are free-text and can collide). */
+  let txnSel = $state<{ key: string; catId: string | null; name: string } | null>(null);
+  /** Customize: top-level category ids the user hid (grouped into an "Other" row). */
+  let hiddenRoots = $state<Set<string>>(new Set());
+  let customizeOpen = $state(false);
+  const HIDDEN_KEY = 'mtrb.dash.hiddenCats';
+  onMount(() => {
+    try {
+      const raw = localStorage.getItem(HIDDEN_KEY);
+      if (raw !== null) hiddenRoots = new Set(JSON.parse(raw) as string[]);
+    } catch {
+      /* ignore */
+    }
+  });
+  function toggleHidden(id: string): void {
+    const next = new Set(hiddenRoots);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    hiddenRoots = next;
+    try {
+      localStorage.setItem(HIDDEN_KEY, JSON.stringify([...next]));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const currentId = $derived(drillPath.length > 0 ? drillPath[drillPath.length - 1]! : null);
+
+  type Row = {
+    key: string;
+    name: string;
+    color: string;
+    totalMinor: bigint;
+    drillable: boolean;
+    /** for non-drillable rows: which category's transactions to show. */
+    txnCatId: string | null;
+  };
+  function nodeToRow(n: CatNode): Row {
+    const realId = n.id === UNCATEGORIZED_ID ? null : n.id;
+    return {
+      key: n.id,
+      name: n.name,
+      color: n.id === UNCATEGORIZED_ID ? OTHER_COLOR : categoryColor(realId),
+      totalMinor: n.totalMinor,
+      drillable: n.hasChildrenWithSpend,
+      txnCatId: realId
+    };
+  }
+  const rows = $derived.by<Row[]>(() => {
+    const out: Row[] = [];
+    if (currentId === null) {
+      const top = levelRows(catTree, null);
+      for (const n of top.filter((n) => !hiddenRoots.has(n.id))) out.push(nodeToRow(n));
+      const hidden = top.filter((n) => hiddenRoots.has(n.id));
+      if (hidden.length > 0) {
+        out.push({
+          key: OTHER_ID,
+          name: `Other · ${hidden.length} ${hidden.length === 1 ? 'category' : 'categories'}`,
+          color: OTHER_COLOR,
+          totalMinor: sumTotals(hidden),
+          drillable: true,
+          txnCatId: null
+        });
+      }
+    } else if (currentId === OTHER_ID) {
+      for (const n of levelRows(catTree, null).filter((n) => hiddenRoots.has(n.id)))
+        out.push(nodeToRow(n));
+    } else {
+      const node = findNode(catTree, currentId);
+      for (const n of levelRows(catTree, currentId)) out.push(nodeToRow(n));
+      if (node !== null && node.ownMinor > 0n && node.hasChildrenWithSpend) {
+        out.push({
+          key: '__direct__',
+          name: `Directly in ${node.name}`,
+          color: node.id === UNCATEGORIZED_ID ? OTHER_COLOR : categoryColor(node.id),
+          totalMinor: node.ownMinor,
+          drillable: false,
+          txnCatId: node.id === UNCATEGORIZED_ID ? null : node.id
+        });
+      }
+    }
+    return out.sort((a, b) => {
+      // Rank by total desc, deterministic name tie-break for equal totals (a
+      // never-0 comparator leaves ties in engine-defined order — two $80 siblings
+      // would shuffle). Synthetic "Other"/"Directly in …" rows tie-break by name
+      // too, which is fine.
+      if (a.totalMinor !== b.totalMinor) return b.totalMinor > a.totalMinor ? 1 : -1;
+      return a.name.localeCompare(b.name);
+    });
+  });
+  const rowMax = $derived(rows.reduce((m, r) => (r.totalMinor > m ? r.totalMinor : m), 1n));
+  const levelTotal = $derived(rows.reduce((s, r) => s + r.totalMinor, 0n));
+
+  /** Breadcrumb (All › Food › …) from the current path. */
+  const crumbs = $derived.by<Array<{ label: string; depth: number }>>(() => {
+    const list = [{ label: 'All', depth: 0 }];
+    drillPath.forEach((id, i) => {
+      const label = id === OTHER_ID ? 'Other' : (findNode(catTree, id)?.name ?? '…');
+      list.push({ label, depth: i + 1 });
+    });
+    return list;
+  });
+
+  function openRow(r: Row): void {
+    if (r.drillable) {
+      drillPath = [...drillPath, r.key];
+      txnSel = null;
+    } else {
+      // Toggle by the unique row key, not the display name (names can collide).
+      txnSel = txnSel?.key === r.key ? null : { key: r.key, catId: r.txnCatId, name: r.name };
+    }
+  }
+  function gotoDepth(depth: number): void {
+    drillPath = drillPath.slice(0, depth);
+    txnSel = null;
+  }
+
+  const drillRows = $derived.by(() => {
+    const sel = txnSel;
+    if (sel === null) return [];
+    // Same spend projection that built the totals → the listed outflows sum to
+    // the row total the panel sits under (movement / ignored / split-correct).
+    return spendDetail.filter((r) => r.amount_minor < 0n && r.category_id === sel.catId);
+  });
+
   const nbm = $derived(spendableFlowByMonth(imports, cat.annotations));
   const months = $derived(sortedMonths(nbm));
   const monthLabel = (ym: string): string => ym;
@@ -133,10 +268,11 @@
         avoidLabelOverlap: true,
         itemStyle: { borderColor: 'transparent', borderWidth: 2 },
         label: { show: false },
-        data: [...byCat].map(([id, v]) => ({
-          name: catName(id),
-          value: toDollars(v),
-          itemStyle: { color: categoryColor(id) }
+        // Mirrors the current drill level (top categories, or one node's children).
+        data: rows.map((r) => ({
+          name: r.name,
+          value: toDollars(r.totalMinor),
+          itemStyle: { color: r.color }
         }))
       }
     ]
@@ -240,76 +376,168 @@
       class="mb-5 rounded-xl border p-4"
       style="border-color: var(--color-border); background-color: var(--color-surface); box-shadow: var(--shadow);"
     >
-      <h2 class="text-sm font-semibold">Spending by category</h2>
-      <p class="mt-0.5 mb-2 text-xs" style:color="var(--color-muted)">
-        {#if topCat}
-          {formatMoney(totals.outflow_minor)} out across {byCat.size}
-          {byCat.size === 1 ? 'category' : 'categories'} — most went to
-          <span style:color="var(--color-text)">{catName(topCat[0])}</span>. Click a slice to drill
-          in.
-        {:else}
-          No spending recorded.
-        {/if}
-      </p>
-      <EChart option={pieOption} onItemClick={(name) => (drillCategory = name)} />
+      <div class="flex items-start justify-between gap-2">
+        <div class="min-w-0">
+          <h2 class="text-sm font-semibold">Spending by category</h2>
+          <p class="mt-0.5 text-xs" style:color="var(--color-muted)">
+            {#if topCat}
+              {formatMoney(totals.outflow_minor)} out — tap a category to see its sub-categories.
+            {:else}
+              No spending recorded.
+            {/if}
+          </p>
+        </div>
+        <button
+          type="button"
+          class="shrink-0 rounded-full border px-2.5 py-1 text-xs font-medium"
+          style="border-color: var(--color-border); color: {customizeOpen
+            ? 'var(--color-accent)'
+            : 'var(--color-muted)'};"
+          onclick={() => (customizeOpen = !customizeOpen)}
+        >
+          {customizeOpen ? 'Done' : '⚙ Customize'}
+        </button>
+      </div>
 
-      <!-- Readable legend: every category with its colour + amount + a share bar,
-           ranked by spend. Tap a row to drill in (same as a slice). Replaces the
-           old paginated "1/8 ◀ ▶" legend you couldn't read. -->
+      {#if customizeOpen}
+        <!-- Customize: choose which TOP-LEVEL categories show on their own; the
+             rest fold into a single "Other" row you can still drill into. -->
+        <div
+          class="mt-3 rounded-lg border p-3"
+          style="border-color: var(--color-border); background-color: var(--color-elevated);"
+        >
+          <p class="mb-2 text-xs" style:color="var(--color-muted)">
+            Show as its own slice, or fold into “Other”. Add categories from <a
+              href="/categories"
+              class="underline"
+              style:color="var(--color-accent)">Manage categories</a
+            >.
+          </p>
+          <div class="flex flex-wrap gap-1.5">
+            {#each levelRows(catTree, null) as n (n.id)}
+              {@const on = !hiddenRoots.has(n.id)}
+              <button
+                type="button"
+                class="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium"
+                style:border-color={on
+                  ? n.id === UNCATEGORIZED_ID
+                    ? OTHER_COLOR
+                    : categoryColor(n.id)
+                  : 'var(--color-border)'}
+                style:color={on ? 'var(--color-text)' : 'var(--color-muted)'}
+                style:opacity={on ? '1' : '0.6'}
+                onclick={() => toggleHidden(n.id)}
+              >
+                <span
+                  class="h-2.5 w-2.5 shrink-0 rounded-full"
+                  style:background-color={n.id === UNCATEGORIZED_ID
+                    ? OTHER_COLOR
+                    : categoryColor(n.id)}
+                ></span>
+                {n.name}
+                <span style:color="var(--color-muted)">{on ? '✓' : '＋'}</span>
+              </button>
+            {/each}
+          </div>
+        </div>
+      {/if}
+
+      <!-- Breadcrumb: All › Food › Restaurants … tap any crumb to jump back up. -->
+      {#if drillPath.length > 0}
+        <nav class="mt-3 flex flex-wrap items-center gap-1 text-xs" aria-label="Category path">
+          {#each crumbs as c, i (c.depth)}
+            {#if i > 0}<span style:color="var(--color-muted)">›</span>{/if}
+            <button
+              type="button"
+              class="rounded px-1.5 py-0.5 font-medium"
+              style:color={i === crumbs.length - 1 ? 'var(--color-text)' : 'var(--color-accent)'}
+              disabled={i === crumbs.length - 1}
+              onclick={() => gotoDepth(c.depth)}
+            >
+              {c.label}
+            </button>
+          {/each}
+        </nav>
+      {/if}
+
+      <EChart
+        option={pieOption}
+        onItemClick={(_name, i) => {
+          // Resolve by series index (pie data is built from `rows` in order) —
+          // robust to two categories sharing a display name.
+          const r = rows[i];
+          if (r) openRow(r);
+        }}
+      />
+
+      <!-- Ranked rows for the CURRENT level: colour, name, share bar, amount, and
+           — for parents — a › chevron to drill into sub-categories. Tap a leaf to
+           list its transactions. -->
       <ul class="mt-3 space-y-0.5">
-        {#each byCatSorted as [id, amt] (id)}
+        {#each rows as r (r.key)}
           <li>
             <button
               type="button"
               class="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors"
-              style:background-color={drillCategory === catName(id)
+              style:background-color={txnSel?.key === r.key
                 ? 'var(--color-elevated)'
                 : 'transparent'}
-              onclick={() => (drillCategory = drillCategory === catName(id) ? null : catName(id))}
+              onclick={() => openRow(r)}
             >
-              <span class="h-3 w-3 shrink-0 rounded-full" style:background-color={categoryColor(id)}
-              ></span>
+              <span class="h-3 w-3 shrink-0 rounded-full" style:background-color={r.color}></span>
               <span class="min-w-0 flex-1">
-                <span class="block truncate text-sm" style:color="var(--color-text)"
-                  >{catName(id)}</span
-                >
+                <span class="flex items-baseline gap-1.5">
+                  <span class="truncate text-sm" style:color="var(--color-text)">{r.name}</span>
+                  {#if levelTotal > 0n}
+                    <span class="num shrink-0 text-[11px]" style:color="var(--color-muted)"
+                      >{Number((r.totalMinor * 1000n) / levelTotal) / 10}%</span
+                    >
+                  {/if}
+                </span>
                 <span
                   class="mt-1 block h-1 rounded-full"
                   style:background-color="var(--color-border)"
                 >
                   <span
                     class="block h-1 rounded-full"
-                    style:width="{catMax > 0n ? Number((amt * 100n) / catMax) : 0}%"
-                    style:background-color={categoryColor(id)}
+                    style:width="{rowMax > 0n ? Number((r.totalMinor * 100n) / rowMax) : 0}%"
+                    style:background-color={r.color}
                   ></span>
                 </span>
               </span>
               <span class="num shrink-0 text-sm font-medium" style:color="var(--color-text)"
-                >{formatMoney(amt)}</span
+                >{formatMoney(r.totalMinor)}</span
               >
+              {#if r.drillable}
+                <span class="shrink-0 text-sm" style:color="var(--color-muted)">›</span>
+              {:else}
+                <span class="w-[0.9em] shrink-0"></span>
+              {/if}
             </button>
           </li>
         {/each}
       </ul>
 
-      {#if drillCategory !== null}
+      {#if txnSel !== null}
         <div
           class="mt-3 rounded-lg border p-3"
           style="border-color: var(--color-border); background-color: var(--color-elevated);"
         >
           <div class="mb-2 flex items-center justify-between">
-            <span class="text-sm font-semibold">{drillCategory}</span>
+            <span class="text-sm font-semibold">{txnSel.name}</span>
             <button
               type="button"
               class="text-xs underline"
               style:color="var(--color-accent)"
-              onclick={() => (drillCategory = null)}
+              onclick={() => (txnSel = null)}
             >
-              clear
+              close
             </button>
           </div>
           {#if drillRows.length === 0}
-            <p class="text-sm" style:color="var(--color-muted)">No spending in this category.</p>
+            <p class="text-sm" style:color="var(--color-muted)">
+              No transactions in this category.
+            </p>
           {:else}
             <div>
               {#each drillRows as r (r.key)}

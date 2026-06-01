@@ -12,8 +12,10 @@
   }: {
     option: EChartsCoreOption;
     height?: string;
-    /** Fired when a data item (e.g. a pie slice / bar) is clicked; gets its `name`. */
-    onItemClick?: (name: string) => void;
+    /** Fired when a data item (e.g. a pie slice / bar) is clicked; gets its
+     *  display `name` AND the series `dataIndex`. Prefer the index for identity —
+     *  names are user free-text and can collide. */
+    onItemClick?: (name: string, dataIndex: number) => void;
   } = $props();
 
   let el: HTMLDivElement;
@@ -28,8 +30,8 @@
       chart = echarts.init(el);
       chart.setOption(option);
       if (onItemClick) {
-        chart.on('click', (params: { name?: string }) => {
-          if (typeof params.name === 'string') onItemClick(params.name);
+        chart.on('click', (params: { name?: string; dataIndex?: number }) => {
+          if (typeof params.name === 'string') onItemClick(params.name, params.dataIndex ?? -1);
         });
       }
       onResize = () => chart?.resize();
