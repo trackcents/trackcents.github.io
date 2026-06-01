@@ -51,6 +51,8 @@
         return 'var(--color-success)';
       case 'danger':
         return 'var(--color-danger)';
+      case 'savings':
+        return 'oklch(0.58 0.13 250)'; // calm blue — distinct from Paychecks/Extra
       case 'accent':
       default:
         return 'var(--color-accent)';

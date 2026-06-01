@@ -61,7 +61,11 @@ export const DEFAULT_PAID_FROM = 'paychecks';
  */
 export const DEFAULT_POCKETS: Pocket[] = [
   { id: 'paychecks', name: 'Paychecks', logo: '💵', color: 'success', order: 0 },
-  { id: 'extra', name: 'Extra', logo: '🎁', color: 'accent', order: 1 }
+  { id: 'extra', name: 'Extra', logo: '🎁', color: 'accent', order: 1 },
+  // Savings — the home for money you deliberately set aside (a 3rd paycheck, a
+  // bonus, a carved-out part of a deposit). Starts empty; fills only when the
+  // user moves money into it. Never auto-filled by flow-intent.
+  { id: 'savings', name: 'Savings', logo: '💰', color: 'savings', order: 2 }
 ];
 
 /**

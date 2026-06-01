@@ -765,6 +765,7 @@
     categories={cat.categories}
     rules={cat.rules}
     annotations={cat.annotations}
+    pockets={activePockets}
     accounts={accountList}
     onClose={() => (quickAddOpen = false)}
     onSaved={refreshAfterSave}

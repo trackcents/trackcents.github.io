@@ -81,5 +81,13 @@ export async function loadCategorization(): Promise<CategorizationState> {
 /** Persist the categorization state, encrypted at rest when a session key is loaded. */
 export async function saveCategorization(state: CategorizationState): Promise<void> {
   if (typeof localStorage === 'undefined') return;
-  localStorage.setItem(LS_KEY, await encodeStateForStorage(JSON.stringify(state, bigintReplacer)));
+  // Preserve the pocket list when the caller rebuilt state without it. Many call
+  // sites still pass only `{ categories, rules, annotations }`; without this, each
+  // such save would drop `pockets` and the user's boxes would reset on next load.
+  let pockets = state.pockets;
+  if (pockets === undefined) {
+    pockets = (await loadCategorization()).pockets ?? [...DEFAULT_POCKETS];
+  }
+  const toSave: CategorizationState = { ...state, pockets };
+  localStorage.setItem(LS_KEY, await encodeStateForStorage(JSON.stringify(toSave, bigintReplacer)));
 }

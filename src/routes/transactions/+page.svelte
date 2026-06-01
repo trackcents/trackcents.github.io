@@ -27,6 +27,7 @@
   } from '$lib/app/transaction-view';
   import type { ImportSuccess } from '$lib/app/import';
   import { loadCategorization, saveCategorization } from '$lib/db/categorization-store';
+  import { DEFAULT_POCKETS, type Pocket } from '$lib/app/pockets';
   import {
     setManualCategory,
     setAnnotation,
@@ -49,6 +50,7 @@
   let categories = $state<Category[]>([]);
   let rules = $state<CategoryRule[]>([]);
   let annotations = $state<Record<string, TransactionAnnotation>>({});
+  let pockets = $state<Pocket[]>([...DEFAULT_POCKETS]);
 
   function rowKey(r: UnifiedRow): string {
     return transactionCategoryKey(r.pdf_source_hash, r.transaction_index);
@@ -101,6 +103,7 @@
     categories = c.categories;
     rules = c.rules;
     annotations = c.annotations;
+    pockets = c.pockets !== undefined && c.pockets.length > 0 ? c.pockets : [...DEFAULT_POCKETS];
   }
 
   // Filter + sort state.  Filter starts empty (show everything); sort
@@ -450,6 +453,7 @@
     {categories}
     {rules}
     {annotations}
+    {pockets}
     accounts={accountList}
     onClose={() => (quickAddOpen = false)}
     onSaved={refreshAfterSave}

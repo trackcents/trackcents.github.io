@@ -41,6 +41,7 @@
   } from '$lib/app/accounts';
   import { accountDisplayName } from '$lib/app/account-nicknames';
   import { categoryColor, categoryIconName, type GlyphKey } from '$lib/app/category-visuals';
+  import { DEFAULT_POCKETS, type Pocket } from '$lib/app/pockets';
   import CategoryIcon from '$components/CategoryIcon.svelte';
   import CategoryPicker from '$components/CategoryPicker.svelte';
   import AccountPicker from '$components/AccountPicker.svelte';
@@ -61,6 +62,8 @@
     categories: Category[];
     rules: CategoryRule[];
     annotations: Record<string, TransactionAnnotation>;
+    /** Income pockets — drives the "Paid from" selector on an expense. */
+    pockets?: Pocket[];
     /** All known accounts (Cash + imported + manually added). */
     accounts: string[];
     onClose: () => void;
@@ -87,6 +90,7 @@
     categories,
     rules,
     annotations,
+    pockets = DEFAULT_POCKETS,
     accounts,
     onClose,
     onSaved,
@@ -94,6 +98,12 @@
     onDeleteCategory,
     onRenameCategory
   }: Props = $props();
+
+  /** The pocket an expense is paid from (spec 002-income-pockets §4). Default
+   *  Paychecks (the 90% rule). Only persisted when the user picks a non-default,
+   *  so the common case adds no annotation noise. */
+  let paidFrom = $state('paychecks');
+  const orderedPockets = $derived([...pockets].sort((a, b) => a.order - b.order));
 
   // ── Form state ─────────────────────────────────────────────────────────────
   let date = $state(today());
@@ -216,6 +226,7 @@
         amount = '';
         direction = initialType;
         account = defaultAccount(initialType);
+        paidFrom = 'paychecks';
         categoryId = null;
         userPickedCategory = false;
         userTouchedAmount = false;
@@ -494,9 +505,14 @@
         }
       }
 
+      // Persist the paid-from pocket only when the user picked a NON-default
+      // (Paychecks is the implicit default in the pocket math, so the common
+      // case stays annotation-free).
+      const savePaidFrom = direction === 'expense' && paidFrom !== 'paychecks' && paidFrom !== '';
       const needsAnnotationSave =
         categoryId !== null ||
         direction === 'transfer' ||
+        savePaidFrom ||
         trimmedNote.length > 0 ||
         nextRules !== rules;
       if (needsAnnotationSave) {
@@ -511,10 +527,17 @@
           const prior = map.get(key) ?? { category_id: null, source: 'manual' as const };
           map.set(key, { ...prior, flow_intent: 'transfer_self' });
         }
+        if (savePaidFrom) {
+          const prior = map.get(key) ?? { category_id: null, source: 'manual' as const };
+          map.set(key, { ...prior, paid_from: paidFrom });
+        }
+        // IMPORTANT: carry `pockets` through — rebuilding the state without it
+        // would wipe the user's pocket list on the next load.
         await saveCategorization({
           categories,
           rules: nextRules,
-          annotations: Object.fromEntries(map)
+          annotations: Object.fromEntries(map),
+          pockets
         });
       }
       onSaved({ learned: categoryId !== null, rulePattern: learnedPattern });
@@ -665,6 +688,27 @@
           <span class="qas-dd-chev" aria-hidden="true">▾</span>
         </button>
       </div>
+
+      {#if direction === 'expense' && orderedPockets.length > 0}
+        <!-- Paid from — which income pocket funds this expense (§4). Default
+             Paychecks; tap to draw it from Extra / Savings instead. -->
+        <div class="qas-paidfrom">
+          <span class="qas-lbl">Paid from</span>
+          <div class="qas-pockets">
+            {#each orderedPockets as p (p.id)}
+              <button
+                type="button"
+                class="qas-pk"
+                class:on={paidFrom === p.id}
+                onclick={() => (paidFrom = p.id)}
+              >
+                <span aria-hidden="true">{p.logo}</span>
+                {p.name}
+              </button>
+            {/each}
+          </div>
+        </div>
+      {/if}
 
       <!-- Date + Time. -->
       <div class="qas-row-2col">
@@ -981,6 +1025,35 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0.55rem;
+  }
+
+  .qas-paidfrom {
+    margin-top: 0.55rem;
+  }
+  .qas-pockets {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+    margin-top: 0.3rem;
+  }
+  .qas-pk {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.45rem 0.7rem;
+    border-radius: 999px;
+    border: 1px solid var(--color-border);
+    background: var(--color-bg);
+    color: var(--color-muted);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .qas-pk.on {
+    background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+    border-color: var(--color-accent);
+    color: var(--color-accent);
   }
 
   .qas-dd-btn {

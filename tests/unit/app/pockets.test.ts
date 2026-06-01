@@ -128,10 +128,16 @@ describe('pocketIdForIntent — income routes by intent, never amount', () => {
 });
 
 describe('DEFAULT_POCKETS', () => {
-  test('ships 💵 Paychecks then 🎁 Extra', () => {
-    expect(DEFAULT_POCKETS.map((p) => p.id)).toEqual(['paychecks', 'extra']);
+  test('ships 💵 Paychecks, 🎁 Extra, 💰 Savings', () => {
+    expect(DEFAULT_POCKETS.map((p) => p.id)).toEqual(['paychecks', 'extra', 'savings']);
     expect(DEFAULT_POCKETS[0]!.logo).toBe('💵');
     expect(DEFAULT_POCKETS[1]!.logo).toBe('🎁');
+    expect(DEFAULT_POCKETS[2]!.logo).toBe('💰');
+  });
+  test('Savings is never auto-filled by a flow-intent', () => {
+    // income only reaches Savings when the user moves it there.
+    expect(pocketIdForIntent('salary')).not.toBe('savings');
+    expect(pocketIdForIntent('gift_in')).not.toBe('savings');
   });
 });
 
@@ -317,7 +323,7 @@ describe('robustness', () => {
 
   test('an empty pocket list falls back to DEFAULT_POCKETS (no crash, no lost money)', () => {
     const sums = pocketSummariesForMonth([may], {}, '2026-05', []);
-    expect(sums.map((s) => s.pocket.id)).toEqual(['paychecks', 'extra']);
+    expect(sums.map((s) => s.pocket.id)).toEqual(['paychecks', 'extra', 'savings']);
   });
 });
 
