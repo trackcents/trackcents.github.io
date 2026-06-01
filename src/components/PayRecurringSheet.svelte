@@ -209,7 +209,7 @@
       <button type="button" class="pr-btn primary" onclick={submit}>
         ✓ Mark {payingMinor !== null && payingMinor > 0n ? formatMoney(payingMinor) : ''} paid
       </button>
-      <p class="pr-editnote">Need to change the amount or name? Tap the bill to edit it.</p>
+      <p class="pr-editnote">Need to change the amount or name? Tap ⋮ on the bill → Edit.</p>
     {/if}
     <button type="button" class="pr-cancel" onclick={onClose}>Cancel</button>
   </div>

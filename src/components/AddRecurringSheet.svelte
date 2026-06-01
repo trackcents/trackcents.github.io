@@ -46,6 +46,8 @@
      *  a forgotten bill straight into the month the user is viewing. */
     defaultDueDate?: string;
     onAdd: (draft: DraftItem) => void;
+    /** Edit-mode only: a destructive "Delete bill" path (page shows the confirm). */
+    onDelete?: () => void;
     onClose: () => void;
   }
   const {
@@ -57,6 +59,7 @@
     seed = null,
     defaultDueDate,
     onAdd,
+    onDelete,
     onClose
   }: Props = $props();
 
@@ -329,6 +332,9 @@
     <button type="button" class="ar-btn" onclick={submit}
       >{isEdit ? 'Save changes' : 'Add ' + kind}</button
     >
+    {#if isEdit && onDelete}
+      <button type="button" class="ar-delete" onclick={onDelete}>🗑 Delete {kind}</button>
+    {/if}
     <button type="button" class="ar-cancel" onclick={onClose}>Cancel</button>
   </div>
 {/if}
@@ -531,12 +537,25 @@
     cursor: pointer;
     font-family: inherit;
   }
+  .ar-delete {
+    width: 100%;
+    text-align: center;
+    color: var(--color-danger);
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-top: 0.7rem;
+    padding: 0.6rem;
+    background: none;
+    border: 0;
+    cursor: pointer;
+    font-family: inherit;
+  }
   .ar-cancel {
     width: 100%;
     text-align: center;
     color: var(--color-muted);
     font-size: 0.88rem;
-    margin-top: 0.7rem;
+    margin-top: 0.3rem;
     background: none;
     border: 0;
     cursor: pointer;

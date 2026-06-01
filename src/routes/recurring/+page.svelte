@@ -44,12 +44,16 @@
   import PayRecurringSheet from '$components/PayRecurringSheet.svelte';
   import AddRecurringSheet from '$components/AddRecurringSheet.svelte';
   import MonthPickerSheet from '$components/MonthPickerSheet.svelte';
+  import RecurringActionSheet from '$components/RecurringActionSheet.svelte';
+  import ConfirmSheet from '$components/ConfirmSheet.svelte';
 
   let loading = $state(true);
   let items = $state<RecurringItem[]>([]);
   let pockets = $state<Pocket[]>([...DEFAULT_POCKETS]);
-  let editMode = $state(false);
   let paySheetItem = $state<RecurringItem | null>(null);
+  // The ⋮ per-row menu (Mark paid / Edit / Delete) and the delete confirm.
+  let actionSheetItem = $state<RecurringItem | null>(null);
+  let confirmDeleteItem = $state<RecurringItem | null>(null);
   // One add/edit sheet, three uses: blank add, edit an item, or seed from a
   // statement suggestion (so the user can tweak the name/amount before adding).
   type AddEdit = {
@@ -275,6 +279,38 @@
   function openEdit(item: RecurringItem): void {
     addEdit = { kind: item.kind, editItem: item, seed: null };
   }
+
+  // ── ⋮ action sheet → Mark paid / Edit / Delete ─────────────────────────────
+  /** Plain-English label for the menu's pay action, by this month's status. */
+  function payActionLabel(item: RecurringItem): string {
+    const st = statusInMonth(item, activeMonth, todayIso);
+    if (st === 'paid') return 'View payment';
+    if (st === 'partial') return 'Continue paying…';
+    return `Mark paid for ${activeMonthLabel}…`;
+  }
+  function actionMarkPaid(): void {
+    paySheetItem = actionSheetItem;
+    actionSheetItem = null;
+  }
+  function actionEdit(): void {
+    if (actionSheetItem !== null) openEdit(actionSheetItem);
+    actionSheetItem = null;
+  }
+  function actionDelete(): void {
+    confirmDeleteItem = actionSheetItem;
+    actionSheetItem = null;
+  }
+  /** "Delete bill" tapped at the bottom of the Edit sheet — route to the confirm. */
+  function requestDeleteFromEdit(): void {
+    const it = addEdit?.editItem ?? null;
+    addEdit = null;
+    if (it !== null) confirmDeleteItem = it;
+  }
+  async function confirmDelete(): Promise<void> {
+    const it = confirmDeleteItem;
+    confirmDeleteItem = null;
+    if (it !== null) await handleDelete(it);
+  }
   /** Pre-filled due date for a NEW item: today if viewing this month, else the
    *  same day-of-month inside the viewed month (so it lands where expected). */
   function defaultDueFor(month: string): string {
@@ -305,23 +341,9 @@
 <svelte:head><title>Recurring · trackcents</title></svelte:head>
 
 <main class="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-  <div class="mb-1 flex items-center justify-between">
-    <h1 class="text-2xl font-semibold">Recurring</h1>
-    {#if !loading && items.length > 0}
-      <button
-        type="button"
-        class="rounded-full border px-3 py-1 text-sm font-medium"
-        style="border-color: var(--color-border); color: {editMode
-          ? 'var(--color-accent)'
-          : 'var(--color-muted)'};"
-        onclick={() => (editMode = !editMode)}
-      >
-        {editMode ? 'Done' : 'Edit'}
-      </button>
-    {/if}
-  </div>
+  <h1 class="mb-1 text-2xl font-semibold">Recurring</h1>
   <p class="mb-4 text-sm" style:color="var(--color-muted)">
-    Tap a row to <strong>edit</strong> it; tap the circle to <strong>mark it paid</strong>.
+    Tap the circle to <strong>mark a bill paid</strong> · tap <strong>⋮</strong> to edit or delete.
   </p>
 
   {#if !loading}
@@ -504,12 +526,9 @@
                   {status === 'paid' ? '✓' : status === 'partial' ? '◐' : ''}
                 </span>
               </button>
-              <button
-                type="button"
-                class="rec-tap"
-                onclick={() => openEdit(item)}
-                aria-label="Edit {item.name}"
-              >
+              <!-- Body is inert text: editing lives on the explicit ⋮ menu, not on
+                   an invisible body tap (the #1 complaint). -->
+              <div class="rec-body-wrap">
                 {#if item.kind === 'subscription'}
                   <CategoryIcon
                     icon={categoryIconName(item.name)}
@@ -528,17 +547,25 @@
                   </span>
                 </span>
                 <span class="num rec-amt">{formatMoney(item.amount_minor)}</span>
-              </button>
-              {#if editMode}
-                <button
-                  type="button"
-                  class="rec-del"
-                  onclick={() => handleDelete(item)}
-                  aria-label="Delete {item.name}"
+              </div>
+              <button
+                type="button"
+                class="rec-overflow"
+                onclick={() => (actionSheetItem = item)}
+                aria-label="More actions for {item.name}"
+              >
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  aria-hidden="true"
                 >
-                  🗑
-                </button>
-              {/if}
+                  <circle cx="12" cy="5" r="1.6" />
+                  <circle cx="12" cy="12" r="1.6" />
+                  <circle cx="12" cy="19" r="1.6" />
+                </svg>
+              </button>
             </div>
           {/each}
         {/if}
@@ -547,12 +574,6 @@
 
     {@render section('Bills', '📋', 'bill', bills, billTotals)}
     {@render section('Subscriptions', '🔁', 'subscription', subs, subTotals)}
-
-    <p class="mt-2 text-xs" style:color="var(--color-muted)">
-      Each month shows the bills &amp; subscriptions due that month. Use ◀ ▶ to revisit a past month
-      (e.g. add a bill you forgot) or look ahead. Marking paid is deliberate — tap the circle to
-      confirm the amount &amp; pocket.
-    </p>
   {/if}
 </main>
 
@@ -576,7 +597,28 @@
   {pockets}
   {todayIso}
   onAdd={handleAddOrEdit}
+  onDelete={requestDeleteFromEdit}
   onClose={() => (addEdit = null)}
+/>
+
+<RecurringActionSheet
+  open={actionSheetItem !== null}
+  item={actionSheetItem}
+  payLabel={actionSheetItem !== null ? payActionLabel(actionSheetItem) : ''}
+  onMarkPaid={actionMarkPaid}
+  onEdit={actionEdit}
+  onDelete={actionDelete}
+  onClose={() => (actionSheetItem = null)}
+/>
+
+<ConfirmSheet
+  open={confirmDeleteItem !== null}
+  title="Delete {confirmDeleteItem?.name ?? 'this bill'}?"
+  message="This removes it and its payment history. This can't be undone."
+  confirmLabel="Delete"
+  danger
+  onConfirm={confirmDelete}
+  onClose={() => (confirmDeleteItem = null)}
 />
 
 <MonthPickerSheet
@@ -680,18 +722,13 @@
   .rec-status.overdue {
     border-color: var(--color-danger);
   }
-  .rec-tap {
+  .rec-body-wrap {
     flex: 1;
     display: flex;
     align-items: center;
     gap: 0.6rem;
     padding: 0.7rem 0;
-    background: none;
-    border: 0;
-    cursor: pointer;
-    text-align: left;
     min-width: 0;
-    font-family: inherit;
   }
   .rec-body {
     flex: 1;
@@ -728,13 +765,21 @@
     color: var(--color-text);
     flex: none;
   }
-  .rec-del {
+  .rec-overflow {
     flex: none;
     background: none;
     border: 0;
-    font-size: 1rem;
     cursor: pointer;
-    padding: 0.4rem;
+    color: var(--color-muted);
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    margin-left: 0.1rem;
+  }
+  .rec-overflow:active {
+    background: var(--color-elevated);
   }
 
   .sug-row {
