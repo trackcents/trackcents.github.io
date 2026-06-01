@@ -29,13 +29,7 @@
  */
 import type { ImportRecord } from '../db/store';
 import { transactionCategoryKey, type TransactionAnnotation } from './categorization';
-import {
-  SPEND_INTENTS,
-  INCOME_INTENTS,
-  REFUND_INTENTS,
-  inferAllFlowIntents,
-  type FlowIntent
-} from './flow-intent';
+import { INCOME_INTENTS, inferAllFlowIntents, type FlowIntent } from './flow-intent';
 import { flowIntentRowsFromImports, type SpendableFlowOptions } from './categorization-glue';
 
 /** A named income box. `logo` is an emoji; `color` is an app token name. */
@@ -139,7 +133,14 @@ export function pocketSummariesForMonth(
    * calendar month its date falls in (a late-April paycheck funds May). Only
    * salary keys appear, so non-paycheck rows keep their calendar month.
    */
-  salaryMonths: ReadonlyMap<string, string> = new Map()
+  salaryMonths: ReadonlyMap<string, string> = new Map(),
+  /**
+   * Money the user already had before tracking began (the earliest statement's
+   * opening balance — see startingLiquidBalanceMinor). It sits in the main pot as
+   * CARRIED-IN (never "new this month"), so the pocket "remaining" reflects the
+   * real account balance, not just income−out since the first statement.
+   */
+  startingBalanceMinor: bigint = 0n
 ): PocketSummary[] {
   const ordered = [...pockets].sort((a, b) => a.order - b.order);
   // Defensive: an empty pocket list would lose all routing — fall back to defaults.
@@ -165,7 +166,13 @@ export function pocketSummariesForMonth(
   }
 
   for (const imp of imports) {
+    // Credit-card activity is NOT a bank flow. A card's purchases are settled by
+    // the card PAYMENT made from the bank (which DOES draw the pocket), so counting
+    // the card rows too would double-count. The pocket "remaining" tracks the BANK
+    // (checking/savings/cash) balance, so we only process liquid-account rows here.
+    const isCard = imp.statement.account_type === 'credit_card';
     imp.transactions.forEach((t, i) => {
+      if (isCard) return;
       const key = transactionCategoryKey(imp.pdf_source_hash, i);
       const ann = annotations[key];
       if (ann?.ignored === true) return;
@@ -207,16 +214,26 @@ export function pocketSummariesForMonth(
           const a = acc.get(pid)!;
           if (isThis) a.incomeThis += amount;
           else a.incomeBefore += amount;
-        } else if (SPEND_INTENTS.has(intent) || REFUND_INTENTS.has(intent)) {
+        } else {
+          // EVERYTHING else on a bank account draws down the pocket — it's real
+          // money that left the bank: bills, debit/ATM, money moved out (investments,
+          // transfers to India / savings / people), AND credit-card PAYMENTS (the
+          // lump that settles your cards). A refund on the bank side is a positive
+          // amount → a NEGATIVE draw → it gives money back. All categorized, so they
+          // can be re-labelled.
           const a = acc.get(paidFrom)!;
-          // Outflows are negative cents; "used" is positive magnitude. A refund is a
-          // positive amount → a NEGATIVE draw → it gives the pocket money back.
           if (isThis) a.usedThis += -amount;
           else a.usedBefore += -amount;
         }
-        // MOVEMENT intents: no pocket effect.
       }
     });
+  }
+
+  // Seed the pre-tracking balance into the main pot as carried-in money. It's
+  // always "before" (it predates every transaction), so it shows under "carried
+  // from earlier" and never appears as a phantom deposit in the manage list.
+  if (startingBalanceMinor !== 0n) {
+    acc.get(known.has('paychecks') ? 'paychecks' : firstId)!.incomeBefore += startingBalanceMinor;
   }
 
   return list.map((pocket) => {
@@ -240,4 +257,28 @@ function clampPct(p: number): number {
 /** Find a pocket by id (or undefined). Pure helper for callers. */
 export function findPocket(pockets: Pocket[], id: string): Pocket | undefined {
   return pockets.find((p) => p.id === id);
+}
+
+/**
+ * The money the user already had before tracking began: the opening balance of
+ * the EARLIEST statement of each LIQUID account (checking / savings), summed.
+ * Credit cards are debt, not cash, so they're excluded. Pass the result to
+ * pocketSummariesForMonth as `startingBalanceMinor` so the pockets reflect the
+ * real account balance, not just income−out since the first upload. Pure.
+ */
+export function startingLiquidBalanceMinor(imports: ImportRecord[]): bigint {
+  const earliest = new Map<string, { date: string; open: bigint }>();
+  for (const imp of imports) {
+    const at = imp.statement.account_type;
+    if (at !== 'checking' && at !== 'savings') continue;
+    const open = imp.statement.opening_balance_minor;
+    if (open === null) continue;
+    const id = `${imp.bank_name ?? '?'}:${at}:${imp.statement.account_last_4 ?? '----'}`;
+    const start = imp.statement.period_start;
+    const cur = earliest.get(id);
+    if (cur === undefined || start < cur.date) earliest.set(id, { date: start, open });
+  }
+  let total = 0n;
+  for (const e of earliest.values()) total += e.open;
+  return total;
 }

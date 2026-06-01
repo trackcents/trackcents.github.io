@@ -41,7 +41,11 @@
   import { formatMoney } from '$lib/util/money';
   import CategoryIcon from '$components/CategoryIcon.svelte';
   import PocketCards from '$components/PocketCards.svelte';
-  import { pocketSummariesForMonth, DEFAULT_POCKETS } from '$lib/app/pockets';
+  import {
+    pocketSummariesForMonth,
+    startingLiquidBalanceMinor,
+    DEFAULT_POCKETS
+  } from '$lib/app/pockets';
   import PaycheckConfirmSheet from '$components/PaycheckConfirmSheet.svelte';
   import PocketEditSheet from '$components/PocketEditSheet.svelte';
   import type { Pocket } from '$lib/app/pockets';
@@ -345,8 +349,19 @@
   // Paycheck-window attribution: once the anchor is set, salary deposits fund
   // their budget month (a late-April paycheck funds May), not the calendar month.
   const salaryMonths = $derived(paycheckBudgetMonths(imports, payAnchor));
+  // Money already in the bank before tracking began (earliest statement opening
+  // balance) — so a pocket's "remaining" is the real balance, not just income−out.
+  const startingBalance = $derived(startingLiquidBalanceMinor(imports));
   const activePocketSummaries = $derived(
-    pocketSummariesForMonth(imports, cat.annotations, activeMonth, activePockets, {}, salaryMonths)
+    pocketSummariesForMonth(
+      imports,
+      cat.annotations,
+      activeMonth,
+      activePockets,
+      {},
+      salaryMonths,
+      startingBalance
+    )
   );
   // Offer the one-time paycheck setup when we detect a cadence but have no anchor.
   const detectedPaychecks = $derived(detectedPaychecksNewestFirst(imports));

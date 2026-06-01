@@ -82,6 +82,20 @@ function checking(
   };
 }
 
+/** A credit-card statement (same shape, account_type = credit_card). */
+function creditCard(
+  hash: string,
+  start: string,
+  end: string,
+  txns: ParsedTransaction[]
+): ImportRecord {
+  const imp = checking(hash, start, end, txns);
+  return {
+    ...imp,
+    statement: { ...imp.statement, account_type: 'credit_card', account_last_4: '1797' }
+  };
+}
+
 /** Pull one pocket's summary out of the result array by id. */
 function pocket(summaries: PocketSummary[], id: string): PocketSummary {
   const s = summaries.find((p) => p.pocket.id === id);
@@ -330,6 +344,54 @@ describe('salaryMonths — a paycheck funds its BUDGET month, not its calendar m
   });
 });
 
+describe('pocket "remaining" = the BANK balance (count liquid flows, skip card rows)', () => {
+  test('bank outflows draw: investment + transfer + the card PAYMENT all reduce Paychecks', () => {
+    const bank = checking('mo', '2026-05-01', '2026-05-31', [
+      txn('2026-05-08', 'Altera Corporati Payroll', 3000_00n, 'deposit'),
+      txn(
+        '2026-05-10',
+        '05/10 Online Realtime Payment To Robinhood Securities',
+        -1000_00n,
+        'transfer'
+      ),
+      txn('2026-05-12', 'Kitsap CU Transfer 630515', -500_00n, 'transfer'),
+      txn('2026-05-14', 'Payment To Chase Card Ending IN 1797', -800_00n, 'payment_to_card')
+    ]);
+    const p = pocket(pocketSummariesForMonth([bank], {}, '2026-05', DEFAULT_POCKETS), 'paychecks');
+    expect(p.used).toBe(2300_00n); // 1,000 + 500 + 800 — all left the bank
+    expect(p.remaining).toBe(700_00n); // 3,000 income − 2,300 out
+  });
+
+  test('credit-card-account purchases do NOT draw (settled by the card payment from the bank)', () => {
+    const card = creditCard('cc', '2026-05-01', '2026-05-31', [
+      txn('2026-05-05', 'COSTCO WHSE', -300_00n, 'purchase'),
+      txn('2026-05-09', 'AMAZON MKTPLACE', -120_00n, 'purchase')
+    ]);
+    const p = pocket(pocketSummariesForMonth([card], {}, '2026-05', DEFAULT_POCKETS), 'paychecks');
+    expect(p.used).toBe(0n); // card activity is not a bank flow
+  });
+
+  test('starting balance seeds the pocket as carried-in (pocket ≈ real account balance)', () => {
+    const bank = checking('sb', '2026-05-01', '2026-05-31', [
+      txn('2026-05-08', 'Altera Corporati Payroll', 2000_00n, 'deposit'),
+      txn('2026-05-20', 'COSTCO', -500_00n, 'withdrawal')
+    ]);
+    // $4,000 already in the bank + $2,000 in − $500 out = $5,500.
+    const sums = pocketSummariesForMonth(
+      [bank],
+      {},
+      '2026-05',
+      DEFAULT_POCKETS,
+      {},
+      new Map(),
+      4000_00n
+    );
+    const total = sums.reduce((s, p) => s + p.remaining, 0n);
+    expect(total).toBe(5500_00n);
+    expect(pocket(sums, 'paychecks').carryIn).toBe(4000_00n);
+  });
+});
+
 describe('exclusions', () => {
   test('an ignored transaction touches no pocket', () => {
     const simple = checking('ign', '2026-05-01', '2026-05-31', [
@@ -346,12 +408,12 @@ describe('exclusions', () => {
     expect(p.used).toBe(0n); // the $100 purchase is ignored → nothing drawn
   });
 
-  test('money-movement (cc_payment) is neither income nor a draw', () => {
+  test('a card payment FROM the bank draws (real money out); it is not income', () => {
     const ccImp = checking('cc', '2026-05-01', '2026-05-31', [
       txn('2026-05-10', 'Robinhood Card Payment', -1000_00n, 'payment_to_card')
     ]);
     const p = pocket(pocketSummariesForMonth([ccImp], {}, '2026-05', DEFAULT_POCKETS), 'paychecks');
-    expect(p.used).toBe(0n);
+    expect(p.used).toBe(1000_00n);
     expect(p.newIncome).toBe(0n);
   });
 
