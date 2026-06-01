@@ -46,6 +46,8 @@
   import PocketCards from '$components/PocketCards.svelte';
   import { pocketSummariesForMonth, DEFAULT_POCKETS } from '$lib/app/pockets';
   import PaycheckConfirmSheet from '$components/PaycheckConfirmSheet.svelte';
+  import PocketEditSheet from '$components/PocketEditSheet.svelte';
+  import type { Pocket } from '$lib/app/pockets';
   import { loadAnchor, saveAnchor } from '$lib/db/budget-anchor-store';
   import { paycheckBudgetMonths, detectedPaychecksNewestFirst } from '$lib/app/paycheck-budget';
   import type { BudgetAnchor } from '$lib/app/budget-window';
@@ -392,6 +394,36 @@
     paycheckConfirmOpen = false;
   }
 
+  // ── Edit income boxes (add / rename / safe-delete) ──────────────────────────
+  let pocketEditOpen = $state(false);
+  /** How many transactions reference each pocket (paid_from + income_pocket). */
+  const pocketCounts = $derived.by<Record<string, number>>(() => {
+    const c: Record<string, number> = {};
+    for (const a of Object.values(cat.annotations)) {
+      if (a.paid_from !== undefined && a.paid_from !== '')
+        c[a.paid_from] = (c[a.paid_from] ?? 0) + 1;
+      if (a.income_pocket !== undefined && a.income_pocket !== '')
+        c[a.income_pocket] = (c[a.income_pocket] ?? 0) + 1;
+    }
+    return c;
+  });
+  async function savePockets(next: Pocket[]): Promise<void> {
+    cat = { ...cat, pockets: next };
+    await saveCategorization(cat);
+  }
+  /** Safe-delete: move every reference from the deleted box into the target box. */
+  async function deletePocketReassign(deleteId: string, targetId: string): Promise<void> {
+    const next: Record<string, TransactionAnnotation> = {};
+    for (const [k, a] of Object.entries(cat.annotations)) {
+      const na = { ...a };
+      if (na.paid_from === deleteId) na.paid_from = targetId;
+      if (na.income_pocket === deleteId) na.income_pocket = targetId;
+      next[k] = na;
+    }
+    cat = { ...cat, annotations: next };
+    await saveCategorization(cat);
+  }
+
   // ── Income deposits, per pocket ─────────────────────────────────────────
   // The exact income deposits for the month, each carrying its pocketId so the
   // per-pocket "manage" sheet can list only its own.
@@ -509,6 +541,7 @@
       canNext={canNextMonth}
       onLabelClick={() => (pickerOpen = true)}
       onManage={(id) => (managePocketId = id)}
+      onEdit={() => (pocketEditOpen = true)}
     />
 
     <div class="card rise mt-4 p-8 text-center">
@@ -603,6 +636,7 @@
       canNext={canNextMonth}
       onLabelClick={() => (pickerOpen = true)}
       onManage={(id) => (managePocketId = id)}
+      onEdit={() => (pocketEditOpen = true)}
     />
 
     {#if spentTodayMinor > 0n}
@@ -852,6 +886,16 @@
     paychecks={detectedPaychecks}
     onSave={savePaycheckAnchor}
     onClose={() => (paycheckConfirmOpen = false)}
+  />
+
+  <!-- Edit income boxes (add / rename / safe-delete = move transactions). -->
+  <PocketEditSheet
+    open={pocketEditOpen}
+    pockets={activePockets}
+    counts={pocketCounts}
+    onSave={savePockets}
+    onDelete={deletePocketReassign}
+    onClose={() => (pocketEditOpen = false)}
   />
 
   <!-- Save-confirmation toast — shows briefly after a manual transaction is

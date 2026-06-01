@@ -23,6 +23,8 @@
     onLabelClick: () => void;
     /** Tap "manage ›" on a pocket card. */
     onManage?: (pocketId: string) => void;
+    /** Tap "Edit" — opens the box editor (add / rename / delete boxes). */
+    onEdit?: () => void;
   }
 
   const {
@@ -33,7 +35,8 @@
     canPrev = true,
     canNext = true,
     onLabelClick,
-    onManage
+    onManage,
+    onEdit
   }: Props = $props();
 
   /** No-decimal money for the headline + subline (matches the mockup "$7,290"). */
@@ -124,7 +127,12 @@
     </div>
   </div>
 
-  <p class="seclabel">Income · what's left</p>
+  <div class="seclabel-row">
+    <p class="seclabel">Income · what's left</p>
+    {#if onEdit !== undefined}
+      <button type="button" class="edit-boxes" onclick={onEdit}>Edit</button>
+    {/if}
+  </div>
 
   {#each summaries as s (s.pocket.id)}
     {@const over = s.remaining < 0n}
@@ -230,13 +238,28 @@
     color: var(--color-muted);
   }
 
+  .seclabel-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0 0.25rem 0.6rem;
+  }
   .seclabel {
     font-size: 0.72rem;
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--color-muted);
-    margin: 0 0.25rem 0.6rem;
+  }
+  .edit-boxes {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--color-accent);
+    background: none;
+    border: 0;
+    cursor: pointer;
+    font-family: inherit;
+    padding: 0.1rem 0.2rem;
   }
 
   .pocket {
