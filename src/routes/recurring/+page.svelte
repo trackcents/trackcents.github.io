@@ -8,6 +8,9 @@
   import { onMount } from 'svelte';
   import { loadRecurring, saveRecurring } from '$lib/db/recurring-store';
   import { loadCategorization } from '$lib/db/categorization-store';
+  import { loadState, type ImportRecord } from '$lib/db/store';
+  import { suggestRecurring, type RecurringSuggestion } from '$lib/app/recurring-suggest';
+  import type { TransactionAnnotation } from '$lib/app/categorization';
   import { DEFAULT_POCKETS, findPocket, type Pocket } from '$lib/app/pockets';
   import {
     deriveStatus,
@@ -36,16 +39,85 @@
   let editMode = $state(false);
   let paySheetItem = $state<RecurringItem | null>(null);
   let addSheetKind = $state<RecurringKind | null>(null);
+  // Auto-detection of recurring items from the user's statements.
+  let imports = $state<ImportRecord[]>([]);
+  let annotations = $state<Record<string, TransactionAnnotation>>({});
+  let dismissed = $state<Set<string>>(new Set());
 
   const todayIso = today();
 
   onMount(async () => {
-    const [rec, cat] = await Promise.all([loadRecurring(), loadCategorization()]);
+    const [rec, cat, state] = await Promise.all([
+      loadRecurring(),
+      loadCategorization(),
+      loadState()
+    ]);
     items = rec.items;
     pockets =
       cat.pockets !== undefined && cat.pockets.length > 0 ? cat.pockets : [...DEFAULT_POCKETS];
+    annotations = cat.annotations;
+    imports = state.imports;
     loading = false;
   });
+
+  // Recurring bills + subscriptions detected in the statements, minus ones the
+  // user already added (by name) or dismissed — so we "populate" the tab but the
+  // user stays in control (edit / remove).
+  const sugKey = (s: { kind: string; name: string }): string => `${s.kind}|${s.name.toLowerCase()}`;
+  const suggestions = $derived(
+    suggestRecurring(imports, annotations, todayIso).filter((s) => {
+      if (dismissed.has(sugKey(s))) return false;
+      return !items.some(
+        (it) => it.kind === s.kind && it.name.toLowerCase() === s.name.toLowerCase()
+      );
+    })
+  );
+  async function addSuggestion(s: RecurringSuggestion): Promise<void> {
+    const order = items.filter((i) => i.kind === s.kind).length;
+    items = [
+      ...items,
+      {
+        kind: s.kind,
+        name: s.name,
+        amount_minor: s.amount_minor,
+        paid_from: 'paychecks',
+        cadence: s.cadence,
+        due_date: s.due_date,
+        id: newId(),
+        order,
+        paid_minor: 0n,
+        paid_date: null
+      }
+    ];
+    await persist();
+  }
+  async function addAllSuggestions(): Promise<void> {
+    const toAdd = suggestions;
+    let next = items;
+    for (const s of toAdd) {
+      const order = next.filter((i) => i.kind === s.kind).length;
+      next = [
+        ...next,
+        {
+          kind: s.kind,
+          name: s.name,
+          amount_minor: s.amount_minor,
+          paid_from: 'paychecks',
+          cadence: s.cadence,
+          due_date: s.due_date,
+          id: newId(),
+          order,
+          paid_minor: 0n,
+          paid_date: null
+        }
+      ];
+    }
+    items = next;
+    await persist();
+  }
+  function dismissSuggestion(s: RecurringSuggestion): void {
+    dismissed = new Set([...dismissed, sugKey(s)]);
+  }
 
   async function persist(): Promise<void> {
     await saveRecurring({ items });
@@ -187,6 +259,59 @@
             .join(', ')}{overdue.length > 4 ? '…' : ''}
         </p>
       </div>
+    {/if}
+
+    {#if suggestions.length > 0}
+      <section class="card rise mb-4 p-5">
+        <div class="mb-1 flex items-baseline justify-between">
+          <h2 class="text-sm font-semibold">✨ Found in your statements</h2>
+          <button
+            type="button"
+            class="text-sm font-semibold"
+            style:color="var(--color-accent)"
+            onclick={addAllSuggestions}
+          >
+            Add all {suggestions.length}
+          </button>
+        </div>
+        <p class="mb-2 text-xs" style:color="var(--color-muted)">
+          Recurring bills &amp; subscriptions we spotted by name. Add the ones that make sense; edit
+          or remove them anytime.
+        </p>
+        {#each suggestions as s (s.kind + s.name)}
+          <div class="sug-row" style="border-top: 1px solid var(--color-border);">
+            {#if s.kind === 'subscription'}
+              <CategoryIcon icon={categoryIconName(s.name)} color={categoryColor(s.name)} tint />
+            {:else}
+              <span class="sug-ic">📋</span>
+            {/if}
+            <span class="sug-body">
+              <span class="sug-name">{s.name}</span>
+              <span class="sug-meta">
+                {s.kind === 'subscription' ? 'Subscription' : s.label} · {s.occurrences}× · next
+                {s.due_date.slice(5)}
+              </span>
+            </span>
+            <span class="num sug-amt">{formatMoney(s.amount_minor)}</span>
+            <button
+              type="button"
+              class="sug-add"
+              onclick={() => addSuggestion(s)}
+              aria-label="Add {s.name}"
+            >
+              ＋ Add
+            </button>
+            <button
+              type="button"
+              class="sug-x"
+              onclick={() => dismissSuggestion(s)}
+              aria-label="Dismiss {s.name}"
+            >
+              ✕
+            </button>
+          </div>
+        {/each}
+      </section>
     {/if}
 
     {#snippet section(
@@ -383,5 +508,67 @@
     font-size: 1rem;
     cursor: pointer;
     padding: 0.4rem;
+  }
+
+  .sug-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 0;
+  }
+  .sug-ic {
+    width: 32px;
+    height: 32px;
+    flex: none;
+    border-radius: 9px;
+    display: grid;
+    place-items: center;
+    font-size: 15px;
+    background: var(--color-elevated);
+  }
+  .sug-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .sug-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--color-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sug-meta {
+    font-size: 0.72rem;
+    color: var(--color-muted);
+  }
+  .sug-amt {
+    font-weight: 600;
+    color: var(--color-text);
+    flex: none;
+    font-size: 0.88rem;
+  }
+  .sug-add {
+    flex: none;
+    border: 1px solid var(--color-accent);
+    color: var(--color-accent);
+    background: transparent;
+    border-radius: 999px;
+    padding: 0.3rem 0.7rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .sug-x {
+    flex: none;
+    background: none;
+    border: 0;
+    color: var(--color-muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+    padding: 0.3rem;
   }
 </style>
