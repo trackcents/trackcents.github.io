@@ -1,20 +1,25 @@
 /**
- * Recurring bills + subscriptions — USER-OWNED model (spec 002-income-pockets
- * §7.5–§7.10). This REPLACES the old auto-detected "we spotted these repeating"
- * list (which produced nonsense like "Western Union · Weekly · $43,413/yr"). The
- * user owns the list entirely: they add each bill/subscription, set its amount,
- * default pocket, cadence and first due date, and mark it paid deliberately.
+ * Recurring bills + subscriptions — USER-OWNED, MONTH-AWARE model (spec
+ * 002-income-pockets §7.5–§7.10). The user owns the list entirely: they add each
+ * bill/subscription, set its amount, default pocket, cadence and first due date,
+ * and mark it paid deliberately — per month.
+ *
+ * WHY a payment HISTORY (not a single current cycle): the user asked to "jump
+ * between months and check — in February what bills did I pay for?" and to add a
+ * forgotten bill to a past month. A single inline cycle (the old paid_minor /
+ * paid_date) loses last month's payment the moment you roll forward, so it cannot
+ * answer "what did I pay in February". Each payment is therefore recorded against
+ * the BUDGET MONTH it covers, and every status / total is derived for a month.
  *
  * Pure logic only — no storage, no UI, no Date.now(). Money is bigint cents.
  *
- * A "bill" and a "subscription" share the same shape; `kind` only drives which
- * section + iconography the UI shows. Each item tracks its CURRENT cycle inline:
- *   - `amount_minor` — the full amount expected this cycle (editable at pay time)
- *   - `paid_minor`   — how much has been paid toward this cycle (0 = unpaid)
- *   - `paid_date`    — the latest payment date this cycle (null = unpaid)
- *   - `due_date`     — when this cycle is due
- * Partial payments accumulate into `paid_minor`; a full payment of a recurring
- * item can be rolled to the next cycle (deliberately) via `startNextCycle`.
+ * Each item carries:
+ *   - `amount_minor` — the standard amount expected each cycle (edited via "Edit",
+ *     NOT at pay time — paying a different amount is just a smaller `payingNow`).
+ *   - `due_date`     — the ANCHOR: its day-of-month is the due day every cycle, and
+ *     its month is the FIRST month the item is active. It does NOT roll forward;
+ *     each month computes its own due-instance from this anchor + the cadence.
+ *   - `payments[]`   — history; each entry is tagged with the `month` it covers.
  */
 
 export type RecurringKind = 'bill' | 'subscription';
@@ -28,23 +33,33 @@ export interface CustomCadence {
 }
 export type Cadence = CadencePreset | CustomCadence;
 
+/** One recorded payment toward an item, tagged with the budget month it covers. */
+export interface PaymentRecord {
+  /** Budget month this payment is FOR, 'YYYY-MM'. */
+  month: string;
+  /** Amount paid, in cents (positive). */
+  amount_minor: bigint;
+  /** ISO YYYY-MM-DD the payment was actually made. */
+  paid_date: string;
+  /** Pocket id the payment was drawn from. */
+  paid_from: string;
+}
+
 export interface RecurringItem {
   id: string;
   kind: RecurringKind;
   name: string;
   /** Emoji or brand-icon key shown on the row. */
   logo?: string;
-  /** Full amount of the CURRENT cycle, in cents. Editable at pay time. */
+  /** Standard amount expected each cycle, in cents. */
   amount_minor: bigint;
   /** Pocket id this is paid from by default (e.g. 'paychecks'). */
   paid_from: string;
   cadence: Cadence;
-  /** ISO YYYY-MM-DD — when the current cycle is due. */
+  /** ISO YYYY-MM-DD anchor — its DAY is the due day; its MONTH is the first active month. */
   due_date: string;
-  /** Paid toward the current cycle, in cents (0 = unpaid). */
-  paid_minor: bigint;
-  /** ISO date of the latest payment this cycle, or null when unpaid. */
-  paid_date: string | null;
+  /** Full payment history, tagged by budget month. */
+  payments: PaymentRecord[];
   /** Sort order within its section (lower first). */
   order: number;
   /** Soft-removed by the user (kept out of all views/totals). */
@@ -53,64 +68,162 @@ export interface RecurringItem {
 
 export type RecurringStatus = 'due' | 'overdue' | 'partial' | 'paid';
 
-/** Cents still owed this cycle (floored at 0 — overpayment never goes negative). */
-export function remainingMinor(item: Pick<RecurringItem, 'amount_minor' | 'paid_minor'>): bigint {
-  const r = item.amount_minor - item.paid_minor;
-  return r > 0n ? r : 0n;
+// ── month helpers ───────────────────────────────────────────────────────────
+
+/** 'YYYY-MM' month key of an ISO date (or any 'YYYY-MM…' string). */
+export function monthOf(iso: string): string {
+  return iso.slice(0, 7);
 }
 
-/** Cents counted as paid this cycle (capped at the cycle amount). */
-export function paidThisCycleMinor(
-  item: Pick<RecurringItem, 'amount_minor' | 'paid_minor'>
-): bigint {
-  return item.paid_minor > item.amount_minor ? item.amount_minor : item.paid_minor;
+/** Whole months from month `a` to month `b` ('YYYY-MM'); negative if b precedes a. */
+function monthsBetween(a: string, b: string): number {
+  const ay = Number.parseInt(a.slice(0, 4), 10);
+  const am = Number.parseInt(a.slice(5, 7), 10);
+  const by = Number.parseInt(b.slice(0, 4), 10);
+  const bm = Number.parseInt(b.slice(5, 7), 10);
+  return (by - ay) * 12 + (bm - am);
 }
 
 /**
- * Derive the display status from the current-cycle figures + today's date.
- *   paid     — fully covered (paid_minor ≥ amount, amount > 0)
+ * The cadence's stride in whole months, or null for sub-monthly cadences
+ * (custom days / weeks) which recur at least once a month.
+ */
+function cadenceMonthStride(c: Cadence): number | null {
+  if (c === 'once') return 1; // handled specially by isActiveInMonth (only its own month)
+  if (c === 'monthly') return 1;
+  if (c === 'every_3_months') return 3;
+  if (c === 'every_6_months') return 6;
+  if (c === 'yearly') return 12;
+  if (c.unit === 'months') return Math.max(1, Math.trunc(c.every));
+  if (c.unit === 'years') return Math.max(1, Math.trunc(c.every)) * 12;
+  return null; // days / weeks
+}
+
+/**
+ * Does this item have a due-instance in `month` ('YYYY-MM')? A `once` item is
+ * active only in its own month; a recurring item is active on its cadence grid
+ * from its first month onward. Sub-monthly custom cadences (days/weeks) are
+ * treated as active every month from the start (month-browsing shows one row).
+ */
+export function isActiveInMonth(
+  item: Pick<RecurringItem, 'due_date' | 'cadence'>,
+  month: string
+): boolean {
+  const start = monthOf(item.due_date);
+  const diff = monthsBetween(start, month);
+  if (diff < 0) return false;
+  if (item.cadence === 'once') return diff === 0;
+  const stride = cadenceMonthStride(item.cadence);
+  if (stride === null) return true; // sub-monthly: every month
+  return diff % stride === 0;
+}
+
+/** The due date (ISO) for `month`: the anchor's day clamped to that month's length. */
+export function dueDateInMonth(item: Pick<RecurringItem, 'due_date'>, month: string): string {
+  const day = Number.parseInt(item.due_date.slice(8, 10), 10);
+  const y = Number.parseInt(month.slice(0, 4), 10);
+  const m = Number.parseInt(month.slice(5, 7), 10); // 1-based
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const d = Math.min(day, lastDay);
+  return `${month}-${String(d).padStart(2, '0')}`;
+}
+
+/** Cents paid toward `month` (sum of that month's payment records). */
+export function paidInMonth(item: Pick<RecurringItem, 'payments'>, month: string): bigint {
+  let s = 0n;
+  for (const p of item.payments) if (p.month === month) s += p.amount_minor;
+  return s;
+}
+
+/** Payment records for `month`, newest payment last (insertion order). */
+export function paymentsInMonth(
+  item: Pick<RecurringItem, 'payments'>,
+  month: string
+): PaymentRecord[] {
+  return item.payments.filter((p) => p.month === month);
+}
+
+/** The latest payment recorded for `month`, or null. */
+export function latestPaymentInMonth(
+  item: Pick<RecurringItem, 'payments'>,
+  month: string
+): PaymentRecord | null {
+  const inMonth = paymentsInMonth(item, month);
+  return inMonth.length > 0 ? inMonth[inMonth.length - 1]! : null;
+}
+
+/** Cents still owed for `month` (floored at 0 — overpayment never goes negative). */
+export function remainingInMonth(
+  item: Pick<RecurringItem, 'amount_minor' | 'payments'>,
+  month: string
+): bigint {
+  const r = item.amount_minor - paidInMonth(item, month);
+  return r > 0n ? r : 0n;
+}
+
+/** Cents counted as paid for `month` (capped at the cycle amount). */
+export function paidCappedInMonth(
+  item: Pick<RecurringItem, 'amount_minor' | 'payments'>,
+  month: string
+): bigint {
+  const paid = paidInMonth(item, month);
+  return paid > item.amount_minor ? item.amount_minor : paid;
+}
+
+/**
+ * Status of an item FOR a given month:
+ *   paid     — fully covered for the month (paid ≥ amount, amount > 0)
  *   partial  — some but not all paid
- *   overdue  — nothing paid and the due date is in the past
+ *   overdue  — nothing paid and the month's due date is in the past
  *   due      — nothing paid and the due date is today or future
  * Pure; `todayIso` is injected so this never reads the clock.
  */
-export function deriveStatus(
-  item: Pick<RecurringItem, 'amount_minor' | 'paid_minor' | 'due_date'>,
+export function statusInMonth(
+  item: Pick<RecurringItem, 'amount_minor' | 'due_date' | 'payments'>,
+  month: string,
   todayIso: string
 ): RecurringStatus {
-  if (item.amount_minor > 0n && item.paid_minor >= item.amount_minor) return 'paid';
-  if (item.paid_minor > 0n) return 'partial';
-  if (item.due_date < todayIso) return 'overdue';
+  const paid = paidInMonth(item, month);
+  if (item.amount_minor > 0n && paid >= item.amount_minor) return 'paid';
+  if (paid > 0n) return 'partial';
+  if (dueDateInMonth(item, month) < todayIso) return 'overdue';
   return 'due';
 }
 
 export interface SectionTotals {
-  /** Total expected this cycle across the section (= paid + left). */
+  /** Total expected for the month across the section (= paid + left). */
   dueMinor: bigint;
-  /** Total paid this cycle (each item capped at its amount). */
+  /** Total paid for the month (each item capped at its amount). */
   paidMinor: bigint;
-  /** Total still owed this cycle. */
+  /** Total still owed for the month. */
   leftMinor: bigint;
 }
 
-/** Sum a section's due / paid / left (skips archived items). Conserves: due = paid + left. */
-export function sectionTotals(items: readonly RecurringItem[]): SectionTotals {
+/**
+ * Sum a section's due / paid / left for `month` — only items ACTIVE in that
+ * month and not archived. Conserves: due = paid + left.
+ */
+export function sectionTotalsForMonth(
+  items: readonly RecurringItem[],
+  month: string
+): SectionTotals {
   let dueMinor = 0n;
   let paidMinor = 0n;
   let leftMinor = 0n;
   for (const it of items) {
     if (it.archived === true) continue;
+    if (!isActiveInMonth(it, month)) continue;
     dueMinor += it.amount_minor;
-    paidMinor += paidThisCycleMinor(it);
-    leftMinor += remainingMinor(it);
+    paidMinor += paidCappedInMonth(it, month);
+    leftMinor += remainingInMonth(it, month);
   }
   return { dueMinor, paidMinor, leftMinor };
 }
 
-/** Inputs from the "Mark paid" sheet. */
+/** Inputs from the "Mark paid" sheet — a payment toward ONE budget month. */
 export interface PaymentInput {
-  /** The (possibly edited) full amount of the cycle, in cents. */
-  totalMinor: bigint;
+  /** Budget month being paid, 'YYYY-MM'. */
+  month: string;
   /** How much to pay right now, in cents (defaults to the remaining amount). */
   payingNowMinor: bigint;
   /** Pocket the payment is drawn from. */
@@ -120,31 +233,35 @@ export interface PaymentInput {
 }
 
 /**
- * Apply a (possibly partial) payment to an item, returning a NEW item (pure).
- * Sets the cycle total to the edited amount, adds the paid amount onto
- * `paid_minor`, and records the pocket + date. Negative `payingNowMinor` is
- * floored at 0 (you cannot un-pay by paying a negative).
+ * Record a (possibly partial) payment toward `input.month`, returning a NEW item
+ * (pure). Appends a payment record and updates the default pocket. A non-positive
+ * `payingNowMinor` records nothing (you cannot un-pay by paying ≤ 0).
  */
 export function applyPayment(item: RecurringItem, input: PaymentInput): RecurringItem {
-  const add = input.payingNowMinor > 0n ? input.payingNowMinor : 0n;
-  return {
-    ...item,
-    amount_minor: input.totalMinor,
-    paid_minor: item.paid_minor + add,
+  if (input.payingNowMinor <= 0n) return item;
+  const record: PaymentRecord = {
+    month: input.month,
+    amount_minor: input.payingNowMinor,
     paid_date: input.paidOn,
     paid_from: input.paidFrom
   };
+  return {
+    ...item,
+    paid_from: input.paidFrom,
+    payments: [...item.payments, record]
+  };
 }
 
-/** Reverse all payments for the current cycle (the "Mark unpaid" action). Pure. */
-export function markUnpaid(item: RecurringItem): RecurringItem {
-  return { ...item, paid_minor: 0n, paid_date: null };
+/** Remove all payments recorded for `month` (the "Mark unpaid" action). Pure. */
+export function unpayMonth(item: RecurringItem, month: string): RecurringItem {
+  return { ...item, payments: item.payments.filter((p) => p.month !== month) };
 }
 
 /**
  * Advance an ISO date by a cadence, clamping the day to the target month's last
  * day (so the 31st of a month rolls to the 28th/30th, never spills over). Pure,
- * UTC-based. `once` returns the date unchanged.
+ * UTC-based. `once` returns the date unchanged. Still used for the "next due"
+ * hint in the add/edit sheet and by the statement-based suggestion engine.
  */
 export function advanceDueDate(due: string, cadence: Cadence): string {
   const y = Number.parseInt(due.slice(0, 4), 10);
@@ -182,21 +299,6 @@ export function advanceDueDate(due: string, cadence: Cadence): string {
 
 function iso(y: number, m: number, d: number): string {
   return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-}
-
-/**
- * Roll a fully-paid RECURRING item into its next cycle: advance the due date by
- * the cadence and reset the paid figures. A `once` item has no next cycle and is
- * returned unchanged (the caller keeps it 'paid' or archives it). Pure.
- */
-export function startNextCycle(item: RecurringItem): RecurringItem {
-  if (item.cadence === 'once') return item;
-  return {
-    ...item,
-    due_date: advanceDueDate(item.due_date, item.cadence),
-    paid_minor: 0n,
-    paid_date: null
-  };
 }
 
 /** The next due date a recurring item WOULD roll to (for "next due …" hints). */

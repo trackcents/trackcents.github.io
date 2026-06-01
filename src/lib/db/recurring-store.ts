@@ -9,7 +9,7 @@
  * categorization blob (a plain JSON.stringify throws on bigint).
  */
 import { encodeStateForStorage, decodeStateFromStorage } from './store-crypto';
-import type { RecurringItem } from '../app/recurring-items';
+import type { PaymentRecord, RecurringItem } from '../app/recurring-items';
 
 const LS_KEY = 'mtrb.recurring';
 
@@ -19,6 +19,36 @@ export interface RecurringState {
 
 function empty(): RecurringState {
   return { items: [] };
+}
+
+/**
+ * Migrate a stored item to the current shape. Older builds tracked a single
+ * inline cycle (`paid_minor` / `paid_date`); the current model keeps a
+ * `payments[]` history tagged by budget month. We fold any old non-zero
+ * paid_minor into one payment record (attributed to the month it was paid, or
+ * the due month as a fallback) so no past payment is lost on upgrade.
+ */
+function normalizeItem(raw: Record<string, unknown>): RecurringItem {
+  const { paid_minor, paid_date, payments, ...rest } = raw as {
+    paid_minor?: bigint;
+    paid_date?: string | null;
+    payments?: PaymentRecord[];
+  } & Record<string, unknown>;
+
+  let history: PaymentRecord[] = Array.isArray(payments) ? payments : [];
+  if (history.length === 0 && typeof paid_minor === 'bigint' && paid_minor > 0n) {
+    const dueDate = typeof rest.due_date === 'string' ? rest.due_date : '';
+    const when = typeof paid_date === 'string' && paid_date !== '' ? paid_date : dueDate;
+    history = [
+      {
+        month: when.slice(0, 7),
+        amount_minor: paid_minor,
+        paid_date: when,
+        paid_from: typeof rest.paid_from === 'string' ? rest.paid_from : 'paychecks'
+      }
+    ];
+  }
+  return { ...(rest as unknown as RecurringItem), payments: history };
 }
 
 function bigintReplacer(_key: string, value: unknown): unknown {
@@ -45,7 +75,10 @@ export async function loadRecurring(): Promise<RecurringState> {
   if (decoded.kind === 'locked') return empty();
   try {
     const parsed = JSON.parse(decoded.json, bigintReviver) as Partial<RecurringState>;
-    return { items: parsed.items ?? [] };
+    const items = Array.isArray(parsed.items)
+      ? (parsed.items as unknown as Record<string, unknown>[]).map(normalizeItem)
+      : [];
+    return { items };
   } catch {
     return empty();
   }

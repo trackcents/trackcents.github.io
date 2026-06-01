@@ -1,20 +1,26 @@
 /**
  * Recurring bills + subscriptions — pure logic (spec 002-income-pockets §7.5–§7.10).
- * Cadence date math, status derivation, partial/installment payments, and
- * section totals. Money is bigint cents; dates are injected (never reads a clock).
+ * MONTH-AWARE model: cadence date math, per-month status, partial/installment
+ * payments recorded in a history, and per-month section totals. Money is bigint
+ * cents; dates are injected (never reads a clock).
  */
 import { describe, expect, test } from 'vitest';
 import {
   advanceDueDate,
   applyPayment,
   cadenceLabel,
-  deriveStatus,
-  markUnpaid,
+  dueDateInMonth,
+  isActiveInMonth,
+  latestPaymentInMonth,
+  monthOf,
   nextDueDate,
-  paidThisCycleMinor,
-  remainingMinor,
-  sectionTotals,
-  startNextCycle,
+  paidCappedInMonth,
+  paidInMonth,
+  remainingInMonth,
+  sectionTotalsForMonth,
+  statusInMonth,
+  unpayMonth,
+  type PaymentRecord,
   type RecurringItem
 } from '../../../src/lib/app/recurring-items';
 
@@ -27,128 +33,226 @@ function item(over: Partial<RecurringItem> = {}): RecurringItem {
     paid_from: over.paid_from ?? 'paychecks',
     cadence: over.cadence ?? 'monthly',
     due_date: over.due_date ?? '2026-06-14',
-    paid_minor: over.paid_minor ?? 0n,
-    paid_date: over.paid_date ?? null,
+    payments: over.payments ?? [],
     order: over.order ?? 0,
     ...(over.logo !== undefined ? { logo: over.logo } : {}),
     ...(over.archived !== undefined ? { archived: over.archived } : {})
   };
 }
+function pay(
+  month: string,
+  amount: bigint,
+  paid_date = `${month}-10`,
+  paid_from = 'paychecks'
+): PaymentRecord {
+  return { month, amount_minor: amount, paid_date, paid_from };
+}
 
-describe('deriveStatus', () => {
-  const today = '2026-06-10';
-  test('unpaid + future due → due', () => {
-    expect(deriveStatus(item({ due_date: '2026-06-14' }), today)).toBe('due');
+describe('isActiveInMonth', () => {
+  test('monthly is active every month from its start, never before', () => {
+    const it = item({ cadence: 'monthly', due_date: '2026-03-14' });
+    expect(isActiveInMonth(it, '2026-02')).toBe(false); // before start
+    expect(isActiveInMonth(it, '2026-03')).toBe(true);
+    expect(isActiveInMonth(it, '2026-04')).toBe(true);
+    expect(isActiveInMonth(it, '2027-01')).toBe(true);
   });
-  test('unpaid + past due → overdue', () => {
-    expect(deriveStatus(item({ due_date: '2026-06-01' }), today)).toBe('overdue');
+  test('one-time is active ONLY in its own month', () => {
+    const it = item({ cadence: 'once', due_date: '2026-03-14' });
+    expect(isActiveInMonth(it, '2026-02')).toBe(false);
+    expect(isActiveInMonth(it, '2026-03')).toBe(true);
+    expect(isActiveInMonth(it, '2026-04')).toBe(false);
   });
-  test('part-paid → partial (even if overdue)', () => {
-    expect(deriveStatus(item({ paid_minor: 500_00n, due_date: '2026-06-01' }), today)).toBe(
-      'partial'
-    );
+  test('every-3-months lands on the cadence grid only', () => {
+    const it = item({ cadence: 'every_3_months', due_date: '2026-01-15' });
+    expect(isActiveInMonth(it, '2026-01')).toBe(true);
+    expect(isActiveInMonth(it, '2026-02')).toBe(false);
+    expect(isActiveInMonth(it, '2026-04')).toBe(true);
+    expect(isActiveInMonth(it, '2026-07')).toBe(true);
   });
-  test('fully paid → paid', () => {
-    expect(deriveStatus(item({ paid_minor: 1250_00n }), today)).toBe('paid');
+  test('yearly recurs only in the anchor month', () => {
+    const it = item({ cadence: 'yearly', due_date: '2026-02-28' });
+    expect(isActiveInMonth(it, '2026-02')).toBe(true);
+    expect(isActiveInMonth(it, '2026-08')).toBe(false);
+    expect(isActiveInMonth(it, '2027-02')).toBe(true);
   });
-  test('overpaid still → paid', () => {
-    expect(deriveStatus(item({ paid_minor: 1300_00n }), today)).toBe('paid');
+  test('custom months grid; custom weeks treated as every month', () => {
+    expect(
+      isActiveInMonth(
+        item({ cadence: { every: 2, unit: 'months' }, due_date: '2026-01-10' }),
+        '2026-03'
+      )
+    ).toBe(true);
+    expect(
+      isActiveInMonth(
+        item({ cadence: { every: 2, unit: 'months' }, due_date: '2026-01-10' }),
+        '2026-02'
+      )
+    ).toBe(false);
+    expect(
+      isActiveInMonth(
+        item({ cadence: { every: 2, unit: 'weeks' }, due_date: '2026-01-10' }),
+        '2026-05'
+      )
+    ).toBe(true);
   });
 });
 
-describe('remaining / paid-this-cycle (overpay clamps)', () => {
-  test('remaining floors at 0 when overpaid', () => {
-    expect(remainingMinor(item({ amount_minor: 1000_00n, paid_minor: 1200_00n }))).toBe(0n);
+describe('dueDateInMonth — anchor day, clamped to month length', () => {
+  test('same day in the target month', () => {
+    expect(dueDateInMonth(item({ due_date: '2026-06-14' }), '2026-09')).toBe('2026-09-14');
   });
-  test('paid-this-cycle caps at the amount', () => {
-    expect(paidThisCycleMinor(item({ amount_minor: 1000_00n, paid_minor: 1200_00n }))).toBe(
-      1000_00n
-    );
+  test('day 31 clamps to Feb 28 (2026)', () => {
+    expect(dueDateInMonth(item({ due_date: '2026-01-31' }), '2026-02')).toBe('2026-02-28');
   });
-  test('partial: remaining = amount − paid', () => {
-    expect(remainingMinor(item({ amount_minor: 1500_00n, paid_minor: 500_00n }))).toBe(1000_00n);
+  test('day 31 clamps to Feb 29 (2028 leap)', () => {
+    expect(dueDateInMonth(item({ due_date: '2026-01-31' }), '2028-02')).toBe('2028-02-29');
   });
 });
 
-describe('sectionTotals — due = paid + left (conserved), skips archived', () => {
+describe('paid / remaining / status per month', () => {
+  const it = item({
+    amount_minor: 1000_00n,
+    due_date: '2026-04-05',
+    payments: [pay('2026-04', 1000_00n), pay('2026-05', 400_00n)]
+  });
+  test('paidInMonth only sums that month', () => {
+    expect(paidInMonth(it, '2026-04')).toBe(1000_00n);
+    expect(paidInMonth(it, '2026-05')).toBe(400_00n);
+    expect(paidInMonth(it, '2026-06')).toBe(0n);
+  });
+  test('remaining floors at 0, caps work', () => {
+    expect(remainingInMonth(it, '2026-04')).toBe(0n);
+    expect(remainingInMonth(it, '2026-05')).toBe(600_00n);
+    expect(remainingInMonth(it, '2026-06')).toBe(1000_00n);
+  });
+  test('overpay: capped paid never exceeds the amount', () => {
+    const over = item({ amount_minor: 1000_00n, payments: [pay('2026-04', 1200_00n)] });
+    expect(paidInMonth(over, '2026-04')).toBe(1200_00n);
+    expect(paidCappedInMonth(over, '2026-04')).toBe(1000_00n);
+    expect(remainingInMonth(over, '2026-04')).toBe(0n);
+  });
+  test('status: paid in April, partial in May, due/overdue in June', () => {
+    expect(statusInMonth(it, '2026-04', '2026-06-01')).toBe('paid');
+    expect(statusInMonth(it, '2026-05', '2026-06-01')).toBe('partial');
+    // June unpaid: due date 06-05; before it → due, after it → overdue.
+    expect(statusInMonth(it, '2026-06', '2026-06-01')).toBe('due');
+    expect(statusInMonth(it, '2026-06', '2026-06-30')).toBe('overdue');
+  });
+  test('latestPaymentInMonth returns the right record', () => {
+    expect(latestPaymentInMonth(it, '2026-05')?.amount_minor).toBe(400_00n);
+    expect(latestPaymentInMonth(it, '2026-06')).toBeNull();
+  });
+});
+
+describe('sectionTotalsForMonth — conserved, only active + non-archived', () => {
+  const month = '2026-06';
   const items = [
-    item({ id: 'a', amount_minor: 1250_00n, paid_minor: 0n }),
-    item({ id: 'b', amount_minor: 2200_00n, paid_minor: 2200_00n }),
-    item({ id: 'c', amount_minor: 1500_00n, paid_minor: 500_00n }),
-    item({ id: 'd', amount_minor: 999_00n, archived: true })
+    item({ id: 'a', amount_minor: 1250_00n }), // active, unpaid
+    item({ id: 'b', amount_minor: 2200_00n, payments: [pay('2026-06', 2200_00n)] }), // paid
+    item({ id: 'c', amount_minor: 1500_00n, payments: [pay('2026-06', 500_00n)] }), // partial
+    item({ id: 'd', amount_minor: 999_00n, archived: true }), // excluded
+    item({ id: 'e', amount_minor: 800_00n, cadence: 'once', due_date: '2026-05-01' }) // not active in June
   ];
-  test('totals', () => {
-    const t = sectionTotals(items);
-    expect(t.dueMinor).toBe(1250_00n + 2200_00n + 1500_00n); // archived excluded
+  test('totals only count active, non-archived items', () => {
+    const t = sectionTotalsForMonth(items, month);
+    expect(t.dueMinor).toBe(1250_00n + 2200_00n + 1500_00n);
     expect(t.paidMinor).toBe(2200_00n + 500_00n);
     expect(t.leftMinor).toBe(1250_00n + 1000_00n);
   });
   test('CONSERVATION: due === paid + left', () => {
-    const t = sectionTotals(items);
+    const t = sectionTotalsForMonth(items, month);
     expect(t.dueMinor).toBe(t.paidMinor + t.leftMinor);
   });
 });
 
-describe('applyPayment — full, partial, edited total, negative floored', () => {
-  test('full payment marks paid + records date/pocket', () => {
-    const paid = applyPayment(item(), {
-      totalMinor: 1250_00n,
+describe('applyPayment — records a payment toward a month (does NOT touch the amount)', () => {
+  test('full payment appends a record and marks the month paid', () => {
+    const it = item({ amount_minor: 1250_00n });
+    const paid = applyPayment(it, {
+      month: '2026-06',
       payingNowMinor: 1250_00n,
       paidFrom: 'extra',
       paidOn: '2026-06-12'
     });
-    expect(paid.paid_minor).toBe(1250_00n);
-    expect(paid.paid_date).toBe('2026-06-12');
+    expect(paid.amount_minor).toBe(1250_00n); // unchanged — editing the bill is separate
+    expect(paid.payments).toHaveLength(1);
+    expect(paid.payments[0]).toEqual({
+      month: '2026-06',
+      amount_minor: 1250_00n,
+      paid_date: '2026-06-12',
+      paid_from: 'extra'
+    });
     expect(paid.paid_from).toBe('extra');
-    expect(deriveStatus(paid, '2026-06-12')).toBe('paid');
+    expect(statusInMonth(paid, '2026-06', '2026-06-12')).toBe('paid');
   });
 
-  test('partial then the remainder accumulates to fully paid', () => {
+  test('partial then the remainder accumulates to fully paid for the month', () => {
     const half = applyPayment(item({ amount_minor: 1500_00n }), {
-      totalMinor: 1500_00n,
+      month: '2026-06',
       payingNowMinor: 500_00n,
       paidFrom: 'paychecks',
       paidOn: '2026-06-03'
     });
-    expect(remainingMinor(half)).toBe(1000_00n);
-    expect(deriveStatus(half, '2026-06-03')).toBe('partial');
+    expect(remainingInMonth(half, '2026-06')).toBe(1000_00n);
+    expect(statusInMonth(half, '2026-06', '2026-06-03')).toBe('partial');
     const rest = applyPayment(half, {
-      totalMinor: 1500_00n,
+      month: '2026-06',
       payingNowMinor: 1000_00n,
       paidFrom: 'paychecks',
       paidOn: '2026-06-20'
     });
-    expect(remainingMinor(rest)).toBe(0n);
-    expect(deriveStatus(rest, '2026-06-20')).toBe('paid');
+    expect(remainingInMonth(rest, '2026-06')).toBe(0n);
+    expect(statusInMonth(rest, '2026-06', '2026-06-20')).toBe('paid');
+    expect(rest.payments).toHaveLength(2);
   });
 
-  test('editing the total at pay time changes the cycle amount', () => {
-    const paid = applyPayment(item({ amount_minor: 1250_00n }), {
-      totalMinor: 1300_00n, // EMI went up
-      payingNowMinor: 1300_00n,
+  test('a payment for one month leaves another month untouched', () => {
+    const it = item({ amount_minor: 1000_00n, payments: [pay('2026-05', 1000_00n)] });
+    const paid = applyPayment(it, {
+      month: '2026-06',
+      payingNowMinor: 1000_00n,
       paidFrom: 'paychecks',
+      paidOn: '2026-06-10'
+    });
+    expect(paidInMonth(paid, '2026-05')).toBe(1000_00n);
+    expect(paidInMonth(paid, '2026-06')).toBe(1000_00n);
+  });
+
+  test('non-positive payingNow records nothing (cannot un-pay by paying ≤ 0)', () => {
+    const it = item({ payments: [pay('2026-06', 500_00n)] });
+    const zero = applyPayment(it, {
+      month: '2026-06',
+      payingNowMinor: 0n,
+      paidFrom: 'x',
       paidOn: '2026-06-12'
     });
-    expect(paid.amount_minor).toBe(1300_00n);
-    expect(deriveStatus(paid, '2026-06-12')).toBe('paid');
-  });
-
-  test('negative payingNow is floored to 0 (cannot un-pay by paying negative)', () => {
-    const r = applyPayment(item({ paid_minor: 500_00n }), {
-      totalMinor: 1250_00n,
+    const neg = applyPayment(it, {
+      month: '2026-06',
       payingNowMinor: -100_00n,
-      paidFrom: 'paychecks',
+      paidFrom: 'x',
       paidOn: '2026-06-12'
     });
-    expect(r.paid_minor).toBe(500_00n);
+    expect(zero.payments).toHaveLength(1);
+    expect(neg.payments).toHaveLength(1);
+    expect(paidInMonth(neg, '2026-06')).toBe(500_00n);
   });
 });
 
-describe('markUnpaid', () => {
-  test('resets paid figures', () => {
-    const r = markUnpaid(item({ paid_minor: 1250_00n, paid_date: '2026-06-12' }));
-    expect(r.paid_minor).toBe(0n);
-    expect(r.paid_date).toBeNull();
+describe('unpayMonth', () => {
+  test('removes only the target month, keeps the others', () => {
+    const it = item({
+      payments: [pay('2026-05', 500_00n), pay('2026-06', 700_00n), pay('2026-06', 300_00n)]
+    });
+    const r = unpayMonth(it, '2026-06');
+    expect(paidInMonth(r, '2026-06')).toBe(0n);
+    expect(paidInMonth(r, '2026-05')).toBe(500_00n);
+    expect(r.payments).toHaveLength(1);
+  });
+});
+
+describe('monthOf', () => {
+  test('slices the month key', () => {
+    expect(monthOf('2026-06-14')).toBe('2026-06');
   });
 });
 
@@ -183,21 +287,8 @@ describe('advanceDueDate — cadence math with month-end clamp', () => {
   });
 });
 
-describe('startNextCycle / nextDueDate', () => {
-  test('recurring: advances due date + resets paid', () => {
-    const rolled = startNextCycle(
-      item({ cadence: 'monthly', paid_minor: 1250_00n, paid_date: '2026-06-12' })
-    );
-    expect(rolled.due_date).toBe('2026-07-14');
-    expect(rolled.paid_minor).toBe(0n);
-    expect(rolled.paid_date).toBeNull();
-  });
-  test('once: unchanged (no next cycle)', () => {
-    const r = startNextCycle(item({ cadence: 'once', paid_minor: 100n }));
-    expect(r.due_date).toBe('2026-06-14');
-    expect(r.paid_minor).toBe(100n);
-  });
-  test('nextDueDate is null for one-time, a date for recurring', () => {
+describe('nextDueDate', () => {
+  test('null for one-time, a date for recurring', () => {
     expect(nextDueDate(item({ cadence: 'once' }))).toBeNull();
     expect(nextDueDate(item({ cadence: 'monthly', due_date: '2026-06-14' }))).toBe('2026-07-14');
   });

@@ -1,10 +1,17 @@
 <script lang="ts">
-  // Recurring — USER-OWNED bills + subscriptions (spec 002-income-pockets
-  // §7.5–§7.10). This REPLACES the old auto-detected list (which guessed nonsense
-  // like "Western Union · Weekly · $43,413/yr"). The user owns every row: add it,
-  // set amount + default pocket + cadence + first due date, and mark it paid
-  // deliberately (a bottom sheet, never a one-tap toggle). Two sections — 📋 Bills
-  // and 🔁 Subscriptions — each with its own due · paid · left totals.
+  // Recurring — USER-OWNED bills + subscriptions, MONTH-AWARE (spec
+  // 002-income-pockets §7.5–§7.10). The user owns every row: add it, set amount +
+  // default pocket + cadence + first due date, and mark it paid deliberately.
+  //
+  // Two interactions, deliberately SEPARATE (Hemanth's bug report — editing must
+  // not force a payment):
+  //   • tap the ROW (name/amount)  → EDIT the bill (amount/name/cadence/due)
+  //   • tap the CIRCLE             → PAY this month (a confirm sheet, never 1-tap)
+  //
+  // A month navigator (◀ June 2026 ▶ + calendar) sits at the top, just like Home,
+  // so the user can jump to any month — see what they paid in February, or add a
+  // bill they forgot to a past month. Each month shows the bills/subscriptions
+  // ACTIVE that month with that month's own paid/left status.
   import { onMount } from 'svelte';
   import { loadRecurring, saveRecurring } from '$lib/db/recurring-store';
   import { loadCategorization } from '$lib/db/categorization-store';
@@ -13,18 +20,22 @@
   import type { TransactionAnnotation } from '$lib/app/categorization';
   import { DEFAULT_POCKETS, findPocket, type Pocket } from '$lib/app/pockets';
   import {
-    deriveStatus,
-    remainingMinor,
-    paidThisCycleMinor,
-    sectionTotals,
+    monthOf,
+    isActiveInMonth,
+    dueDateInMonth,
+    statusInMonth,
+    sectionTotalsForMonth,
+    remainingInMonth,
+    paidCappedInMonth,
+    latestPaymentInMonth,
     applyPayment,
-    markUnpaid as markUnpaidPure,
-    startNextCycle as startNextCyclePure,
+    unpayMonth,
     cadenceLabel,
     type RecurringItem,
     type RecurringKind,
     type PaymentInput,
-    type RecurringStatus
+    type RecurringStatus,
+    type Cadence
   } from '$lib/app/recurring-items';
   import { categoryColor, categoryIconName } from '$lib/app/category-visuals';
   import { formatMoney } from '$lib/util/money';
@@ -32,19 +43,31 @@
   import CategoryIcon from '$components/CategoryIcon.svelte';
   import PayRecurringSheet from '$components/PayRecurringSheet.svelte';
   import AddRecurringSheet from '$components/AddRecurringSheet.svelte';
+  import MonthPickerSheet from '$components/MonthPickerSheet.svelte';
 
   let loading = $state(true);
   let items = $state<RecurringItem[]>([]);
   let pockets = $state<Pocket[]>([...DEFAULT_POCKETS]);
   let editMode = $state(false);
   let paySheetItem = $state<RecurringItem | null>(null);
-  let addSheetKind = $state<RecurringKind | null>(null);
+  // One add/edit sheet, three uses: blank add, edit an item, or seed from a
+  // statement suggestion (so the user can tweak the name/amount before adding).
+  type AddEdit = {
+    kind: RecurringKind;
+    editItem: RecurringItem | null;
+    seed: { name: string; amount_minor: bigint; cadence: Cadence; due_date: string } | null;
+  };
+  let addEdit = $state<AddEdit | null>(null);
+  let pickerOpen = $state(false);
   // Auto-detection of recurring items from the user's statements.
   let imports = $state<ImportRecord[]>([]);
   let annotations = $state<Record<string, TransactionAnnotation>>({});
   let dismissed = $state<Set<string>>(new Set());
 
   const todayIso = today();
+  const currentMonth = todayIso.slice(0, 7);
+  /** The month currently shown — defaults to this calendar month. */
+  let activeMonth = $state(currentMonth);
 
   onMount(async () => {
     const [rec, cat, state] = await Promise.all([
@@ -60,134 +83,54 @@
     loading = false;
   });
 
-  // Recurring bills + subscriptions detected in the statements, minus ones the
-  // user already added (by name) or dismissed — so we "populate" the tab but the
-  // user stays in control (edit / remove).
-  const sugKey = (s: { kind: string; name: string }): string => `${s.kind}|${s.name.toLowerCase()}`;
-  const suggestions = $derived(
-    suggestRecurring(imports, annotations, todayIso).filter((s) => {
-      if (dismissed.has(sugKey(s))) return false;
-      return !items.some(
-        (it) => it.kind === s.kind && it.name.toLowerCase() === s.name.toLowerCase()
-      );
-    })
-  );
-  async function addSuggestion(s: RecurringSuggestion): Promise<void> {
-    const order = items.filter((i) => i.kind === s.kind).length;
-    items = [
-      ...items,
-      {
-        kind: s.kind,
-        name: s.name,
-        amount_minor: s.amount_minor,
-        paid_from: 'paychecks',
-        cadence: s.cadence,
-        due_date: s.due_date,
-        id: newId(),
-        order,
-        paid_minor: 0n,
-        paid_date: null
+  // ── month navigation ────────────────────────────────────────────────────────
+  function addMonths(ym: string, n: number): string {
+    const y = Number.parseInt(ym.slice(0, 4), 10);
+    const m = Number.parseInt(ym.slice(5, 7), 10);
+    const t = y * 12 + (m - 1) + n;
+    const ny = Math.floor(t / 12);
+    const nm = t % 12;
+    return `${ny}-${String(nm + 1).padStart(2, '0')}`;
+  }
+  /** Contiguous month list the nav can step through: spans every month an item
+   *  starts or was paid in, ±6 months of headroom so a forgotten bill can be
+   *  added to a nearby empty month. */
+  const monthsAvailable = $derived.by<string[]>(() => {
+    let min = currentMonth;
+    let max = currentMonth;
+    for (const it of items) {
+      if (it.archived === true) continue;
+      const start = monthOf(it.due_date);
+      if (start < min) min = start;
+      if (start > max) max = start;
+      for (const p of it.payments) {
+        if (p.month < min) min = p.month;
+        if (p.month > max) max = p.month;
       }
-    ];
-    await persist();
-  }
-  async function addAllSuggestions(): Promise<void> {
-    const toAdd = suggestions;
-    let next = items;
-    for (const s of toAdd) {
-      const order = next.filter((i) => i.kind === s.kind).length;
-      next = [
-        ...next,
-        {
-          kind: s.kind,
-          name: s.name,
-          amount_minor: s.amount_minor,
-          paid_from: 'paychecks',
-          cadence: s.cadence,
-          due_date: s.due_date,
-          id: newId(),
-          order,
-          paid_minor: 0n,
-          paid_date: null
-        }
-      ];
     }
-    items = next;
-    await persist();
+    min = addMonths(min, -6);
+    max = addMonths(max, 6);
+    const list: string[] = [];
+    let cur = min;
+    let guard = 0;
+    while (cur <= max && guard < 600) {
+      list.push(cur);
+      cur = addMonths(cur, 1);
+      guard++;
+    }
+    return list;
+  });
+  const monthsSet = $derived(new Set(monthsAvailable));
+  const activeIdx = $derived(monthsAvailable.indexOf(activeMonth));
+  const canPrev = $derived(activeIdx > 0);
+  const canNext = $derived(activeIdx >= 0 && activeIdx < monthsAvailable.length - 1);
+  function prevMonth(): void {
+    if (canPrev) activeMonth = monthsAvailable[activeIdx - 1]!;
   }
-  function dismissSuggestion(s: RecurringSuggestion): void {
-    dismissed = new Set([...dismissed, sugKey(s)]);
+  function nextMonth(): void {
+    if (canNext) activeMonth = monthsAvailable[activeIdx + 1]!;
   }
-
-  async function persist(): Promise<void> {
-    await saveRecurring({ items });
-  }
-
-  function byDue(a: RecurringItem, b: RecurringItem): number {
-    if (a.due_date !== b.due_date) return a.due_date < b.due_date ? -1 : 1;
-    return a.order - b.order;
-  }
-  const bills = $derived(items.filter((i) => i.kind === 'bill' && i.archived !== true).sort(byDue));
-  const subs = $derived(
-    items.filter((i) => i.kind === 'subscription' && i.archived !== true).sort(byDue)
-  );
-  const billTotals = $derived(sectionTotals(bills));
-  const subTotals = $derived(sectionTotals(subs));
-  const overdue = $derived(
-    [...bills, ...subs].filter((i) => deriveStatus(i, todayIso) === 'overdue')
-  );
-
-  // ── mutations ─────────────────────────────────────────────────────────────
-  function newId(): string {
-    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
-    // Fallback for very old engines; ids only need to be unique within this list.
-    return 'r' + items.length + '_' + items.reduce((n, i) => n + i.id.length, 0);
-  }
-
-  async function handleAdd(
-    draft: Omit<RecurringItem, 'id' | 'order' | 'paid_minor' | 'paid_date'>
-  ): Promise<void> {
-    const order = items.filter((i) => i.kind === draft.kind).length;
-    const item: RecurringItem = { ...draft, id: newId(), order, paid_minor: 0n, paid_date: null };
-    items = [...items, item];
-    addSheetKind = null;
-    await persist();
-  }
-
-  function replace(updated: RecurringItem): void {
-    items = items.map((i) => (i.id === updated.id ? updated : i));
-  }
-
-  async function handlePay(input: PaymentInput): Promise<void> {
-    if (paySheetItem === null) return;
-    const updated = applyPayment(paySheetItem, input);
-    replace(updated);
-    // Close after recording — the row now reflects the new state (paid / partial).
-    // To pay the remainder, roll the cycle, or undo, the user taps the row again.
-    paySheetItem = null;
-    await persist();
-  }
-  async function handleMarkUnpaid(): Promise<void> {
-    if (paySheetItem === null) return;
-    const updated = markUnpaidPure(paySheetItem);
-    replace(updated);
-    paySheetItem = null;
-    await persist();
-  }
-  async function handleStartNextCycle(): Promise<void> {
-    if (paySheetItem === null) return;
-    const updated = startNextCyclePure(paySheetItem);
-    replace(updated);
-    paySheetItem = null;
-    await persist();
-  }
-  async function handleDelete(item: RecurringItem): Promise<void> {
-    items = items.filter((i) => i.id !== item.id);
-    await persist();
-  }
-
-  // ── row presentation ────────────────────────────────────────────────────
-  const months = [
+  const MONTHS = [
     '',
     'Jan',
     'Feb',
@@ -202,20 +145,160 @@
     'Nov',
     'Dec'
   ];
+  const activeMonthLabel = $derived(
+    `${MONTHS[Number(activeMonth.slice(5, 7))]} ${activeMonth.slice(0, 4)}`
+  );
+
+  // ── statement suggestions ────────────────────────────────────────────────────
+  const sugKey = (s: { kind: string; name: string }): string => `${s.kind}|${s.name.toLowerCase()}`;
+  const suggestions = $derived(
+    suggestRecurring(imports, annotations, todayIso).filter((s) => {
+      if (dismissed.has(sugKey(s))) return false;
+      return !items.some(
+        (it) => it.kind === s.kind && it.name.toLowerCase() === s.name.toLowerCase()
+      );
+    })
+  );
+  /** Move a suggestion's due day into the active month so it appears immediately. */
+  function seedDueDate(s: RecurringSuggestion): string {
+    return dueDateInMonth({ due_date: s.due_date }, activeMonth);
+  }
+  function customizeSuggestion(s: RecurringSuggestion): void {
+    addEdit = {
+      kind: s.kind,
+      editItem: null,
+      seed: {
+        name: s.name,
+        amount_minor: s.amount_minor,
+        cadence: s.cadence,
+        due_date: seedDueDate(s)
+      }
+    };
+  }
+  async function addAllSuggestions(): Promise<void> {
+    let next = items;
+    for (const s of suggestions) {
+      const order = next.filter((i) => i.kind === s.kind).length;
+      next = [
+        ...next,
+        {
+          kind: s.kind,
+          name: s.name,
+          amount_minor: s.amount_minor,
+          paid_from: 'paychecks',
+          cadence: s.cadence,
+          due_date: s.due_date,
+          id: newId(),
+          order,
+          payments: []
+        }
+      ];
+    }
+    items = next;
+    await persist();
+  }
+  function dismissSuggestion(s: RecurringSuggestion): void {
+    dismissed = new Set([...dismissed, sugKey(s)]);
+  }
+
+  async function persist(): Promise<void> {
+    await saveRecurring({ items });
+  }
+
+  // ── per-month views ──────────────────────────────────────────────────────────
+  function byDueInMonth(a: RecurringItem, b: RecurringItem): number {
+    const da = dueDateInMonth(a, activeMonth);
+    const db = dueDateInMonth(b, activeMonth);
+    if (da !== db) return da < db ? -1 : 1;
+    return a.order - b.order;
+  }
+  const billsAll = $derived(items.filter((i) => i.kind === 'bill' && i.archived !== true));
+  const subsAll = $derived(items.filter((i) => i.kind === 'subscription' && i.archived !== true));
+  const bills = $derived(
+    billsAll.filter((i) => isActiveInMonth(i, activeMonth)).sort(byDueInMonth)
+  );
+  const subs = $derived(subsAll.filter((i) => isActiveInMonth(i, activeMonth)).sort(byDueInMonth));
+  const billTotals = $derived(sectionTotalsForMonth(billsAll, activeMonth));
+  const subTotals = $derived(sectionTotalsForMonth(subsAll, activeMonth));
+  const overdue = $derived(
+    [...bills, ...subs].filter((i) => statusInMonth(i, activeMonth, todayIso) === 'overdue')
+  );
+
+  // ── mutations ─────────────────────────────────────────────────────────────
+  function newId(): string {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
+    return 'r' + items.length + '_' + items.reduce((n, i) => n + i.id.length, 0);
+  }
+
+  type Draft = Pick<
+    RecurringItem,
+    'kind' | 'name' | 'amount_minor' | 'paid_from' | 'cadence' | 'due_date'
+  >;
+  async function handleAddOrEdit(draft: Draft): Promise<void> {
+    const ae = addEdit;
+    if (ae === null) return;
+    if (ae.editItem !== null) {
+      // Edit: keep id/order/payments/logo, overwrite the editable fields. NO payment.
+      replace({ ...ae.editItem, ...draft });
+    } else {
+      const order = items.filter((i) => i.kind === draft.kind).length;
+      items = [...items, { ...draft, id: newId(), order, payments: [] }];
+    }
+    addEdit = null;
+    await persist();
+  }
+
+  function replace(updated: RecurringItem): void {
+    items = items.map((i) => (i.id === updated.id ? updated : i));
+  }
+
+  async function handlePay(input: PaymentInput): Promise<void> {
+    if (paySheetItem === null) return;
+    replace(applyPayment(paySheetItem, input));
+    paySheetItem = null;
+    await persist();
+  }
+  async function handleMarkUnpaid(): Promise<void> {
+    if (paySheetItem === null) return;
+    replace(unpayMonth(paySheetItem, activeMonth));
+    paySheetItem = null;
+    await persist();
+  }
+  async function handleDelete(item: RecurringItem): Promise<void> {
+    items = items.filter((i) => i.id !== item.id);
+    await persist();
+  }
+
+  function openAdd(kind: RecurringKind): void {
+    addEdit = { kind, editItem: null, seed: null };
+  }
+  function openEdit(item: RecurringItem): void {
+    addEdit = { kind: item.kind, editItem: item, seed: null };
+  }
+  /** Pre-filled due date for a NEW item: today if viewing this month, else the
+   *  same day-of-month inside the viewed month (so it lands where expected). */
+  function defaultDueFor(month: string): string {
+    if (month === currentMonth) return todayIso;
+    return dueDateInMonth({ due_date: todayIso }, month);
+  }
+
+  // ── row presentation ────────────────────────────────────────────────────
   function prettyDate(iso: string): string {
     const [, m, d] = iso.split('-');
-    return `${months[Number(m)]} ${Number(d)}`;
+    return `${MONTHS[Number(m)]} ${Number(d)}`;
   }
   function statusLine(item: RecurringItem, status: RecurringStatus): string {
     if (status === 'paid') {
-      const pk = findPocket(pockets, item.paid_from);
-      return `✓ paid ${item.paid_date ? prettyDate(item.paid_date) : ''}${pk ? ' · ' + pk.logo + ' ' + pk.name : ''}`;
+      const lp = latestPaymentInMonth(item, activeMonth);
+      const pk = lp ? findPocket(pockets, lp.paid_from) : null;
+      return `✓ paid ${lp ? prettyDate(lp.paid_date) : ''}${pk ? ' · ' + pk.logo + ' ' + pk.name : ''}`;
     }
     if (status === 'partial') {
-      return `${formatMoney(paidThisCycleMinor(item))} of ${formatMoney(item.amount_minor)} · ${formatMoney(remainingMinor(item))} left`;
+      return `${formatMoney(paidCappedInMonth(item, activeMonth))} of ${formatMoney(item.amount_minor)} · ${formatMoney(remainingInMonth(item, activeMonth))} left`;
     }
-    if (status === 'overdue') return `⚠ overdue · was due ${prettyDate(item.due_date)}`;
-    return `due ${prettyDate(item.due_date)} · ${cadenceLabel(item.cadence)}`;
+    const due = dueDateInMonth(item, activeMonth);
+    if (status === 'overdue') return `⚠ overdue · was due ${prettyDate(due)}`;
+    return `due ${prettyDate(due)} · ${cadenceLabel(item.cadence)}`;
   }
 </script>
 
@@ -237,9 +320,69 @@
       </button>
     {/if}
   </div>
-  <p class="mb-6 text-sm" style:color="var(--color-muted)">
-    Your bills &amp; subscriptions. Add each one, then tick it paid when you pay it.
+  <p class="mb-4 text-sm" style:color="var(--color-muted)">
+    Tap a row to <strong>edit</strong> it; tap the circle to <strong>mark it paid</strong>.
   </p>
+
+  {#if !loading}
+    <!-- Month navigator — ◀ Month YYYY ▶ + calendar, mirroring Home. -->
+    <div class="month-nav">
+      <button
+        type="button"
+        class="mn-arrow"
+        onclick={prevMonth}
+        disabled={!canPrev}
+        aria-label="Previous month"
+      >
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"><path d="M15 6l-6 6 6 6" /></svg
+        >
+      </button>
+      <button type="button" class="mn-label" onclick={() => (pickerOpen = true)}>
+        <span>{activeMonthLabel}</span>
+        {#if activeMonth !== currentMonth}<span class="mn-dot" aria-hidden="true"></span>{/if}
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+          ><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg
+        >
+      </button>
+      <button
+        type="button"
+        class="mn-arrow"
+        onclick={nextMonth}
+        disabled={!canNext}
+        aria-label="Next month"
+      >
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"><path d="M9 6l6 6-6 6" /></svg
+        >
+      </button>
+    </div>
+  {/if}
 
   {#if loading}
     <p class="text-sm" style:color="var(--color-muted)">Loading…</p>
@@ -250,7 +393,7 @@
         style="background-image: linear-gradient(to right, color-mix(in oklab, var(--color-danger) 10%, transparent), transparent);"
       >
         <p class="text-sm font-semibold" style:color="var(--color-danger)">
-          ⚠ {overdue.length} overdue
+          ⚠ {overdue.length} overdue in {activeMonthLabel}
         </p>
         <p class="text-xs" style:color="var(--color-muted)">
           {overdue
@@ -275,8 +418,8 @@
           </button>
         </div>
         <p class="mb-2 text-xs" style:color="var(--color-muted)">
-          Recurring bills &amp; subscriptions we spotted by name. Add the ones that make sense; edit
-          or remove them anytime.
+          Recurring bills &amp; subscriptions we spotted by name. Tap <strong>＋ Add</strong> to review
+          the name &amp; amount before saving; edit or remove anytime.
         </p>
         {#each suggestions as s (s.kind + s.name)}
           <div class="sug-row" style="border-top: 1px solid var(--color-border);">
@@ -296,7 +439,7 @@
             <button
               type="button"
               class="sug-add"
-              onclick={() => addSuggestion(s)}
+              onclick={() => customizeSuggestion(s)}
               aria-label="Add {s.name}"
             >
               ＋ Add
@@ -328,7 +471,7 @@
             type="button"
             class="text-sm font-semibold"
             style:color="var(--color-accent)"
-            onclick={() => (addSheetKind = kind)}
+            onclick={() => openAdd(kind)}
           >
             ➕ Add
           </button>
@@ -336,7 +479,7 @@
 
         {#if list.length === 0}
           <p class="py-3 text-sm" style:color="var(--color-muted)">
-            None yet. Tap <strong>➕ Add</strong> to add your first {kind}.
+            None due in {activeMonthLabel}. Tap <strong>➕ Add</strong> to add a {kind}.
           </p>
         {:else}
           <p class="mb-1 text-xs" style:color="var(--color-muted)">
@@ -344,13 +487,13 @@
             <strong style:color="var(--color-text)">{formatMoney(totals.leftMinor)} left</strong>
           </p>
           {#each list as item (item.id)}
-            {@const status = deriveStatus(item, todayIso)}
+            {@const status = statusInMonth(item, activeMonth, todayIso)}
             <div class="rec-row" style="border-top: 1px solid var(--color-border);">
               <button
                 type="button"
-                class="rec-tap"
+                class="rec-circle"
                 onclick={() => (paySheetItem = item)}
-                aria-label="Pay {item.name}"
+                aria-label="Mark {item.name} paid for {activeMonthLabel}"
               >
                 <span
                   class="rec-status"
@@ -360,6 +503,13 @@
                 >
                   {status === 'paid' ? '✓' : status === 'partial' ? '◐' : ''}
                 </span>
+              </button>
+              <button
+                type="button"
+                class="rec-tap"
+                onclick={() => openEdit(item)}
+                aria-label="Edit {item.name}"
+              >
                 {#if item.kind === 'subscription'}
                   <CategoryIcon
                     icon={categoryIconName(item.name)}
@@ -399,8 +549,9 @@
     {@render section('Subscriptions', '🔁', 'subscription', subs, subTotals)}
 
     <p class="mt-2 text-xs" style:color="var(--color-muted)">
-      Bills recur until you remove them; one-time items don't come back. Marking paid is a
-      deliberate step — tap a row to confirm the amount and pocket.
+      Each month shows the bills &amp; subscriptions due that month. Use ◀ ▶ to revisit a past month
+      (e.g. add a bill you forgot) or look ahead. Marking paid is deliberate — tap the circle to
+      confirm the amount &amp; pocket.
     </p>
   {/if}
 </main>
@@ -408,45 +559,108 @@
 <PayRecurringSheet
   open={paySheetItem !== null}
   item={paySheetItem}
+  month={activeMonth}
   {pockets}
   {todayIso}
   onPay={handlePay}
   onMarkUnpaid={handleMarkUnpaid}
-  onStartNextCycle={handleStartNextCycle}
   onClose={() => (paySheetItem = null)}
 />
 
 <AddRecurringSheet
-  open={addSheetKind !== null}
-  kind={addSheetKind ?? 'bill'}
+  open={addEdit !== null}
+  kind={addEdit?.kind ?? 'bill'}
+  editItem={addEdit?.editItem ?? null}
+  seed={addEdit?.seed ?? null}
+  defaultDueDate={defaultDueFor(activeMonth)}
   {pockets}
   {todayIso}
-  onAdd={handleAdd}
-  onClose={() => (addSheetKind = null)}
+  onAdd={handleAddOrEdit}
+  onClose={() => (addEdit = null)}
+/>
+
+<MonthPickerSheet
+  open={pickerOpen}
+  currentMonth={activeMonth}
+  monthsWithData={monthsSet}
+  todayMonth={currentMonth}
+  onSelect={(m) => (activeMonth = m)}
+  onClose={() => (pickerOpen = false)}
 />
 
 <style>
+  .month-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 1.25rem;
+  }
+  .mn-arrow {
+    width: 38px;
+    height: 38px;
+    border-radius: 999px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-sm);
+    color: var(--color-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex: none;
+  }
+  .mn-arrow:disabled {
+    opacity: 0.35;
+    cursor: default;
+    box-shadow: none;
+  }
+  .mn-arrow:not(:disabled):active {
+    transform: scale(0.92);
+  }
+  .mn-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-width: 9.5rem;
+    justify-content: center;
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-weight: 700;
+    font-size: 0.98rem;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .mn-label svg {
+    color: var(--color-muted);
+  }
+  .mn-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--color-accent);
+  }
+
   .rec-row {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.2rem;
   }
-  .rec-tap {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
-    padding: 0.7rem 0;
+  .rec-circle {
+    flex: none;
     background: none;
     border: 0;
     cursor: pointer;
-    text-align: left;
-    min-width: 0;
-    font-family: inherit;
+    padding: 0.7rem 0.35rem 0.7rem 0;
+    display: grid;
+    place-items: center;
   }
   .rec-status {
-    width: 22px;
-    height: 22px;
+    width: 24px;
+    height: 24px;
     flex: none;
     border-radius: 7px;
     border: 1.5px solid var(--color-border);
@@ -465,6 +679,19 @@
   }
   .rec-status.overdue {
     border-color: var(--color-danger);
+  }
+  .rec-tap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.7rem 0;
+    background: none;
+    border: 0;
+    cursor: pointer;
+    text-align: left;
+    min-width: 0;
+    font-family: inherit;
   }
   .rec-body {
     flex: 1;
