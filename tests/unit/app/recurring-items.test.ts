@@ -9,7 +9,10 @@ import {
   advanceDueDate,
   applyPayment,
   cadenceLabel,
+  DEFAULT_SECTIONS,
+  defaultSectionForKind,
   dueDateInMonth,
+  findSection,
   isActiveInMonth,
   latestPaymentInMonth,
   monthOf,
@@ -17,6 +20,8 @@ import {
   paidCappedInMonth,
   paidInMonth,
   remainingInMonth,
+  SECTION_BILLS,
+  SECTION_SUBSCRIPTIONS,
   sectionTotalsForMonth,
   statusInMonth,
   unpayMonth,
@@ -27,7 +32,7 @@ import {
 function item(over: Partial<RecurringItem> = {}): RecurringItem {
   return {
     id: over.id ?? 'i1',
-    kind: over.kind ?? 'bill',
+    section_id: over.section_id ?? 'bills',
     name: over.name ?? 'Car EMI',
     amount_minor: over.amount_minor ?? 1250_00n,
     paid_from: over.paid_from ?? 'paychecks',
@@ -253,6 +258,28 @@ describe('unpayMonth', () => {
 describe('monthOf', () => {
   test('slices the month key', () => {
     expect(monthOf('2026-06-14')).toBe('2026-06');
+  });
+});
+
+describe('sections (user-owned grouping)', () => {
+  test('two built-in sections ship by default and are non-deletable', () => {
+    expect(DEFAULT_SECTIONS.map((s) => s.id)).toEqual([SECTION_BILLS, SECTION_SUBSCRIPTIONS]);
+    for (const s of DEFAULT_SECTIONS) expect(s.builtin).toBe(true);
+  });
+  test('defaultSectionForKind maps a detected kind to a built-in section', () => {
+    expect(defaultSectionForKind('bill')).toBe(SECTION_BILLS);
+    expect(defaultSectionForKind('subscription')).toBe(SECTION_SUBSCRIPTIONS);
+  });
+  test('findSection returns the section or null', () => {
+    const custom = [...DEFAULT_SECTIONS, { id: 'loans', name: 'Loans', icon: '🚗', order: 2 }];
+    expect(findSection(custom, 'loans')?.name).toBe('Loans');
+    expect(findSection(custom, SECTION_BILLS)?.builtin).toBe(true);
+    expect(findSection(custom, 'nope')).toBeNull();
+  });
+  test('an item can live in a custom section; totals + activity are section-agnostic', () => {
+    const it = item({ section_id: 'loans', amount_minor: 736_00n, due_date: '2026-06-11' });
+    expect(isActiveInMonth(it, '2026-06')).toBe(true);
+    expect(sectionTotalsForMonth([it], '2026-06').dueMinor).toBe(736_00n);
   });
 });
 

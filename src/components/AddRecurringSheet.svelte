@@ -17,13 +17,13 @@
     type Cadence,
     type CadenceUnit,
     type RecurringItem,
-    type RecurringKind
+    type RecurringSection
   } from '$lib/app/recurring-items';
   import CategoryIcon from '$components/CategoryIcon.svelte';
   import IconPickerSheet from '$components/IconPickerSheet.svelte';
 
   interface DraftItem {
-    kind: RecurringKind;
+    section_id: string;
     name: string;
     amount_minor: bigint;
     paid_from: string;
@@ -34,7 +34,10 @@
   }
   interface Props {
     open: boolean;
-    kind: RecurringKind;
+    /** The section a NEW item lands in (the card whose ＋ Add was tapped). */
+    sectionId: string;
+    /** All sections, for the in-sheet Section picker. */
+    sections: RecurringSection[];
     pockets: Pocket[];
     todayIso: string;
     /** When set, the sheet edits this item instead of adding a new one. */
@@ -51,29 +54,39 @@
      *  a forgotten bill straight into the month the user is viewing. */
     defaultDueDate?: string;
     onAdd: (draft: DraftItem) => void;
-    /** Edit-mode only: a destructive "Delete bill" path (page shows the confirm). */
+    /** Create a new section inline; returns its id so we can select it. */
+    onCreateSection?: (name: string, icon: string) => string;
+    /** Edit-mode only: a destructive "Delete" path (page shows the confirm). */
     onDelete?: () => void;
     onClose: () => void;
   }
   const {
     open,
-    kind,
+    sectionId,
+    sections,
     pockets,
     todayIso,
     editItem = null,
     seed = null,
     defaultDueDate,
     onAdd,
+    onCreateSection,
     onDelete,
     onClose
   }: Props = $props();
 
   const isEdit = $derived(editItem !== null && editItem !== undefined);
 
-  /** The item's type, editable here so the user can move a row between the Bills
-   *  and Subscriptions sections (or fix a wrong auto-classification). Seeded from
-   *  the `kind` prop on open; the emitted draft carries this, not the prop. */
-  let kindState = $state<RecurringKind>('bill');
+  /** The section this item belongs to, editable here so the user can move a row
+   *  between sections (or fix a wrong auto-classification). Seeded from the
+   *  `sectionId` prop / edited item on open; the draft carries this. */
+  let sectionState = $state('bills');
+  // Inline "＋ New section" sub-form.
+  let creatingSection = $state(false);
+  let newSecName = $state('');
+  let newSecIcon = $state('📁');
+  const SECTION_EMOJI = ['📁', '🏠', '🚗', '⚡', '🛡️', '💳', '📱', '🎬', '💊', '🎮', '🏥', '✈️'];
+  const orderedSections = $derived([...sections].sort((a, b) => a.order - b.order));
   let name = $state('');
   let amountStr = $state('');
   let repeats = $state<'once' | 'recurring'>('recurring');
@@ -119,7 +132,10 @@
   $effect(() => {
     if (open && !wasOpen) {
       untrack(() => {
-        kindState = editItem ? editItem.kind : kind;
+        sectionState = editItem ? editItem.section_id : sectionId;
+        creatingSection = false;
+        newSecName = '';
+        newSecIcon = '📁';
         if (editItem) {
           name = editItem.name;
           amountStr = centsToDecimal(editItem.amount_minor);
@@ -210,7 +226,7 @@
       return;
     }
     onAdd({
-      kind: kindState,
+      section_id: sectionState,
       name: name.trim(),
       amount_minor: amount,
       paid_from: paidFrom,
@@ -219,6 +235,20 @@
       logo
     });
   }
+
+  /** Commit the inline "＋ New section" form: create it + select it. */
+  function commitNewSection(): void {
+    const nm = newSecName.trim();
+    if (nm === '' || onCreateSection === undefined) {
+      creatingSection = false;
+      return;
+    }
+    sectionState = onCreateSection(nm, newSecIcon);
+    creatingSection = false;
+    newSecName = '';
+    newSecIcon = '📁';
+  }
+  const currentSection = $derived(orderedSections.find((s) => s.id === sectionState) ?? null);
 
   const presetLabels: Array<[typeof preset, string]> = [
     ['monthly', 'Month'],
@@ -236,29 +266,65 @@
     class="ar-sheet"
     role="dialog"
     aria-modal="true"
-    aria-label={isEdit ? 'Edit ' + kindState : 'Add ' + kindState}
+    aria-label={isEdit ? 'Edit item' : 'Add item'}
   >
     <div class="ar-grab"></div>
     <h2 class="ar-name">
-      {#if isEdit}Edit {kindState === 'subscription' ? 'subscription 🔁' : 'bill 📋'}{:else}New {kindState ===
-        'subscription'
-          ? 'subscription 🔁'
-          : 'bill 📋'}{/if}
+      {isEdit ? 'Edit' : 'New'}
+      {#if currentSection}· {currentSection.icon} {currentSection.name}{/if}
     </h2>
 
-    <!-- Type — move a row between Bills and Subscriptions, or fix a wrong guess. -->
+    <!-- Section — which card this lives in. Move a row between sections, fix a
+         wrong auto-guess, or ＋ create your own (Loans, Utilities, …). -->
     <div class="ar-field">
-      <span class="ar-lbl">Type</span>
-      <div class="ar-seg">
-        <button type="button" class:on={kindState === 'bill'} onclick={() => (kindState = 'bill')}
-          >📋 Bill</button
-        >
-        <button
-          type="button"
-          class:on={kindState === 'subscription'}
-          onclick={() => (kindState = 'subscription')}>🔁 Subscription</button
-        >
-      </div>
+      <span class="ar-lbl">Section</span>
+      {#if creatingSection}
+        <div class="ar-newsec">
+          <div class="ar-emoji-row">
+            {#each SECTION_EMOJI as e (e)}
+              <button
+                type="button"
+                class="ar-emoji"
+                class:on={newSecIcon === e}
+                onclick={() => (newSecIcon = e)}>{e}</button
+              >
+            {/each}
+          </div>
+          <div class="ar-newsec-row">
+            <input
+              class="ar-in"
+              bind:value={newSecName}
+              placeholder="Section name (e.g. Loans)"
+              onfocus={scrollIntoView}
+            />
+            <button type="button" class="ar-newsec-ok" onclick={commitNewSection}>Add</button>
+            <button type="button" class="ar-newsec-x" onclick={() => (creatingSection = false)}
+              >✕</button
+            >
+          </div>
+        </div>
+      {:else}
+        <div class="ar-chips">
+          {#each orderedSections as s (s.id)}
+            <button
+              type="button"
+              class="ar-chip"
+              class:on={sectionState === s.id}
+              onclick={() => (sectionState = s.id)}
+            >
+              {s.icon}
+              {s.name}
+            </button>
+          {/each}
+          {#if onCreateSection}
+            <button
+              type="button"
+              class="ar-chip ar-chip-new"
+              onclick={() => (creatingSection = true)}>＋ New section</button
+            >
+          {/if}
+        </div>
+      {/if}
     </div>
 
     <div class="ar-namerow">
@@ -281,7 +347,7 @@
           <input
             class="ar-in"
             bind:value={name}
-            placeholder={kindState === 'subscription' ? 'Netflix' : 'Car EMI'}
+            placeholder="e.g. Car EMI, Netflix"
             onfocus={scrollIntoView}
           />
         </div>
@@ -382,11 +448,9 @@
 
     {#if err}<p class="ar-err">{err}</p>{/if}
 
-    <button type="button" class="ar-btn" onclick={submit}
-      >{isEdit ? 'Save changes' : 'Add ' + kindState}</button
-    >
+    <button type="button" class="ar-btn" onclick={submit}>{isEdit ? 'Save changes' : 'Add'}</button>
     {#if isEdit && onDelete}
-      <button type="button" class="ar-delete" onclick={onDelete}>🗑 Delete {kindState}</button>
+      <button type="button" class="ar-delete" onclick={onDelete}>🗑 Delete</button>
     {/if}
     <button type="button" class="ar-cancel" onclick={onClose}>Cancel</button>
   </div>
@@ -561,6 +625,68 @@
     background: color-mix(in oklab, var(--color-accent) 14%, transparent);
     border-color: var(--color-accent);
     color: var(--color-accent);
+  }
+  .ar-chip-new {
+    border-style: dashed;
+    color: var(--color-accent);
+  }
+  .ar-newsec {
+    border: 1.5px solid var(--color-accent);
+    background: color-mix(in oklab, var(--color-accent) 6%, transparent);
+    border-radius: 14px;
+    padding: 0.6rem;
+  }
+  .ar-emoji-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-bottom: 0.5rem;
+  }
+  .ar-emoji {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    font-size: 1.05rem;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+  }
+  .ar-emoji.on {
+    border-color: var(--color-accent);
+    background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+  }
+  .ar-newsec-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .ar-newsec-row .ar-in {
+    flex: 1;
+    min-width: 0;
+  }
+  .ar-newsec-ok {
+    flex: none;
+    border: 0;
+    border-radius: 10px;
+    padding: 0.55rem 0.9rem;
+    background-image: var(--grad-primary);
+    color: var(--color-accent-fg);
+    font-weight: 700;
+    font-size: 0.88rem;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .ar-newsec-x {
+    flex: none;
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    width: 36px;
+    height: 36px;
+    background: var(--color-surface);
+    color: var(--color-muted);
+    cursor: pointer;
   }
   .ar-custom {
     display: flex;

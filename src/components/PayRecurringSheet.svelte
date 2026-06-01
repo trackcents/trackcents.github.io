@@ -131,11 +131,7 @@
     <div class="pr-grab"></div>
 
     <p class="pr-kicker">
-      {isPaid
-        ? `✓ Paid · ${monthName(month)}`
-        : item.kind === 'subscription'
-          ? `Pay this subscription 💳 · ${monthName(month)}`
-          : `Pay this bill 💸 · ${monthName(month)}`}
+      {isPaid ? `✓ Paid · ${monthName(month)}` : `Pay this 💸 · ${monthName(month)}`}
     </p>
     <h2 class="pr-name">{item.name}</h2>
     <p class="pr-amtline">{formatMoney(item.amount_minor)} due this month</p>

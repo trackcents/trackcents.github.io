@@ -22,7 +22,48 @@
  *   - `payments[]`   — history; each entry is tagged with the `month` it covers.
  */
 
+/** Classification used ONLY by the statement-suggestion engine (it detects a
+ *  charge as a bill or a subscription); items themselves live in a user-owned
+ *  SECTION (see RecurringSection / section_id), not a fixed kind. */
 export type RecurringKind = 'bill' | 'subscription';
+
+/**
+ * A user-owned grouping the Recurring tab renders as a card. Two built-ins
+ * (Bills, Subscriptions) ship by default and can't be deleted; the user can add
+ * their own (Loans, Utilities, …), rename, reorder, and delete custom ones.
+ */
+export interface RecurringSection {
+  id: string;
+  name: string;
+  /** Emoji shown on the section header. */
+  icon: string;
+  /** Display order (lower first). */
+  order: number;
+  /** Built-in sections (Bills / Subscriptions) can be renamed but not deleted. */
+  builtin?: boolean;
+}
+
+export const SECTION_BILLS = 'bills';
+export const SECTION_SUBSCRIPTIONS = 'subscriptions';
+
+/** The two sections every user starts with. */
+export const DEFAULT_SECTIONS: readonly RecurringSection[] = [
+  { id: SECTION_BILLS, name: 'Bills', icon: '📋', order: 0, builtin: true },
+  { id: SECTION_SUBSCRIPTIONS, name: 'Subscriptions', icon: '🔁', order: 1, builtin: true }
+];
+
+/** Which built-in section a suggestion lands in, from its detected kind. */
+export function defaultSectionForKind(kind: RecurringKind): string {
+  return kind === 'subscription' ? SECTION_SUBSCRIPTIONS : SECTION_BILLS;
+}
+
+/** Find a section by id (or null). */
+export function findSection(
+  sections: readonly RecurringSection[],
+  id: string
+): RecurringSection | null {
+  return sections.find((s) => s.id === id) ?? null;
+}
 
 /** Built-in cadences plus a custom "every N units". `once` = no repeat. */
 export type CadencePreset = 'once' | 'monthly' | 'every_3_months' | 'every_6_months' | 'yearly';
@@ -47,7 +88,8 @@ export interface PaymentRecord {
 
 export interface RecurringItem {
   id: string;
-  kind: RecurringKind;
+  /** The user-owned section this item belongs to (see RecurringSection). */
+  section_id: string;
   name: string;
   /** Emoji or brand-icon key shown on the row. */
   logo?: string;

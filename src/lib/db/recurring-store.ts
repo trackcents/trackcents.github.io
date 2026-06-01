@@ -9,30 +9,41 @@
  * categorization blob (a plain JSON.stringify throws on bigint).
  */
 import { encodeStateForStorage, decodeStateFromStorage } from './store-crypto';
-import type { PaymentRecord, RecurringItem } from '../app/recurring-items';
+import {
+  DEFAULT_SECTIONS,
+  SECTION_BILLS,
+  SECTION_SUBSCRIPTIONS,
+  type PaymentRecord,
+  type RecurringItem,
+  type RecurringSection
+} from '../app/recurring-items';
 
 const LS_KEY = 'mtrb.recurring';
 
 export interface RecurringState {
   items: RecurringItem[];
+  /** User-owned section list (Bills/Subscriptions + any custom). */
+  sections: RecurringSection[];
 }
 
 function empty(): RecurringState {
-  return { items: [] };
+  return { items: [], sections: [...DEFAULT_SECTIONS] };
 }
 
 /**
- * Migrate a stored item to the current shape. Older builds tracked a single
- * inline cycle (`paid_minor` / `paid_date`); the current model keeps a
- * `payments[]` history tagged by budget month. We fold any old non-zero
- * paid_minor into one payment record (attributed to the month it was paid, or
- * the due month as a fallback) so no past payment is lost on upgrade.
+ * Migrate a stored item to the current shape. Two upgrades are handled:
+ *   1) the single inline cycle (`paid_minor`/`paid_date`) → a `payments[]`
+ *      history tagged by budget month (no past payment lost);
+ *   2) the fixed `kind: 'bill'|'subscription'` → a user-owned `section_id`
+ *      (bill→Bills, subscription→Subscriptions).
  */
 function normalizeItem(raw: Record<string, unknown>): RecurringItem {
-  const { paid_minor, paid_date, payments, ...rest } = raw as {
+  const { paid_minor, paid_date, payments, kind, section_id, ...rest } = raw as {
     paid_minor?: bigint;
     paid_date?: string | null;
     payments?: PaymentRecord[];
+    kind?: string;
+    section_id?: string;
   } & Record<string, unknown>;
 
   let history: PaymentRecord[] = Array.isArray(payments) ? payments : [];
@@ -48,7 +59,23 @@ function normalizeItem(raw: Record<string, unknown>): RecurringItem {
       }
     ];
   }
-  return { ...(rest as unknown as RecurringItem), payments: history };
+  const sectionId =
+    typeof section_id === 'string' && section_id !== ''
+      ? section_id
+      : kind === 'subscription'
+        ? SECTION_SUBSCRIPTIONS
+        : SECTION_BILLS;
+  return { ...(rest as unknown as RecurringItem), section_id: sectionId, payments: history };
+}
+
+/** Ensure the two built-in sections always exist (so items never orphan), and
+ *  fall back to the defaults when none were stored. */
+function normalizeSections(raw: unknown): RecurringSection[] {
+  const list = Array.isArray(raw) ? (raw as RecurringSection[]) : [];
+  if (list.length === 0) return [...DEFAULT_SECTIONS];
+  const byId = new Map(list.map((s) => [s.id, s]));
+  for (const b of DEFAULT_SECTIONS) if (!byId.has(b.id)) list.push({ ...b });
+  return list;
 }
 
 function bigintReplacer(_key: string, value: unknown): unknown {
@@ -78,7 +105,7 @@ export async function loadRecurring(): Promise<RecurringState> {
     const items = Array.isArray(parsed.items)
       ? (parsed.items as unknown as Record<string, unknown>[]).map(normalizeItem)
       : [];
-    return { items };
+    return { items, sections: normalizeSections(parsed.sections) };
   } catch {
     return empty();
   }

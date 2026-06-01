@@ -31,8 +31,11 @@
     applyPayment,
     unpayMonth,
     cadenceLabel,
+    defaultSectionForKind,
+    DEFAULT_SECTIONS,
+    SECTION_BILLS,
     type RecurringItem,
-    type RecurringKind,
+    type RecurringSection,
     type PaymentInput,
     type RecurringStatus,
     type Cadence
@@ -46,18 +49,21 @@
   import MonthPickerSheet from '$components/MonthPickerSheet.svelte';
   import RecurringActionSheet from '$components/RecurringActionSheet.svelte';
   import ConfirmSheet from '$components/ConfirmSheet.svelte';
+  import ManageSectionsSheet from '$components/ManageSectionsSheet.svelte';
 
   let loading = $state(true);
   let items = $state<RecurringItem[]>([]);
+  let sections = $state<RecurringSection[]>([...DEFAULT_SECTIONS]);
   let pockets = $state<Pocket[]>([...DEFAULT_POCKETS]);
   let paySheetItem = $state<RecurringItem | null>(null);
   // The ⋮ per-row menu (Mark paid / Edit / Delete) and the delete confirm.
   let actionSheetItem = $state<RecurringItem | null>(null);
   let confirmDeleteItem = $state<RecurringItem | null>(null);
+  let manageOpen = $state(false);
   // One add/edit sheet, three uses: blank add, edit an item, or seed from a
   // statement suggestion (so the user can tweak the name/amount before adding).
   type AddEdit = {
-    kind: RecurringKind;
+    sectionId: string;
     editItem: RecurringItem | null;
     seed: { name: string; amount_minor: bigint; cadence: Cadence; due_date: string } | null;
   };
@@ -80,6 +86,7 @@
       loadState()
     ]);
     items = rec.items;
+    sections = rec.sections.length > 0 ? rec.sections : [...DEFAULT_SECTIONS];
     pockets =
       cat.pockets !== undefined && cat.pockets.length > 0 ? cat.pockets : [...DEFAULT_POCKETS];
     annotations = cat.annotations;
@@ -158,9 +165,8 @@
   const suggestions = $derived(
     suggestRecurring(imports, annotations, todayIso).filter((s) => {
       if (dismissed.has(sugKey(s))) return false;
-      return !items.some(
-        (it) => it.kind === s.kind && it.name.toLowerCase() === s.name.toLowerCase()
-      );
+      // Already added under ANY section (matched by name) → don't re-suggest.
+      return !items.some((it) => it.name.toLowerCase() === s.name.toLowerCase());
     })
   );
   /** Move a suggestion's due day into the active month so it appears immediately. */
@@ -169,7 +175,7 @@
   }
   function customizeSuggestion(s: RecurringSuggestion): void {
     addEdit = {
-      kind: s.kind,
+      sectionId: defaultSectionForKind(s.kind),
       editItem: null,
       seed: {
         name: s.name,
@@ -182,11 +188,12 @@
   async function addAllSuggestions(): Promise<void> {
     let next = items;
     for (const s of suggestions) {
-      const order = next.filter((i) => i.kind === s.kind).length;
+      const sectionId = defaultSectionForKind(s.kind);
+      const order = next.filter((i) => i.section_id === sectionId).length;
       next = [
         ...next,
         {
-          kind: s.kind,
+          section_id: sectionId,
           name: s.name,
           amount_minor: s.amount_minor,
           paid_from: 'paychecks',
@@ -206,7 +213,7 @@
   }
 
   async function persist(): Promise<void> {
-    await saveRecurring({ items });
+    await saveRecurring({ items, sections });
   }
 
   // ── per-month views ──────────────────────────────────────────────────────────
@@ -216,16 +223,31 @@
     if (da !== db) return da < db ? -1 : 1;
     return a.order - b.order;
   }
-  const billsAll = $derived(items.filter((i) => i.kind === 'bill' && i.archived !== true));
-  const subsAll = $derived(items.filter((i) => i.kind === 'subscription' && i.archived !== true));
-  const bills = $derived(
-    billsAll.filter((i) => isActiveInMonth(i, activeMonth)).sort(byDueInMonth)
+  const orderedSections = $derived([...sections].sort((a, b) => a.order - b.order));
+  /** One view per section: the section, its items ACTIVE this month (sorted), and
+   *  this month's totals over ALL its non-archived items. */
+  type SectionView = {
+    section: RecurringSection;
+    list: RecurringItem[];
+    totals: { dueMinor: bigint; paidMinor: bigint; leftMinor: bigint };
+  };
+  const sectionViews = $derived.by<SectionView[]>(() =>
+    orderedSections.map((section) => {
+      const all = items.filter((i) => i.section_id === section.id && i.archived !== true);
+      return {
+        section,
+        list: all.filter((i) => isActiveInMonth(i, activeMonth)).sort(byDueInMonth),
+        totals: sectionTotalsForMonth(all, activeMonth)
+      };
+    })
   );
-  const subs = $derived(subsAll.filter((i) => isActiveInMonth(i, activeMonth)).sort(byDueInMonth));
-  const billTotals = $derived(sectionTotalsForMonth(billsAll, activeMonth));
-  const subTotals = $derived(sectionTotalsForMonth(subsAll, activeMonth));
   const overdue = $derived(
-    [...bills, ...subs].filter((i) => statusInMonth(i, activeMonth, todayIso) === 'overdue')
+    items.filter(
+      (i) =>
+        i.archived !== true &&
+        isActiveInMonth(i, activeMonth) &&
+        statusInMonth(i, activeMonth, todayIso) === 'overdue'
+    )
   );
 
   // ── mutations ─────────────────────────────────────────────────────────────
@@ -236,16 +258,16 @@
 
   type Draft = Pick<
     RecurringItem,
-    'kind' | 'name' | 'amount_minor' | 'paid_from' | 'cadence' | 'due_date'
+    'section_id' | 'name' | 'amount_minor' | 'paid_from' | 'cadence' | 'due_date'
   > & { logo: string };
   async function handleAddOrEdit(draft: Draft): Promise<void> {
     const ae = addEdit;
     if (ae === null) return;
     if (ae.editItem !== null) {
-      // Edit: keep id/order/payments/logo, overwrite the editable fields. NO payment.
+      // Edit: keep id/payments, overwrite the editable fields (incl. section). NO payment.
       replace({ ...ae.editItem, ...draft });
     } else {
-      const order = items.filter((i) => i.kind === draft.kind).length;
+      const order = items.filter((i) => i.section_id === draft.section_id).length;
       items = [...items, { ...draft, id: newId(), order, payments: [] }];
     }
     addEdit = null;
@@ -273,11 +295,50 @@
     await persist();
   }
 
-  function openAdd(kind: RecurringKind): void {
-    addEdit = { kind, editItem: null, seed: null };
+  function openAdd(sectionId: string): void {
+    addEdit = { sectionId, editItem: null, seed: null };
   }
   function openEdit(item: RecurringItem): void {
-    addEdit = { kind: item.kind, editItem: item, seed: null };
+    addEdit = { sectionId: item.section_id, editItem: item, seed: null };
+  }
+
+  // ── section CRUD (user-owned grouping) ─────────────────────────────────────
+  function newSectionId(): string {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+      return 'sec-' + crypto.randomUUID();
+    return 'sec-' + sections.length + '-' + sections.reduce((n, s) => n + s.id.length, 0);
+  }
+  /** Create a section (used by the in-sheet "＋ New section"); returns its id. */
+  function createSection(name: string, icon: string): string {
+    const id = newSectionId();
+    const order = sections.reduce((m, s) => Math.max(m, s.order), -1) + 1;
+    sections = [...sections, { id, name: name.trim() || 'Section', icon, order }];
+    void persist();
+    return id;
+  }
+  function renameSection(id: string, name: string, icon: string): void {
+    sections = sections.map((s) => (s.id === id ? { ...s, name: name.trim() || s.name, icon } : s));
+    void persist();
+  }
+  /** Delete a custom section; its items move to Bills so nothing is lost. */
+  function deleteSection(id: string): void {
+    const sec = sections.find((s) => s.id === id);
+    if (sec === undefined || sec.builtin === true) return;
+    items = items.map((i) => (i.section_id === id ? { ...i, section_id: SECTION_BILLS } : i));
+    sections = sections.filter((s) => s.id !== id);
+    void persist();
+  }
+  function moveSection(id: string, dir: -1 | 1): void {
+    const ord = [...sections].sort((a, b) => a.order - b.order);
+    const idx = ord.findIndex((s) => s.id === id);
+    const swap = idx + dir;
+    if (idx < 0 || swap < 0 || swap >= ord.length) return;
+    const a = ord[idx]!;
+    const b = ord[swap]!;
+    sections = sections.map((s) =>
+      s.id === a.id ? { ...s, order: b.order } : s.id === b.id ? { ...s, order: a.order } : s
+    );
+    void persist();
   }
 
   // ── ⋮ action sheet → Mark paid / Edit / Delete ─────────────────────────────
@@ -483,36 +544,30 @@
       </section>
     {/if}
 
-    {#snippet section(
-      title: string,
-      emoji: string,
-      kind: RecurringKind,
-      list: RecurringItem[],
-      totals: { dueMinor: bigint; paidMinor: bigint; leftMinor: bigint }
-    )}
+    {#snippet section(v: SectionView)}
       <section class="card rise mb-4 p-5">
         <div class="mb-2 flex items-baseline justify-between">
-          <h2 class="text-sm font-semibold">{emoji} {title}</h2>
+          <h2 class="text-sm font-semibold">{v.section.icon} {v.section.name}</h2>
           <button
             type="button"
             class="text-sm font-semibold"
             style:color="var(--color-accent)"
-            onclick={() => openAdd(kind)}
+            onclick={() => openAdd(v.section.id)}
           >
             ➕ Add
           </button>
         </div>
 
-        {#if list.length === 0}
+        {#if v.list.length === 0}
           <p class="py-3 text-sm" style:color="var(--color-muted)">
-            None due in {activeMonthLabel}. Tap <strong>➕ Add</strong> to add a {kind}.
+            None due in {activeMonthLabel}. Tap <strong>➕ Add</strong> to add one.
           </p>
         {:else}
           <p class="mb-1 text-xs" style:color="var(--color-muted)">
-            {formatMoney(totals.dueMinor)} due · {formatMoney(totals.paidMinor)} paid ·
-            <strong style:color="var(--color-text)">{formatMoney(totals.leftMinor)} left</strong>
+            {formatMoney(v.totals.dueMinor)} due · {formatMoney(v.totals.paidMinor)} paid ·
+            <strong style:color="var(--color-text)">{formatMoney(v.totals.leftMinor)} left</strong>
           </p>
-          {#each list as item (item.id)}
+          {#each v.list as item (item.id)}
             {@const status = statusInMonth(item, activeMonth, todayIso)}
             <div class="rec-row" style="border-top: 1px solid var(--color-border);">
               <button
@@ -570,8 +625,13 @@
       </section>
     {/snippet}
 
-    {@render section('Bills', '📋', 'bill', bills, billTotals)}
-    {@render section('Subscriptions', '🔁', 'subscription', subs, subTotals)}
+    {#each sectionViews as v (v.section.id)}
+      {@render section(v)}
+    {/each}
+
+    <button type="button" class="manage-sections" onclick={() => (manageOpen = true)}>
+      ⚙ Manage sections
+    </button>
   {/if}
 </main>
 
@@ -588,13 +648,15 @@
 
 <AddRecurringSheet
   open={addEdit !== null}
-  kind={addEdit?.kind ?? 'bill'}
+  sectionId={addEdit?.sectionId ?? SECTION_BILLS}
+  {sections}
   editItem={addEdit?.editItem ?? null}
   seed={addEdit?.seed ?? null}
   defaultDueDate={defaultDueFor(activeMonth)}
   {pockets}
   {todayIso}
   onAdd={handleAddOrEdit}
+  onCreateSection={createSection}
   onDelete={requestDeleteFromEdit}
   onClose={() => (addEdit = null)}
 />
@@ -609,9 +671,26 @@
   onClose={() => (actionSheetItem = null)}
 />
 
+<ManageSectionsSheet
+  open={manageOpen}
+  {sections}
+  counts={items.reduce(
+    (m, i) => {
+      if (i.archived !== true) m[i.section_id] = (m[i.section_id] ?? 0) + 1;
+      return m;
+    },
+    {} as Record<string, number>
+  )}
+  onCreate={createSection}
+  onRename={renameSection}
+  onDelete={deleteSection}
+  onMove={moveSection}
+  onClose={() => (manageOpen = false)}
+/>
+
 <ConfirmSheet
   open={confirmDeleteItem !== null}
-  title="Delete {confirmDeleteItem?.name ?? 'this bill'}?"
+  title="Delete {confirmDeleteItem?.name ?? 'this item'}?"
   message="This removes it and its payment history. This can't be undone."
   confirmLabel="Delete"
   danger
@@ -682,6 +761,25 @@
     height: 6px;
     border-radius: 999px;
     background: var(--color-accent);
+  }
+
+  .manage-sections {
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding: 0.7rem;
+    border: 1px dashed var(--color-border);
+    border-radius: 14px;
+    background: transparent;
+    color: var(--color-muted);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    margin-top: 0.2rem;
+  }
+  .manage-sections:active {
+    background: var(--color-elevated);
   }
 
   .rec-row {
