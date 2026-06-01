@@ -12,6 +12,10 @@ import { mkdirSync } from 'node:fs';
 
 mkdirSync('reports', { recursive: true });
 
+// Point at a local dev/preview build with BASE_URL=http://localhost:5179 to test
+// unshipped changes; defaults to the live site.
+const BASE_URL = process.env.BASE_URL ?? 'https://trackcents.github.io';
+
 const browser = await chromium.launch({ headless: true });
 
 /**
@@ -50,7 +54,7 @@ for (const { name, device, keyboard } of TARGETS) {
     }
   });
   const page = await context.newPage();
-  await page.goto('https://trackcents.github.io/today?add=expense', {
+  await page.goto(`${BASE_URL}/today?add=expense`, {
     waitUntil: 'domcontentloaded'
   });
   await page.waitForTimeout(3000);
@@ -95,24 +99,31 @@ for (const { name, device, keyboard } of TARGETS) {
       const lbl = btn.querySelector('.qas-lbl');
       if (lbl) ddByLabel[lbl.textContent.trim()] = btn;
     }
+    const scroll = find('.qas-scroll');
     return {
       viewportHeight: window.innerHeight,
+      // The promise: the form body fits ABOVE the keyboard with no scroll.
+      scrollOverflowPx: scroll ? scroll.scrollHeight - scroll.clientHeight : null,
       fields: {
         amount: box(find('.qas-amount-row')),
-        description: box(
-          find('input[placeholder*="coffee today" i], input[placeholder*="chai today" i]')
-        ),
         category: box(ddByLabel.Category),
         account: box(ddByLabel.Account),
+        paidfrom: box(find('.qas-paidfrom')),
         date: box(find('input[type="date"]')),
         time: box(find('.ti-wrap')),
         notes: box(find('textarea.qas-notes')),
-        save: box(find('.qas-save-btn'))
+        // The description box + send live in the pinned dock (always visible).
+        description: box(find('.qas-dock-input')),
+        send: box(find('.qas-send-btn'))
       }
     };
   });
 
   console.log(`  Visible viewport: ${result.viewportHeight}px`);
+  const ov = result.scrollOverflowPx;
+  console.log(
+    `  Form fits above keyboard (no scroll): ${ov === null ? 'n/a' : ov <= 1 ? '✓ yes' : `✗ overflows by ${ov}px`}`
+  );
   for (const [k, v] of Object.entries(result.fields)) {
     if (v === null) {
       console.log(`    ${k.padEnd(13)} : NOT FOUND`);

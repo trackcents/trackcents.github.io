@@ -166,6 +166,136 @@ export function categoryIconName(name: string): GlyphKey {
 function genericIconName(name: string): IconKey {
   const n = name.toLowerCase();
   const has = (...words: string[]): boolean => words.some((w) => n.includes(w));
+  // Whole-word match for SHORT/ambiguous biller tokens ("att", "vw") so they
+  // don't collide as substrings (e.g. "att" inside "mattress").
+  const hasW = (...words: string[]): boolean => words.some((w) => hasWord(n, w));
+
+  // ── Recurring billers / EMIs / banks (Hemanth: "logos for all banks, car,
+  //    internet, what all bills and EMIs"). Matched by NAME, never by amount.
+  //    These run first so a "Vw Credit" auto-loan reads as a car, not 'tag'. ──
+  // Auto loans / vehicle EMIs → car.
+  if (
+    hasW(
+      'vw',
+      'volkswagen',
+      'toyota',
+      'honda',
+      'nissan',
+      'hyundai',
+      'kia',
+      'subaru',
+      'mazda',
+      'lexus',
+      'acura',
+      'infiniti',
+      'audi',
+      'bmw',
+      'mercedes',
+      'ford credit',
+      'gm financial',
+      'ally auto',
+      'chrysler capital',
+      'carmax',
+      'carvana',
+      'auto loan',
+      'autoloan'
+    )
+  )
+    return 'car';
+  // Mortgage servicers / home loans → home.
+  if (
+    hasW(
+      'pennymac',
+      'mr cooper',
+      'rocket mortgage',
+      'freedom mortgage',
+      'newrez',
+      'caliber',
+      'loancare',
+      'lakeview',
+      'shellpoint',
+      'flagstar',
+      'nationstar',
+      'mortgage',
+      'escrow'
+    )
+  )
+    return 'home';
+  // Telecom / internet / cable → connectivity (bolt).
+  if (
+    hasW(
+      'att',
+      'at&t',
+      't-mobile',
+      't mobile',
+      'tmobile',
+      'verizon',
+      'sprint',
+      'comcast',
+      'xfinity',
+      'spectrum',
+      'cox',
+      'centurylink',
+      'frontier',
+      'optimum',
+      'metropcs',
+      'cricket',
+      'boost',
+      'mint mobile',
+      'visible',
+      'broadband',
+      'fiber'
+    )
+  )
+    return 'bolt';
+  // Insurance carriers → shield.
+  if (
+    hasW(
+      'american gen',
+      'american general',
+      'american family',
+      'amfam',
+      'metlife',
+      'prudential',
+      'progressive',
+      'nationwide',
+      'farmers',
+      'liberty mutual',
+      'aetna',
+      'cigna',
+      'anthem',
+      'humana',
+      'lic',
+      'life ins',
+      'gen lif'
+    )
+  )
+    return 'shield';
+  // Buy-now-pay-later / installment lenders → card.
+  if (hasW('affirm', 'klarna', 'afterpay', 'sezzle', 'zip pay')) return 'card';
+  // Banks / card issuers → card.
+  if (
+    hasW(
+      'chase',
+      'wells fargo',
+      'wellsfargo',
+      'bank of america',
+      'bofa',
+      'citi',
+      'citibank',
+      'capital one',
+      'us bank',
+      'pnc',
+      'truist',
+      'usaa',
+      'amex',
+      'american express',
+      'synchrony',
+      'barclays'
+    )
+  )
+    return 'card';
+
   // Order matters — more specific keywords first so "ice cream gift card"
   // doesn't route Food to Gift.
   if (has('grocer', 'supermarket', 'whole food')) return 'cart';

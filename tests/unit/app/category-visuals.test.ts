@@ -93,4 +93,33 @@ describe('categoryIconName', () => {
     expect(categoryIconName('Biryani')).toBe('bowl');
     expect(categoryIconName('Gulab Jamun')).toBe('donut');
   });
+
+  test('recurring billers / EMIs / banks map to meaningful icons (not pale tag)', () => {
+    const cases: Array<[string, string]> = [
+      // The user's actual statement bills.
+      ['Vw Credit', 'car'], // auto-loan EMI
+      ['Att Bill', 'bolt'], // telecom (whole-word "att")
+      ['T Mobile', 'bolt'],
+      ['Pennymac Cash', 'home'], // mortgage servicer
+      ['American Gen', 'shield'], // insurance
+      ['Affirm.com Payme', 'card'], // BNPL
+      // Common US billers.
+      ['Toyota Financial', 'car'],
+      ['Rocket Mortgage', 'home'],
+      ['Verizon', 'bolt'],
+      ['Xfinity', 'bolt'],
+      ['Geico', 'shield'],
+      ['Progressive', 'shield'],
+      ['Klarna', 'card'],
+      ['Chase', 'card']
+    ];
+    for (const [name, expected] of cases) {
+      expect(categoryIconName(name), name).toBe(expected);
+    }
+  });
+
+  test('biller keywords use word boundaries (no substring false-positives)', () => {
+    // "att" must not fire inside "mattress"; "vw" not inside arbitrary words.
+    expect(categoryIconName('Mattress Firm')).not.toBe('bolt');
+  });
 });

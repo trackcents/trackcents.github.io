@@ -691,9 +691,12 @@
 
       {#if direction === 'expense' && orderedPockets.length > 0}
         <!-- Paid from — which income pocket funds this expense (§4). Default
-             Paychecks; tap to draw it from Extra / Savings instead. -->
+             Paychecks; tap to draw it from Extra / Savings instead. Single line:
+             inline label + a no-wrap chip strip (scrolls only if it would ever
+             overflow), so adding this option never costs a whole extra row and
+             the form still fits above the keyboard. -->
         <div class="qas-paidfrom">
-          <span class="qas-lbl">Paid from</span>
+          <span class="qas-lbl qas-paidfrom-lbl">Paid from</span>
           <div class="qas-pockets">
             {#each orderedPockets as p (p.id)}
               <button
@@ -1027,28 +1030,49 @@
     gap: 0.55rem;
   }
 
+  /* Single-line: inline label + a no-wrap chip strip. The strip scrolls
+     horizontally only if the chips would ever overflow (many custom pockets
+     on a very narrow phone); for the usual 2–3 pockets it reads as one tidy
+     row. Either way it is exactly ONE line tall, so adding "Paid from" never
+     pushes Date/Time + the type box below the keyboard fold. */
   .qas-paidfrom {
-    margin-top: 0.55rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.15rem;
+    min-width: 0;
+  }
+  .qas-paidfrom-lbl {
+    margin-bottom: 0;
+    flex-shrink: 0;
   }
   .qas-pockets {
     display: flex;
-    gap: 0.4rem;
-    flex-wrap: wrap;
-    margin-top: 0.3rem;
+    gap: 0.35rem;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    min-width: 0;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .qas-pockets::-webkit-scrollbar {
+    display: none;
   }
   .qas-pk {
     display: inline-flex;
     align-items: center;
     gap: 0.3rem;
-    padding: 0.45rem 0.7rem;
+    padding: 0.4rem 0.65rem;
     border-radius: 999px;
     border: 1px solid var(--color-border);
     background: var(--color-bg);
     color: var(--color-muted);
-    font-size: 0.82rem;
+    font-size: 0.8rem;
     font-weight: 600;
     cursor: pointer;
     font-family: inherit;
+    flex-shrink: 0;
+    white-space: nowrap;
   }
   .qas-pk.on {
     background: color-mix(in oklab, var(--color-accent) 14%, transparent);
@@ -1325,6 +1349,14 @@
   .qas-sheet.keyboard-open .qas-grab {
     margin: 0.1rem auto 0.1rem;
   }
+  /* Tighten the inter-field gaps while typing so the whole form clears even the
+     smallest modern phones above the keyboard. */
+  .qas-sheet.keyboard-open .qas-scroll {
+    gap: 0.3rem;
+  }
+  .qas-sheet.keyboard-open .qas-row-2col {
+    gap: 0.4rem;
+  }
   /* The big "Add expense" title disappears; only the × close button
      remains in the header.  The X button is positioned via the
      existing flex-end alignment so no layout reflow happens. */
@@ -1362,6 +1394,15 @@
   }
   .qas-sheet.keyboard-open .qas-field {
     padding: 0.4rem 0.65rem;
+  }
+  /* Paid-from was the regression that broke the one-screen fit: it had no
+     keyboard-open compaction. Tighten it like every other field. */
+  .qas-sheet.keyboard-open .qas-paidfrom {
+    margin-top: 0;
+  }
+  .qas-sheet.keyboard-open .qas-pk {
+    padding: 0.3rem 0.55rem;
+    font-size: 0.76rem;
   }
   /* Keyboard open: tighten the dock so the type box + send sit snug above the
      keyboard, and drop the header/hint to save vertical room. */

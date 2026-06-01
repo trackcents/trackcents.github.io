@@ -10,6 +10,7 @@
   import { untrack } from 'svelte';
   import { parseMoney } from '$lib/util/money';
   import { centsToDecimal } from '$lib/app/export-csv';
+  import { categoryColor, categoryIconName, type GlyphKey } from '$lib/app/category-visuals';
   import type { Pocket } from '$lib/app/pockets';
   import {
     advanceDueDate,
@@ -18,6 +19,8 @@
     type RecurringItem,
     type RecurringKind
   } from '$lib/app/recurring-items';
+  import CategoryIcon from '$components/CategoryIcon.svelte';
+  import IconPickerSheet from '$components/IconPickerSheet.svelte';
 
   interface DraftItem {
     kind: RecurringKind;
@@ -26,6 +29,8 @@
     paid_from: string;
     cadence: Cadence;
     due_date: string;
+    /** User's chosen icon override ('' = auto from the name). */
+    logo: string;
   }
   interface Props {
     open: boolean;
@@ -75,7 +80,16 @@
   let customUnit = $state<CadenceUnit>('weeks');
   let dueDate = $state('');
   let paidFrom = $state('paychecks');
+  /** Chosen icon override; '' = auto-derive from the name. */
+  let logo = $state('');
+  let iconPickerOpen = $state(false);
   let err = $state('');
+
+  /** The glyph shown on the icon button: the override, else auto from the name. */
+  const currentGlyph = $derived<GlyphKey>(
+    logo !== '' ? (logo as GlyphKey) : categoryIconName(name || 'bill')
+  );
+  const iconColor = $derived(categoryColor(name || 'bill'));
 
   // Spread a Cadence across the repeats/preset/custom controls.
   function applyCadence(c: Cadence): void {
@@ -107,12 +121,14 @@
           applyCadence(editItem.cadence);
           dueDate = editItem.due_date;
           paidFrom = editItem.paid_from;
+          logo = editItem.logo ?? '';
         } else if (seed) {
           name = seed.name;
           amountStr = centsToDecimal(seed.amount_minor);
           applyCadence(seed.cadence);
           dueDate = seed.due_date;
           paidFrom = 'paychecks';
+          logo = '';
         } else {
           name = '';
           amountStr = '';
@@ -122,6 +138,7 @@
           customUnit = 'weeks';
           dueDate = defaultDueDate ?? todayIso;
           paidFrom = 'paychecks';
+          logo = '';
         }
         err = '';
       });
@@ -193,7 +210,8 @@
       amount_minor: amount,
       paid_from: paidFrom,
       cadence: cadence(),
-      due_date: dueDate
+      due_date: dueDate,
+      logo
     });
   }
 
@@ -223,25 +241,40 @@
           : 'bill 📋'}{/if}
     </h2>
 
-    <div class="ar-two">
-      <div class="ar-field">
-        <span class="ar-lbl">Name</span>
-        <input
-          class="ar-in"
-          bind:value={name}
-          placeholder={kind === 'subscription' ? 'Netflix' : 'Car EMI'}
-          onfocus={scrollIntoView}
-        />
+    <div class="ar-namerow">
+      <!-- Tappable icon: auto-derived from the name, or pick your own logo. -->
+      <div class="ar-field ar-iconfield">
+        <span class="ar-lbl">Icon</span>
+        <button
+          type="button"
+          class="ar-iconbtn"
+          onclick={() => (iconPickerOpen = true)}
+          aria-label="Change icon"
+        >
+          <CategoryIcon icon={currentGlyph} color={iconColor} tint size={22} />
+          <span class="ar-iconbtn-chev" aria-hidden="true">▾</span>
+        </button>
       </div>
-      <div class="ar-field">
-        <span class="ar-lbl">Amount</span>
-        <input
-          class="ar-in"
-          inputmode="decimal"
-          bind:value={amountStr}
-          placeholder="0.00"
-          onfocus={scrollIntoView}
-        />
+      <div class="ar-two ar-two-grow">
+        <div class="ar-field">
+          <span class="ar-lbl">Name</span>
+          <input
+            class="ar-in"
+            bind:value={name}
+            placeholder={kind === 'subscription' ? 'Netflix' : 'Car EMI'}
+            onfocus={scrollIntoView}
+          />
+        </div>
+        <div class="ar-field">
+          <span class="ar-lbl">Amount</span>
+          <input
+            class="ar-in"
+            inputmode="decimal"
+            bind:value={amountStr}
+            placeholder="0.00"
+            onfocus={scrollIntoView}
+          />
+        </div>
       </div>
     </div>
 
@@ -337,6 +370,15 @@
     {/if}
     <button type="button" class="ar-cancel" onclick={onClose}>Cancel</button>
   </div>
+
+  <IconPickerSheet
+    open={iconPickerOpen}
+    value={logo}
+    {name}
+    color={iconColor}
+    onPick={(g) => (logo = g)}
+    onClose={() => (iconPickerOpen = false)}
+  />
 {/if}
 
 <style>
@@ -389,6 +431,41 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 0.8rem;
+  }
+  .ar-namerow {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.6rem;
+  }
+  .ar-two-grow {
+    flex: 1;
+    min-width: 0;
+  }
+  .ar-iconfield {
+    flex: none;
+  }
+  .ar-iconbtn {
+    position: relative;
+    width: 52px;
+    height: 46px;
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    background: var(--color-bg);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .ar-iconbtn:active {
+    background: var(--color-elevated);
+  }
+  .ar-iconbtn-chev {
+    position: absolute;
+    right: 3px;
+    bottom: 1px;
+    font-size: 0.6rem;
+    color: var(--color-muted);
+    line-height: 1;
   }
   .ar-field {
     margin-bottom: 0.8rem;

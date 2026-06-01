@@ -37,7 +37,7 @@
     type RecurringStatus,
     type Cadence
   } from '$lib/app/recurring-items';
-  import { categoryColor, categoryIconName } from '$lib/app/category-visuals';
+  import { categoryColor, categoryIconName, type GlyphKey } from '$lib/app/category-visuals';
   import { formatMoney } from '$lib/util/money';
   import { today } from '$lib/util/date';
   import CategoryIcon from '$components/CategoryIcon.svelte';
@@ -237,7 +237,7 @@
   type Draft = Pick<
     RecurringItem,
     'kind' | 'name' | 'amount_minor' | 'paid_from' | 'cadence' | 'due_date'
-  >;
+  > & { logo: string };
   async function handleAddOrEdit(draft: Draft): Promise<void> {
     const ae = addEdit;
     if (ae === null) return;
@@ -319,6 +319,14 @@
   }
 
   // ── row presentation ────────────────────────────────────────────────────
+  /** The glyph for a row: the user's chosen icon override (item.logo), else the
+   *  one auto-derived from the name (banks/car/internet/EMI/insurance all map to
+   *  a meaningful icon now, never a pale generic tag). */
+  function iconFor(item: { logo?: string; name: string }): GlyphKey {
+    return item.logo !== undefined && item.logo.length > 0
+      ? (item.logo as GlyphKey)
+      : categoryIconName(item.name);
+  }
   function prettyDate(iso: string): string {
     const [, m, d] = iso.split('-');
     return `${MONTHS[Number(m)]} ${Number(d)}`;
@@ -445,11 +453,7 @@
         </p>
         {#each suggestions as s (s.kind + s.name)}
           <div class="sug-row" style="border-top: 1px solid var(--color-border);">
-            {#if s.kind === 'subscription'}
-              <CategoryIcon icon={categoryIconName(s.name)} color={categoryColor(s.name)} tint />
-            {:else}
-              <span class="sug-ic">📋</span>
-            {/if}
+            <CategoryIcon icon={categoryIconName(s.name)} color={categoryColor(s.name)} tint />
             <span class="sug-body">
               <span class="sug-name">{s.name}</span>
               <span class="sug-meta">
@@ -529,13 +533,7 @@
               <!-- Body is inert text: editing lives on the explicit ⋮ menu, not on
                    an invisible body tap (the #1 complaint). -->
               <div class="rec-body-wrap">
-                {#if item.kind === 'subscription'}
-                  <CategoryIcon
-                    icon={categoryIconName(item.name)}
-                    color={categoryColor(item.name)}
-                    tint
-                  />
-                {/if}
+                <CategoryIcon icon={iconFor(item)} color={categoryColor(item.name)} tint />
                 <span class="rec-body">
                   <span class="rec-name" class:done={status === 'paid'}>{item.name}</span>
                   <span
@@ -787,16 +785,6 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.6rem 0;
-  }
-  .sug-ic {
-    width: 32px;
-    height: 32px;
-    flex: none;
-    border-radius: 9px;
-    display: grid;
-    place-items: center;
-    font-size: 15px;
-    background: var(--color-elevated);
   }
   .sug-body {
     flex: 1;
