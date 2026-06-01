@@ -192,7 +192,9 @@ export function pocketSummariesForMonth(
 
       for (const { amount, intent } of parts) {
         if (INCOME_INTENTS.has(intent)) {
-          const pid = resolvePocket(pocketIdForIntent(intent));
+          // The deposit's box: a user "Move to another box" override wins over the
+          // flow-intent default (salary→Paychecks, others→Extra).
+          const pid = resolvePocket(ann?.income_pocket ?? pocketIdForIntent(intent));
           const a = acc.get(pid)!;
           if (isThis) a.incomeThis += amount;
           else a.incomeBefore += amount;

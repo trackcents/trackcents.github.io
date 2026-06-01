@@ -47,13 +47,14 @@
   import { pocketSummariesForMonth, DEFAULT_POCKETS } from '$lib/app/pockets';
   import MonthPickerSheet from '$components/MonthPickerSheet.svelte';
   import QuickAddSheet from '$components/QuickAddSheet.svelte';
-  import ManageIncomeSheet from '$components/ManageIncomeSheet.svelte';
+  import PocketManageSheet from '$components/PocketManageSheet.svelte';
 
   let loading = $state(true);
   let imports = $state<ImportRecord[]>([]);
   let cat = $state<CategorizationState>({ categories: [], rules: [], annotations: {} });
   let goals = $state<SavingsGoal[]>([]);
-  let manageIncomeOpen = $state(false);
+  /** The pocket whose per-pocket "manage" sheet is open (null = closed). */
+  let managePocketId = $state<string | null>(null);
 
   onMount(async () => {
     imports = (await loadState()).imports;
@@ -363,7 +364,6 @@
     }
   }
 
-  const activeFlow = $derived(nbm.get(activeMonth));
   const activeMonthLabel = $derived(monthName(activeMonth));
 
   // Income pockets for the active month (spec 002-income-pockets §2/§7.11) — the
@@ -373,12 +373,28 @@
     pocketSummariesForMonth(imports, cat.annotations, activeMonth, activePockets)
   );
 
-  // ── Manage-income drill-down ────────────────────────────────────────────
-  // The exact income deposits behind the BudgetBox "of $X income" number, so
-  // tapping the income line shows ONLY those (not all transactions) and lets
-  // the user edit them. Total mirrors the headline (activeFlow.inflow_minor).
+  // ── Income deposits, per pocket ─────────────────────────────────────────
+  // The exact income deposits for the month, each carrying its pocketId so the
+  // per-pocket "manage" sheet can list only its own.
   const activeIncomeRows = $derived(incomeRowsForMonth(imports, cat.annotations, activeMonth));
-  const activeIncomeTotalMinor = $derived(activeFlow?.inflow_minor ?? 0n);
+
+  // ── Per-pocket "manage" sheet (income redesign) ─────────────────────────────
+  const managedSummary = $derived(
+    managePocketId === null
+      ? null
+      : (activePocketSummaries.find((s) => s.pocket.id === managePocketId) ?? null)
+  );
+  const managedRows = $derived(activeIncomeRows.filter((r) => r.pocketId === managePocketId));
+  /** Remove a deposit from income (the editor's "Remove" → confirm). Excludes it. */
+  function removeIncome(key: string): void {
+    void updateIncomeAnnotation(key, { ignored: true });
+  }
+  /** "＋ Add income" from a pocket sheet → the income quick-add. */
+  function addIncomeFromPocket(): void {
+    managePocketId = null;
+    quickAddType = 'income';
+    quickAddOpen = true;
+  }
   /** Persist a per-transaction edit from the income sheet (rename / not-income
    *  / exclude). Mirrors the transactions page: setAnnotation → prune → save. */
   async function updateIncomeAnnotation(
@@ -473,7 +489,7 @@
       canPrev={canPrevMonth}
       canNext={canNextMonth}
       onLabelClick={() => (pickerOpen = true)}
-      onManage={() => (manageIncomeOpen = true)}
+      onManage={(id) => (managePocketId = id)}
     />
 
     <div class="card rise mt-4 p-8 text-center">
@@ -545,7 +561,7 @@
       canPrev={canPrevMonth}
       canNext={canNextMonth}
       onLabelClick={() => (pickerOpen = true)}
-      onManage={() => (manageIncomeOpen = true)}
+      onManage={(id) => (managePocketId = id)}
     />
 
     {#if spentTodayMinor > 0n}
@@ -774,15 +790,19 @@
     onRenameCategory={handleRenameCategory}
   />
 
-  <!-- Manage-income drill-down — opens from the BudgetBox income line. Shows
-       ONLY this month's income deposits, each editable in place. -->
-  <ManageIncomeSheet
-    open={manageIncomeOpen}
+  <!-- Per-pocket "manage" sheet — opens from a pocket card's "manage ›". Lists
+       only that pocket's deposits, each editable in the redesigned IncomeEditSheet. -->
+  <PocketManageSheet
+    open={managePocketId !== null}
+    summary={managedSummary}
     monthLabel={activeMonthLabel}
-    rows={activeIncomeRows}
-    totalMinor={activeIncomeTotalMinor}
+    rows={managedRows}
+    annotations={cat.annotations}
+    pockets={activePockets}
     onUpdate={updateIncomeAnnotation}
-    onClose={() => (manageIncomeOpen = false)}
+    onRemove={removeIncome}
+    onAddIncome={addIncomeFromPocket}
+    onClose={() => (managePocketId = null)}
   />
 
   <!-- Save-confirmation toast — shows briefly after a manual transaction is

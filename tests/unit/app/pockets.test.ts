@@ -280,6 +280,27 @@ describe('split routing on the funding side', () => {
   });
 });
 
+describe('income_pocket override — "Move to another box"', () => {
+  test('a salary deposit moved to Extra lands in Extra, not Paychecks', () => {
+    const moved: Record<string, TransactionAnnotation> = {
+      'may#0': { category_id: null, source: 'manual', income_pocket: 'extra' }
+    };
+    const sums = pocketSummariesForMonth([may], moved, '2026-05', DEFAULT_POCKETS);
+    // May#0 is the $3,000 salary; moving it to Extra removes it from Paychecks.
+    expect(pocket(sums, 'paychecks').newIncome).toBe(0n);
+    expect(pocket(sums, 'extra').newIncome).toBe(3500_00n); // 3000 moved + 500 gift
+  });
+
+  test('a gift moved to Savings lands in Savings', () => {
+    const moved: Record<string, TransactionAnnotation> = {
+      'may#3': { category_id: null, source: 'manual', income_pocket: 'savings' }
+    };
+    const sums = pocketSummariesForMonth([may], moved, '2026-05', DEFAULT_POCKETS);
+    expect(pocket(sums, 'savings').newIncome).toBe(500_00n);
+    expect(pocket(sums, 'extra').newIncome).toBe(0n); // the gift left Extra
+  });
+});
+
 describe('exclusions', () => {
   test('an ignored transaction touches no pocket', () => {
     const simple = checking('ign', '2026-05-01', '2026-05-31', [

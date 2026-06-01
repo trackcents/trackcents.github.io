@@ -360,6 +360,13 @@ export interface IncomeRow {
   flow_intent: FlowIntent;
   /** Current split, if the deposit is capped — so the cap UI shows the state. */
   split?: TransactionSplit[];
+  /**
+   * Which pocket this deposit belongs to (spec 002-income-pockets): the user's
+   * `income_pocket` override if set, else the flow-intent default
+   * (salary→'paychecks', other income→'extra'). Drives the per-pocket "manage"
+   * drill-down so each pocket lists only its own deposits.
+   */
+  pocketId: string;
 }
 
 /**
@@ -425,13 +432,22 @@ export function incomeRowsForMonth(
       } else {
         incomeMinor = t.amount_minor;
       }
+      // Pocket = user override, else flow-intent default (salary→Paychecks, other
+      // income→Extra). Inlined (not pocketIdForIntent) to avoid a glue↔pockets cycle.
+      const pocketId =
+        ann?.income_pocket !== undefined && ann.income_pocket !== ''
+          ? ann.income_pocket
+          : intent === 'salary'
+            ? 'paychecks'
+            : 'extra';
       const incomeRow: IncomeRow = {
         key,
         posted_date: t.posted_date,
         description,
         amount_minor: t.amount_minor,
         income_minor: incomeMinor,
-        flow_intent: intent
+        flow_intent: intent,
+        pocketId
       };
       if (split !== undefined && split.length > 0) incomeRow.split = split;
       out.push(incomeRow);

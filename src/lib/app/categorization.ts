@@ -99,6 +99,21 @@ export interface TransactionAnnotation {
    * silently revert on the next load.
    */
   paid_from?: string;
+  /**
+   * Which income POCKET this DEPOSIT belongs to (spec 002-income-pockets §2-§3),
+   * overriding the flow-intent default (salary→Paychecks, others→Extra). Set by
+   * the "Move to another box" action in the income editor — e.g. move a bonus
+   * from Extra into 💰 Savings, or a person-transfer into Paychecks. Like the
+   * other extras, it MUST survive rule re-apply + normalization.
+   */
+  income_pocket?: string;
+  /**
+   * A free-text "what kind of income" label the user picks in the income editor
+   * (From a person / Bonus / Gift / Refund / Interest / their own). PURELY
+   * cosmetic — it never changes the money math; it just helps the user remember
+   * what a deposit was. Preserved across rule re-apply like the other extras.
+   */
+  income_kind?: string;
 }
 
 /** One leg of a split transaction (US-SPLIT). */
@@ -137,6 +152,10 @@ function extrasOf(a: TransactionAnnotation): Partial<TransactionAnnotation> {
   // The paid-from pocket is a user choice (§4) and must outlive a rule re-apply,
   // exactly like flow_intent — otherwise an expense's pocket reverts on next load.
   if (a.paid_from !== undefined && a.paid_from !== '') e.paid_from = a.paid_from;
+  // The income deposit's box (Move-to-another-box) is a user choice and must
+  // outlive a rule re-apply, exactly like paid_from / flow_intent.
+  if (a.income_pocket !== undefined && a.income_pocket !== '') e.income_pocket = a.income_pocket;
+  if (a.income_kind !== undefined && a.income_kind !== '') e.income_kind = a.income_kind;
   return e;
 }
 function hasExtras(a: TransactionAnnotation): boolean {
@@ -292,6 +311,9 @@ export function pruneAnnotation(a: TransactionAnnotation): TransactionAnnotation
   // The paid-from pocket must survive normalization too (§4) — same class of bug
   // as flow_intent: an edit setting the pocket would otherwise be silently undone.
   if (a.paid_from !== undefined && a.paid_from !== '') cleaned.paid_from = a.paid_from;
+  if (a.income_pocket !== undefined && a.income_pocket !== '')
+    cleaned.income_pocket = a.income_pocket;
+  if (a.income_kind !== undefined && a.income_kind !== '') cleaned.income_kind = a.income_kind;
   // An uncategorized, manual annotation with no extras carries nothing — drop it.
   if (
     cleaned.category_id === null &&
