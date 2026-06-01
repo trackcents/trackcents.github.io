@@ -70,6 +70,10 @@
 
   const isEdit = $derived(editItem !== null && editItem !== undefined);
 
+  /** The item's type, editable here so the user can move a row between the Bills
+   *  and Subscriptions sections (or fix a wrong auto-classification). Seeded from
+   *  the `kind` prop on open; the emitted draft carries this, not the prop. */
+  let kindState = $state<RecurringKind>('bill');
   let name = $state('');
   let amountStr = $state('');
   let repeats = $state<'once' | 'recurring'>('recurring');
@@ -115,6 +119,7 @@
   $effect(() => {
     if (open && !wasOpen) {
       untrack(() => {
+        kindState = editItem ? editItem.kind : kind;
         if (editItem) {
           name = editItem.name;
           amountStr = centsToDecimal(editItem.amount_minor);
@@ -205,7 +210,7 @@
       return;
     }
     onAdd({
-      kind,
+      kind: kindState,
       name: name.trim(),
       amount_minor: amount,
       paid_from: paidFrom,
@@ -231,15 +236,30 @@
     class="ar-sheet"
     role="dialog"
     aria-modal="true"
-    aria-label={isEdit ? 'Edit ' + kind : 'Add ' + kind}
+    aria-label={isEdit ? 'Edit ' + kindState : 'Add ' + kindState}
   >
     <div class="ar-grab"></div>
     <h2 class="ar-name">
-      {#if isEdit}Edit {kind === 'subscription' ? 'subscription 🔁' : 'bill 📋'}{:else}New {kind ===
+      {#if isEdit}Edit {kindState === 'subscription' ? 'subscription 🔁' : 'bill 📋'}{:else}New {kindState ===
         'subscription'
           ? 'subscription 🔁'
           : 'bill 📋'}{/if}
     </h2>
+
+    <!-- Type — move a row between Bills and Subscriptions, or fix a wrong guess. -->
+    <div class="ar-field">
+      <span class="ar-lbl">Type</span>
+      <div class="ar-seg">
+        <button type="button" class:on={kindState === 'bill'} onclick={() => (kindState = 'bill')}
+          >📋 Bill</button
+        >
+        <button
+          type="button"
+          class:on={kindState === 'subscription'}
+          onclick={() => (kindState = 'subscription')}>🔁 Subscription</button
+        >
+      </div>
+    </div>
 
     <div class="ar-namerow">
       <!-- Tappable icon: auto-derived from the name, or pick your own logo. -->
@@ -261,7 +281,7 @@
           <input
             class="ar-in"
             bind:value={name}
-            placeholder={kind === 'subscription' ? 'Netflix' : 'Car EMI'}
+            placeholder={kindState === 'subscription' ? 'Netflix' : 'Car EMI'}
             onfocus={scrollIntoView}
           />
         </div>
@@ -363,10 +383,10 @@
     {#if err}<p class="ar-err">{err}</p>{/if}
 
     <button type="button" class="ar-btn" onclick={submit}
-      >{isEdit ? 'Save changes' : 'Add ' + kind}</button
+      >{isEdit ? 'Save changes' : 'Add ' + kindState}</button
     >
     {#if isEdit && onDelete}
-      <button type="button" class="ar-delete" onclick={onDelete}>🗑 Delete {kind}</button>
+      <button type="button" class="ar-delete" onclick={onDelete}>🗑 Delete {kindState}</button>
     {/if}
     <button type="button" class="ar-cancel" onclick={onClose}>Cancel</button>
   </div>
