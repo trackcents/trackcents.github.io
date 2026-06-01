@@ -271,7 +271,7 @@
             />
             <div class="flex-1 space-y-2">
               <div class="flex items-center justify-between">
-                <span class="text-sm" style:color="var(--color-muted)">Paychecks in</span>
+                <span class="text-sm" style:color="var(--color-muted)">Income this month</span>
                 <span class="num text-sm font-medium" style:color="var(--color-success)"
                   >{formatMoney(s.income_minor)}</span
                 >

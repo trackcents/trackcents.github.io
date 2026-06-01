@@ -65,6 +65,30 @@
   function skip(): void {
     index += 1;
   }
+
+  // ── inline "＋ New category" (Hemanth: "no option to add categories there") ──
+  let creating = $state(false);
+  let newCatName = $state('');
+  async function createAndAssign(): Promise<void> {
+    const trimmed = newCatName.trim();
+    if (trimmed === '') return;
+    const existing = cat.categories.find(
+      (c) => c.name.toLowerCase() === trimmed.toLowerCase() && (c.parent_id ?? '') === ''
+    );
+    let id: string;
+    if (existing) {
+      id = existing.id;
+    } else {
+      id =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? `cat-${crypto.randomUUID()}`
+          : `cat-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+      cat = { ...cat, categories: [...cat.categories, { id, name: trimmed }] };
+    }
+    newCatName = '';
+    creating = false;
+    await assign(id); // assign() records the annotation + persists (incl. the new category)
+  }
 </script>
 
 <svelte:head><title>Review categories · trackcents</title></svelte:head>
@@ -144,7 +168,40 @@
             <span class="truncate">{c.name}</span>
           </button>
         {/each}
+        <!-- ＋ New category — create one on the spot and assign it to this txn. -->
+        <button
+          type="button"
+          class="flex items-center gap-2 rounded-lg border border-dashed px-3 py-2 text-left text-sm font-medium transition-colors hover:border-[var(--color-accent)]"
+          style="border-color: var(--color-border); color: var(--color-accent);"
+          onclick={() => {
+            creating = true;
+            newCatName = '';
+          }}
+        >
+          ＋ New category
+        </button>
       </div>
+
+      {#if creating}
+        <div class="mt-3 flex gap-2">
+          <!-- svelte-ignore a11y_autofocus -->
+          <input
+            bind:value={newCatName}
+            placeholder="New category name"
+            autofocus
+            class="flex-1 rounded-lg border px-3 py-2 text-sm"
+            style="border-color: var(--color-border); background-color: var(--color-bg); color: var(--color-text);"
+            onkeydown={(e) => {
+              if (e.key === 'Enter') createAndAssign();
+              if (e.key === 'Escape') creating = false;
+            }}
+          />
+          <button type="button" class="btn btn-primary" onclick={createAndAssign}>Add</button>
+          <button type="button" class="btn btn-ghost" onclick={() => (creating = false)}
+            >Cancel</button
+          >
+        </div>
+      {/if}
 
       <div
         class="mt-5 flex flex-wrap gap-3 border-t pt-4"

@@ -100,7 +100,11 @@
   // Spending-by-category uses ONLY the spend projection so CC payments + transfers
   // don't pollute the pie slices.
   const byCat = $derived(spendingByCategory(spendTxns));
-  const topCat = $derived([...byCat.entries()].sort((a, b) => (b[1] > a[1] ? 1 : -1))[0] ?? null);
+  /** Categories ranked by spend (desc) — drives the readable legend list below
+   *  the donut so every category + amount is visible at once (no pager). */
+  const byCatSorted = $derived([...byCat.entries()].sort((a, b) => (b[1] > a[1] ? 1 : -1)));
+  const topCat = $derived(byCatSorted[0] ?? null);
+  const catMax = $derived(topCat ? topCat[1] : 1n);
   const nbm = $derived(spendableFlowByMonth(imports, cat.annotations));
   const months = $derived(sortedMonths(nbm));
   const monthLabel = (ym: string): string => ym;
@@ -115,8 +119,11 @@
   const pieOption = $derived<EChartsCoreOption>({
     color: CAT_PALETTE,
     textStyle: { color: TEXT },
-    tooltip: { trigger: 'item', valueFormatter: money },
-    legend: { type: 'scroll', bottom: 0, textStyle: { color: TEXT } },
+    // confine keeps the tooltip inside the chart box so it's never cut off-screen.
+    tooltip: { trigger: 'item', valueFormatter: money, confine: true },
+    // Custom HTML legend below (see markup) lists every category at once, so the
+    // built-in paginated legend is hidden here.
+    legend: { show: false },
     series: [
       {
         name: 'Spending by category',
@@ -137,7 +144,7 @@
 
   const cashFlowOption = $derived<EChartsCoreOption>({
     textStyle: { color: TEXT },
-    tooltip: { trigger: 'axis', valueFormatter: money },
+    tooltip: { trigger: 'axis', valueFormatter: money, confine: true },
     legend: { top: 0, textStyle: { color: TEXT }, data: ['Money in', 'Money out', 'Net'] },
     grid: { left: 68, right: 18, top: 40, bottom: 32 },
     xAxis: { type: 'category', data: months.map(monthLabel), ...axis },
@@ -176,7 +183,7 @@
   const stackedOption = $derived<EChartsCoreOption>({
     color: CAT_PALETTE,
     textStyle: { color: TEXT },
-    tooltip: { trigger: 'axis', valueFormatter: money },
+    tooltip: { trigger: 'axis', valueFormatter: money, confine: true },
     legend: { type: 'scroll', bottom: 0, textStyle: { color: TEXT } },
     grid: { left: 68, right: 18, top: 24, bottom: 56 },
     xAxis: { type: 'category', data: months.map(monthLabel), ...axis },
@@ -245,6 +252,45 @@
         {/if}
       </p>
       <EChart option={pieOption} onItemClick={(name) => (drillCategory = name)} />
+
+      <!-- Readable legend: every category with its colour + amount + a share bar,
+           ranked by spend. Tap a row to drill in (same as a slice). Replaces the
+           old paginated "1/8 ◀ ▶" legend you couldn't read. -->
+      <ul class="mt-3 space-y-0.5">
+        {#each byCatSorted as [id, amt] (id)}
+          <li>
+            <button
+              type="button"
+              class="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors"
+              style:background-color={drillCategory === catName(id)
+                ? 'var(--color-elevated)'
+                : 'transparent'}
+              onclick={() => (drillCategory = drillCategory === catName(id) ? null : catName(id))}
+            >
+              <span class="h-3 w-3 shrink-0 rounded-full" style:background-color={categoryColor(id)}
+              ></span>
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-sm" style:color="var(--color-text)"
+                  >{catName(id)}</span
+                >
+                <span
+                  class="mt-1 block h-1 rounded-full"
+                  style:background-color="var(--color-border)"
+                >
+                  <span
+                    class="block h-1 rounded-full"
+                    style:width="{catMax > 0n ? Number((amt * 100n) / catMax) : 0}%"
+                    style:background-color={categoryColor(id)}
+                  ></span>
+                </span>
+              </span>
+              <span class="num shrink-0 text-sm font-medium" style:color="var(--color-text)"
+                >{formatMoney(amt)}</span
+              >
+            </button>
+          </li>
+        {/each}
+      </ul>
 
       {#if drillCategory !== null}
         <div

@@ -165,10 +165,12 @@
         {:else}
           <ul class="space-y-2">
             {#each jumps.slice(0, 8) as m (m.merchant_key)}
-              <li class="flex items-center justify-between gap-3">
+              <li class="flex min-w-0 items-center justify-between gap-3">
                 <span class="min-w-0 flex-1 truncate text-sm">{m.display_name}</span>
                 <span class="flex flex-none items-center gap-2 whitespace-nowrap">
-                  <span class="num text-xs text-[var(--color-muted)]">
+                  <!-- The before→after pair is wide; hide on the narrowest phones so
+                       the merchant name never gets pushed off-screen (the % stays). -->
+                  <span class="num hidden text-xs text-[var(--color-muted)] sm:inline">
                     {formatMoney(m.previous_amount_minor ?? 0n)} → {formatMoney(
                       m.last_amount_minor
                     )}
@@ -197,12 +199,13 @@
         </p>
         <ul class="space-y-2">
           {#each largest as p, i (i)}
-            <li class="flex items-center justify-between gap-3">
-              <span class="min-w-0">
+            <li class="flex min-w-0 items-center justify-between gap-3">
+              <span class="min-w-0 flex-1">
                 <span class="block truncate text-sm">{p.description}</span>
-                <span class="text-xs text-[var(--color-muted)]">{p.posted_date}</span>
+                <span class="block truncate text-xs text-[var(--color-muted)]">{p.posted_date}</span
+                >
               </span>
-              <span class="num whitespace-nowrap text-sm font-semibold"
+              <span class="num shrink-0 whitespace-nowrap text-sm font-semibold"
                 >{formatMoney(p.amount_minor)}</span
               >
             </li>
