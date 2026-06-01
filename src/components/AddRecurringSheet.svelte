@@ -21,6 +21,7 @@
   } from '$lib/app/recurring-items';
   import CategoryIcon from '$components/CategoryIcon.svelte';
   import IconPickerSheet from '$components/IconPickerSheet.svelte';
+  import SectionIcon from '$components/SectionIcon.svelte';
 
   interface DraftItem {
     section_id: string;
@@ -81,11 +82,12 @@
    *  between sections (or fix a wrong auto-classification). Seeded from the
    *  `sectionId` prop / edited item on open; the draft carries this. */
   let sectionState = $state('bills');
-  // Inline "＋ New section" sub-form.
+  // Inline "＋ New section" sub-form. Its icon is a rich glyph (same picker as
+  // bills); '' = auto-derive from the section name.
   let creatingSection = $state(false);
   let newSecName = $state('');
-  let newSecIcon = $state('📁');
-  const SECTION_EMOJI = ['📁', '🏠', '🚗', '⚡', '🛡️', '💳', '📱', '🎬', '💊', '🎮', '🏥', '✈️'];
+  let newSecIcon = $state('');
+  let secIconPickerOpen = $state(false);
   const orderedSections = $derived([...sections].sort((a, b) => a.order - b.order));
   let name = $state('');
   let amountStr = $state('');
@@ -135,7 +137,7 @@
         sectionState = editItem ? editItem.section_id : sectionId;
         creatingSection = false;
         newSecName = '';
-        newSecIcon = '📁';
+        newSecIcon = '';
         if (editItem) {
           name = editItem.name;
           amountStr = centsToDecimal(editItem.amount_minor);
@@ -246,7 +248,7 @@
     sectionState = onCreateSection(nm, newSecIcon);
     creatingSection = false;
     newSecName = '';
-    newSecIcon = '📁';
+    newSecIcon = '';
   }
   const currentSection = $derived(orderedSections.find((s) => s.id === sectionState) ?? null);
 
@@ -280,17 +282,15 @@
       <span class="ar-lbl">Section</span>
       {#if creatingSection}
         <div class="ar-newsec">
-          <div class="ar-emoji-row">
-            {#each SECTION_EMOJI as e (e)}
-              <button
-                type="button"
-                class="ar-emoji"
-                class:on={newSecIcon === e}
-                onclick={() => (newSecIcon = e)}>{e}</button
-              >
-            {/each}
-          </div>
           <div class="ar-newsec-row">
+            <button
+              type="button"
+              class="ar-secicon"
+              onclick={() => (secIconPickerOpen = true)}
+              aria-label="Choose section icon"
+            >
+              <SectionIcon icon={newSecIcon} name={newSecName} size={20} />
+            </button>
             <input
               class="ar-in"
               bind:value={newSecName}
@@ -302,17 +302,18 @@
               >✕</button
             >
           </div>
+          <p class="ar-secicon-hint">Tap the icon to choose from all logos.</p>
         </div>
       {:else}
         <div class="ar-chips">
           {#each orderedSections as s (s.id)}
             <button
               type="button"
-              class="ar-chip"
+              class="ar-chip ar-chip-sec"
               class:on={sectionState === s.id}
               onclick={() => (sectionState = s.id)}
             >
-              {s.icon}
+              <SectionIcon icon={s.icon} name={s.name} size={15} tint={false} />
               {s.name}
             </button>
           {/each}
@@ -462,6 +463,14 @@
     color={iconColor}
     onPick={(g) => (logo = g)}
     onClose={() => (iconPickerOpen = false)}
+  />
+
+  <IconPickerSheet
+    open={secIconPickerOpen}
+    value={newSecIcon}
+    name={newSecName}
+    onPick={(g) => (newSecIcon = g)}
+    onClose={() => (secIconPickerOpen = false)}
   />
 {/if}
 
@@ -636,26 +645,26 @@
     border-radius: 14px;
     padding: 0.6rem;
   }
-  .ar-emoji-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem;
-    margin-bottom: 0.5rem;
-  }
-  .ar-emoji {
-    width: 34px;
-    height: 34px;
-    border-radius: 9px;
+  .ar-secicon {
+    flex: none;
+    width: 40px;
+    height: 38px;
     border: 1px solid var(--color-border);
+    border-radius: 10px;
     background: var(--color-surface);
-    font-size: 1.05rem;
-    cursor: pointer;
     display: grid;
     place-items: center;
+    cursor: pointer;
   }
-  .ar-emoji.on {
-    border-color: var(--color-accent);
-    background: color-mix(in oklab, var(--color-accent) 16%, transparent);
+  .ar-secicon-hint {
+    font-size: 0.72rem;
+    color: var(--color-muted);
+    margin: 0.45rem 0 0;
+  }
+  .ar-chip-sec {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
   }
   .ar-newsec-row {
     display: flex;

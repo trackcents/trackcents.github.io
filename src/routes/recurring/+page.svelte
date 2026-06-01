@@ -50,6 +50,7 @@
   import RecurringActionSheet from '$components/RecurringActionSheet.svelte';
   import ConfirmSheet from '$components/ConfirmSheet.svelte';
   import ManageSectionsSheet from '$components/ManageSectionsSheet.svelte';
+  import SectionIcon from '$components/SectionIcon.svelte';
 
   let loading = $state(true);
   let items = $state<RecurringItem[]>([]);
@@ -546,8 +547,11 @@
 
     {#snippet section(v: SectionView)}
       <section class="card rise mb-4 p-5">
-        <div class="mb-2 flex items-baseline justify-between">
-          <h2 class="text-sm font-semibold">{v.section.icon} {v.section.name}</h2>
+        <div class="mb-2 flex items-center justify-between">
+          <h2 class="flex items-center gap-2 text-sm font-semibold">
+            <SectionIcon icon={v.section.icon} name={v.section.name} size={16} />
+            {v.section.name}
+          </h2>
           <button
             type="button"
             class="text-sm font-semibold"

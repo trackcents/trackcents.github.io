@@ -4,6 +4,8 @@
   // Subscriptions) can be renamed but not deleted, so an item never orphans —
   // deleting a custom section moves its items to Bills.
   import type { RecurringSection } from '$lib/app/recurring-items';
+  import IconPickerSheet from '$components/IconPickerSheet.svelte';
+  import SectionIcon from '$components/SectionIcon.svelte';
 
   interface Props {
     open: boolean;
@@ -18,31 +20,18 @@
   }
   const { open, sections, counts, onCreate, onRename, onDelete, onMove, onClose }: Props = $props();
 
-  const EMOJI = [
-    '📁',
-    '🏠',
-    '🚗',
-    '⚡',
-    '🛡️',
-    '💳',
-    '📱',
-    '🎬',
-    '💊',
-    '🎮',
-    '🏥',
-    '✈️',
-    '📋',
-    '🔁'
-  ];
   const ordered = $derived([...sections].sort((a, b) => a.order - b.order));
 
   let editingId = $state<string | null>(null);
   let editName = $state('');
-  let editIcon = $state('📁');
+  let editIcon = $state('');
   let confirmingId = $state<string | null>(null);
   let creating = $state(false);
   let newName = $state('');
-  let newIcon = $state('📁');
+  let newIcon = $state('');
+  // Rich icon picker (same set as bills), shared by the create + rename forms.
+  let iconPickerOpen = $state(false);
+  let pickerFor = $state<'new' | 'edit'>('new');
 
   function startRename(s: RecurringSection): void {
     editingId = s.id;
@@ -57,7 +46,11 @@
   function startCreate(): void {
     creating = true;
     newName = '';
-    newIcon = '📁';
+    newIcon = '';
+  }
+  function openIconPicker(target: 'new' | 'edit'): void {
+    pickerFor = target;
+    iconPickerOpen = true;
   }
   function saveCreate(): void {
     if (newName.trim() !== '') onCreate(newName, newIcon);
@@ -84,17 +77,15 @@
       <div class="ms-row">
         {#if editingId === s.id}
           <div class="ms-edit">
-            <div class="ms-emoji-row">
-              {#each EMOJI as e (e)}
-                <button
-                  type="button"
-                  class="ms-emoji"
-                  class:on={editIcon === e}
-                  onclick={() => (editIcon = e)}>{e}</button
-                >
-              {/each}
-            </div>
             <div class="ms-edit-row">
+              <button
+                type="button"
+                class="ms-iconbtn"
+                onclick={() => openIconPicker('edit')}
+                aria-label="Choose section icon"
+              >
+                <SectionIcon icon={editIcon} name={editName} size={18} />
+              </button>
               <input class="ms-in" bind:value={editName} aria-label="Section name" />
               <button type="button" class="ms-ok" onclick={saveRename}>Save</button>
               <button type="button" class="ms-cancel" onclick={() => (editingId = null)}>✕</button>
@@ -122,7 +113,7 @@
             </div>
           </div>
         {:else}
-          <span class="ms-emoji-badge">{s.icon}</span>
+          <SectionIcon icon={s.icon} name={s.name} size={18} />
           <span class="ms-name">{s.name}</span>
           <span class="ms-count">{counts[s.id] ?? 0}</span>
           <div class="ms-actions">
@@ -160,17 +151,15 @@
     {#if creating}
       <div class="ms-row">
         <div class="ms-edit">
-          <div class="ms-emoji-row">
-            {#each EMOJI as e (e)}
-              <button
-                type="button"
-                class="ms-emoji"
-                class:on={newIcon === e}
-                onclick={() => (newIcon = e)}>{e}</button
-              >
-            {/each}
-          </div>
           <div class="ms-edit-row">
+            <button
+              type="button"
+              class="ms-iconbtn"
+              onclick={() => openIconPicker('new')}
+              aria-label="Choose section icon"
+            >
+              <SectionIcon icon={newIcon} name={newName} size={18} />
+            </button>
             <input
               class="ms-in"
               bind:value={newName}
@@ -180,12 +169,21 @@
             <button type="button" class="ms-ok" onclick={saveCreate}>Add</button>
             <button type="button" class="ms-cancel" onclick={() => (creating = false)}>✕</button>
           </div>
+          <p class="ms-icon-hint">Tap the icon to choose from all logos.</p>
         </div>
       </div>
     {:else}
       <button type="button" class="ms-add" onclick={startCreate}>＋ Add section</button>
     {/if}
   </div>
+
+  <IconPickerSheet
+    open={iconPickerOpen}
+    value={pickerFor === 'new' ? newIcon : editIcon}
+    name={pickerFor === 'new' ? newName : editName}
+    onPick={(g) => (pickerFor === 'new' ? (newIcon = g) : (editIcon = g))}
+    onClose={() => (iconPickerOpen = false)}
+  />
 {/if}
 
 <style>
@@ -259,15 +257,21 @@
     padding: 0.6rem 0;
     border-top: 1px solid var(--color-border);
   }
-  .ms-emoji-badge {
-    width: 34px;
-    height: 34px;
+  .ms-iconbtn {
+    flex: none;
+    width: 40px;
+    height: 38px;
+    border: 1px solid var(--color-border);
     border-radius: 10px;
+    background: var(--color-surface);
     display: grid;
     place-items: center;
-    font-size: 18px;
-    background: var(--color-elevated);
-    flex: none;
+    cursor: pointer;
+  }
+  .ms-icon-hint {
+    font-size: 0.72rem;
+    color: var(--color-muted);
+    margin: 0.45rem 0 0;
   }
   .ms-name {
     flex: 1;
@@ -313,25 +317,6 @@
   .ms-confirm {
     flex: 1;
     min-width: 0;
-  }
-  .ms-emoji-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.3rem;
-    margin-bottom: 0.5rem;
-  }
-  .ms-emoji {
-    width: 32px;
-    height: 32px;
-    border-radius: 9px;
-    border: 1px solid var(--color-border);
-    background: var(--color-surface);
-    font-size: 1rem;
-    cursor: pointer;
-  }
-  .ms-emoji.on {
-    border-color: var(--color-accent);
-    background: color-mix(in oklab, var(--color-accent) 16%, transparent);
   }
   .ms-edit-row {
     display: flex;
