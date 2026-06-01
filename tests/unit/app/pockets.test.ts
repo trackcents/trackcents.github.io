@@ -301,6 +301,35 @@ describe('income_pocket override — "Move to another box"', () => {
   });
 });
 
+describe('salaryMonths — a paycheck funds its BUDGET month, not its calendar month', () => {
+  const aprPay = checking('apr', '2026-04-01', '2026-04-30', [
+    txn('2026-04-24', 'Altera Corporati Payroll', 3000_00n, 'deposit')
+  ]);
+  const salaryMonths = new Map([['apr#0', '2026-05']]); // Apr 24 paycheck funds May
+
+  test('NOT counted in its calendar month (April)', () => {
+    const p = pocket(
+      pocketSummariesForMonth([aprPay], {}, '2026-04', DEFAULT_POCKETS, {}, salaryMonths),
+      'paychecks'
+    );
+    expect(p.newIncome).toBe(0n);
+  });
+  test('counted in its budget month (May)', () => {
+    const p = pocket(
+      pocketSummariesForMonth([aprPay], {}, '2026-05', DEFAULT_POCKETS, {}, salaryMonths),
+      'paychecks'
+    );
+    expect(p.newIncome).toBe(3000_00n);
+  });
+  test('without the override it falls back to the calendar month (April)', () => {
+    const p = pocket(
+      pocketSummariesForMonth([aprPay], {}, '2026-04', DEFAULT_POCKETS),
+      'paychecks'
+    );
+    expect(p.newIncome).toBe(3000_00n);
+  });
+});
+
 describe('exclusions', () => {
   test('an ignored transaction touches no pocket', () => {
     const simple = checking('ign', '2026-05-01', '2026-05-31', [

@@ -132,7 +132,14 @@ export function pocketSummariesForMonth(
   annotations: Record<string, TransactionAnnotation>,
   month: string,
   pockets: Pocket[],
-  opts: SpendableFlowOptions = {}
+  opts: SpendableFlowOptions = {},
+  /**
+   * Optional paycheck → budget-month map (paycheck-budget.ts). When a deposit's
+   * key is present, its income is attributed to that BUDGET month instead of the
+   * calendar month its date falls in (a late-April paycheck funds May). Only
+   * salary keys appear, so non-paycheck rows keep their calendar month.
+   */
+  salaryMonths: ReadonlyMap<string, string> = new Map()
 ): PocketSummary[] {
   const ordered = [...pockets].sort((a, b) => a.order - b.order);
   // Defensive: an empty pocket list would lose all routing — fall back to defaults.
@@ -163,7 +170,9 @@ export function pocketSummariesForMonth(
       const ann = annotations[key];
       if (ann?.ignored === true) return;
 
-      const txMonth = t.posted_date.slice(0, 7);
+      // A paycheck is attributed to the BUDGET month it funds (if the user has
+      // set the anchor); everything else uses its calendar month.
+      const txMonth = salaryMonths.get(key) ?? t.posted_date.slice(0, 7);
       if (txMonth > month) return; // future month — not counted in this view
       const isThis = txMonth === month;
 

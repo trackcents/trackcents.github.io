@@ -45,6 +45,10 @@
   import CategoryIcon from '$components/CategoryIcon.svelte';
   import PocketCards from '$components/PocketCards.svelte';
   import { pocketSummariesForMonth, DEFAULT_POCKETS } from '$lib/app/pockets';
+  import PaycheckConfirmSheet from '$components/PaycheckConfirmSheet.svelte';
+  import { loadAnchor, saveAnchor } from '$lib/db/budget-anchor-store';
+  import { paycheckBudgetMonths, detectedPaychecksNewestFirst } from '$lib/app/paycheck-budget';
+  import type { BudgetAnchor } from '$lib/app/budget-window';
   import MonthPickerSheet from '$components/MonthPickerSheet.svelte';
   import QuickAddSheet from '$components/QuickAddSheet.svelte';
   import PocketManageSheet from '$components/PocketManageSheet.svelte';
@@ -55,11 +59,15 @@
   let goals = $state<SavingsGoal[]>([]);
   /** The pocket whose per-pocket "manage" sheet is open (null = closed). */
   let managePocketId = $state<string | null>(null);
+  /** Paycheck-window anchor (which month the first paycheck funds) + the confirm sheet. */
+  let payAnchor = $state<BudgetAnchor | null>(null);
+  let paycheckConfirmOpen = $state(false);
 
   onMount(async () => {
     imports = (await loadState()).imports;
     cat = await loadCategorization();
     goals = await loadGoals();
+    payAnchor = loadAnchor();
     loading = false;
     // Auto-seed the starter category + rule set (REQ-B0.2) whenever the
     // user has ZERO categories.  Originally gated on imports.length > 0
@@ -369,9 +377,20 @@
   // Income pockets for the active month (spec 002-income-pockets §2/§7.11) — the
   // per-pocket carry-forward (±) math that replaces the single combined hero.
   const activePockets = $derived(cat.pockets ?? DEFAULT_POCKETS);
+  // Paycheck-window attribution: once the anchor is set, salary deposits fund
+  // their budget month (a late-April paycheck funds May), not the calendar month.
+  const salaryMonths = $derived(paycheckBudgetMonths(imports, payAnchor));
   const activePocketSummaries = $derived(
-    pocketSummariesForMonth(imports, cat.annotations, activeMonth, activePockets)
+    pocketSummariesForMonth(imports, cat.annotations, activeMonth, activePockets, {}, salaryMonths)
   );
+  // Offer the one-time paycheck setup when we detect a cadence but have no anchor.
+  const detectedPaychecks = $derived(detectedPaychecksNewestFirst(imports));
+  const needsPaycheckSetup = $derived(payAnchor === null && detectedPaychecks.length >= 2);
+  function savePaycheckAnchor(a: BudgetAnchor): void {
+    saveAnchor(a);
+    payAnchor = a;
+    paycheckConfirmOpen = false;
+  }
 
   // ── Income deposits, per pocket ─────────────────────────────────────────
   // The exact income deposits for the month, each carrying its pocketId so the
@@ -550,6 +569,28 @@
           </button>
         </div>
       </div>
+    {/if}
+
+    {#if needsPaycheckSetup}
+      <!-- One-time paycheck setup: we detected a biweekly cadence but the user
+           hasn't told us which month their paychecks fund. -->
+      <button
+        type="button"
+        class="card rise mb-4 flex w-full items-center justify-between gap-3 p-4 text-left"
+        style="background-image: linear-gradient(to right, color-mix(in oklab, var(--color-success) 12%, transparent), transparent);"
+        onclick={() => (paycheckConfirmOpen = true)}
+      >
+        <span class="text-sm">
+          💵 We found <strong>{detectedPaychecks.length} paychecks</strong>. Tell us which month
+          they fund so your Paychecks box is spot-on.
+        </span>
+        <span
+          class="flex-none rounded-full px-3 py-1 text-sm font-medium"
+          style="background-image: var(--grad-primary); color: var(--color-accent-fg);"
+        >
+          Set up →
+        </span>
+      </button>
     {/if}
 
     <!-- PocketCards carries its own ◀ pill ▶ widget — no outer MonthSlider needed. -->
@@ -803,6 +844,14 @@
     onRemove={removeIncome}
     onAddIncome={addIncomeFromPocket}
     onClose={() => (managePocketId = null)}
+  />
+
+  <!-- One-time paycheck-window confirm (which month your paychecks fund). -->
+  <PaycheckConfirmSheet
+    open={paycheckConfirmOpen}
+    paychecks={detectedPaychecks}
+    onSave={savePaycheckAnchor}
+    onClose={() => (paycheckConfirmOpen = false)}
   />
 
   <!-- Save-confirmation toast — shows briefly after a manual transaction is
