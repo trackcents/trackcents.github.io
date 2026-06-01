@@ -384,7 +384,15 @@ export function incomeRowsForMonth(
   imports: ImportRecord[],
   annotations: Record<string, TransactionAnnotation>,
   month: string,
-  opts: SpendableFlowOptions = {}
+  opts: SpendableFlowOptions = {},
+  /**
+   * Optional paycheck → budget-month map (paycheck-budget.ts). When present, a
+   * salary deposit is listed under the month it FUNDS, not the calendar month its
+   * date falls in — so this list reconciles EXACTLY with the Paychecks pocket's
+   * "new this month" total (which uses the same attribution). Only salary keys
+   * appear, so everything else keeps its calendar month.
+   */
+  salaryMonths: ReadonlyMap<string, string> = new Map()
 ): IncomeRow[] {
   const rows = flowIntentRowsFromImports(imports, annotations);
   const context: {
@@ -405,7 +413,11 @@ export function incomeRowsForMonth(
       const ann = annotations[key];
       if (ann?.ignored) return;
       if (t.amount_minor <= 0n) return;
-      if (t.posted_date.slice(0, 7) !== month) return;
+      // A paycheck is listed under the BUDGET month it funds (if the user set the
+      // anchor); everything else under its calendar month. Keeps this list in
+      // lockstep with the pocket's "new this month" total.
+      const effMonth = salaryMonths.get(key) ?? t.posted_date.slice(0, 7);
+      if (effMonth !== month) return;
       const intent = intents.get(key) ?? 'unknown';
       if (!INCOME_INTENTS.has(intent)) return;
       const renamed = ann?.custom_name;

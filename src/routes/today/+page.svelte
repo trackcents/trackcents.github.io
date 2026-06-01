@@ -427,7 +427,9 @@
   // ── Income deposits, per pocket ─────────────────────────────────────────
   // The exact income deposits for the month, each carrying its pocketId so the
   // per-pocket "manage" sheet can list only its own.
-  const activeIncomeRows = $derived(incomeRowsForMonth(imports, cat.annotations, activeMonth));
+  const activeIncomeRows = $derived(
+    incomeRowsForMonth(imports, cat.annotations, activeMonth, {}, salaryMonths)
+  );
 
   // ── Per-pocket "manage" sheet (income redesign) ─────────────────────────────
   const managedSummary = $derived(

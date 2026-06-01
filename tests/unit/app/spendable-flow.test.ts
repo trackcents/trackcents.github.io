@@ -158,6 +158,21 @@ describe('incomeRowsForMonth — the deposits behind the income number', () => {
   test('a different month returns no rows', () => {
     expect(incomeRowsForMonth([checkingImport], {}, '2026-04')).toHaveLength(0);
   });
+
+  // Regression: the deposit list must follow the SAME budget-month attribution as
+  // the Paychecks pocket total, or the manage sheet header ($X new this month)
+  // won't reconcile with the deposits it lists (the Mar bug Hemanth caught).
+  describe('salaryMonths — paycheck listed under the month it FUNDS', () => {
+    const budget = new Map([['hash-chase-may#0', '2026-06']]); // the May 8 salary funds June
+    test('NOT listed in its calendar month (May)', () => {
+      const may = incomeRowsForMonth([checkingImport], {}, '2026-05', {}, budget);
+      expect(may.find((r) => r.flow_intent === 'salary')).toBeUndefined();
+    });
+    test('listed in its budget month (June)', () => {
+      const jun = incomeRowsForMonth([checkingImport], {}, '2026-06', {}, budget);
+      expect(jun.find((r) => r.flow_intent === 'salary')?.amount_minor).toBe(3000_00n);
+    });
+  });
 });
 
 describe('income cap via split (only part counts as income)', () => {
