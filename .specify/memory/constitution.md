@@ -1,23 +1,23 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: 1.0.0 → 1.0.1  (PATCH — wording clarification, no principle change)
+Version change: 1.0.1 → 2.0.0  (MAJOR — redefines NON-NEGOTIABLE Principle I; removes the zero-knowledge encryption requirement)
 Modified principles:
-  - Principle VII (Parsing Is Deterministic): removed the "or run via Pyodide" clause from Step 4. Deeper research (specs/001-money-tracker-mvp/research.md §R1) confirmed Monopoly cannot run inside Pyodide because it depends on the pdftotext C++ binary from Poppler. Now reads: "ported to JavaScript" only. This is a wording clarification — the principle's intent (deterministic parsing, AI forbidden) is unchanged.
-  - Principle XIV (Tech Stack Commitments): removed the "Monopoly via Pyodide as a near-term bootstrap option" mention from the PDF parsing bullet. Same reason. Stack still mandates PDF.js + layout-aware + per-bank regex; Monopoly retained as a documentation reference for per-bank patterns only.
+  - Principle I (Privacy Is Absolute): AMENDED 2026-06-02 at the data owner's explicit, informed decision. The zero-knowledge / client-side-encryption requirement is REMOVED. Parsed transactions are now stored as PLAINTEXT JSON both on-device and in the user's OWN Google Drive (drive.file scope). The user accepted this trade-off — with the privacy implication spelled out — to make Google sign-in the only setup step (no passphrase). See the amendment block under Principle I.
+  - Principle IV (Plug-And-Play): the "set an encryption passphrase" setup step is removed — setup is now "open URL → (optionally) sign in with Google → start using".
+  - Principle X (Encryption Specifics): SUPERSEDED — no encryption layer ships. Retained for history with an amendment note.
+  - Principle XI (Sync-Authoritative): the cloud blob is now PLAINTEXT (not encrypted); it remains the source of truth and local stays a rebuildable cache.
+  - Principle XIII (No Hidden Data Outflow): the 2026-05-25 GIS exception's "Google stores only ciphertext" rationale no longer holds; a 2026-06-02 follow-up records that the synced blob is now plaintext. The GIS-script exception itself still stands (user-initiated auth to the user's own Drive).
 Added sections: none
-Removed sections: none
+Removed sections: none (Principle X retained with a SUPERSEDED note for traceability)
 Templates requiring updates:
-  - .specify/templates/plan-template.md       ✅ no change required (Constitution Check section was already updated in earlier work and uses correct language)
-  - .specify/templates/spec-template.md       ✅ no change required
-  - .specify/templates/tasks-template.md      ✅ no change required
-  - .specify/templates/checklist-template.md  ✅ no change required
-Load-bearing principles review (per the constitution's own governance rule that amendments be reviewed against I/II/III/VI):
-  - I. Privacy Is Absolute             — UNCHANGED. PDF.js-only is more privacy-aligned than the Pyodide option would have been (smaller surface).
-  - II. Accuracy Is Non-Negotiable     — UNCHANGED. Multi-level checksum strategy (research.md §R13) actually strengthens this principle.
-  - III. Zero Infrastructure Cost      — UNCHANGED. Removing Pyodide removes a ~10 MB first-load cost.
-  - VI. Layered Architecture           — UNCHANGED. Three-layer separation preserved.
-Deferred items: none
+  - .specify/templates/*  ✅ no change required (no template references the passphrase/encryption step directly)
+Load-bearing principles review (amendments reviewed against I/II/III/VI):
+  - I. Privacy Is Absolute   — WEAKENED, deliberately, by the data owner. Mitigations that still hold: data lives ONLY in the user's OWN Drive via the narrow drive.file scope (the app can read only files it created); nothing is ever sent to the developer or any third party; open-source (V) + no telemetry (XIII) are intact.
+  - II. Accuracy             — UNCHANGED. bigint cents + checksum import gate intact.
+  - III. Zero Infrastructure Cost — UNCHANGED. Still the user's own Drive + static hosting.
+  - VI. Layered Architecture — UNCHANGED. Three-layer separation preserved.
+Deferred items: re-run /ivv on the now-plaintext sync engine.
 -->
 
 # Money Management Tool Constitution
@@ -32,6 +32,8 @@ Deferred items: none
 No AI service — cloud OR local — is permitted to read bank statement contents. Bank statement PDFs and parsed transactions MUST NOT leave the user's device in any unencrypted form. Any cloud storage of user data MUST use client-side encryption with a key derived from a passphrase the user controls (zero-knowledge architecture). The developer, the hosting provider, and the sync storage provider (Google, etc.) MUST be incapable of decrypting user data.
 
 **Rationale**: Financial data is among the most sensitive personal information. The user has explicitly committed to "no hacker should be able to steal the data, at any cost." This rules out any architecture that places plaintext data on systems we do not physically control.
+
+**Amendment (2026-06-02, MAJOR — approved by the data owner with the trade-off spelled out):** The zero-knowledge / client-side-encryption requirement above is **REMOVED**. The app no longer derives an encryption key or asks for a passphrase. Parsed transactions are stored as **plaintext JSON** on-device and synced as plaintext to the user's **own** Google Drive (`drive.file` scope). The owner chose this deliberately — having been shown that it contradicts the original "at any cost" commitment and exposes the data to Google and to anyone who gains access to their Google account — in order to make Google sign-in the only setup step (no passphrase to set, remember, or enter). **Residual protections that still hold:** data lives only in the user's own Drive (the app can access only files it created), nothing is sent to the developer or any third party, and the app remains open-source (V) with no telemetry (XIII). Anyone re-introducing encryption later should treat this as the new baseline, not a regression.
 
 ### II. Accuracy Is Non-Negotiable (NON-NEGOTIABLE)
 
@@ -50,6 +52,8 @@ Target operating cost MUST be $0/month. The application is hosted as static file
 The end-user setup MUST be: open a URL, sign in with Google (or equivalent OAuth), set an encryption passphrase, start using. NO installs. NO command-line steps. NO setup scripts. The app MUST work on Android, iOS, and Windows/macOS/Linux laptops via a single Progressive Web App. On iOS Safari, the app MUST detect non-standalone mode on first run and require Add-to-Home-Screen before passphrase setup, to survive the 7-day storage eviction policy.
 
 **Rationale**: Friends are non-technical and will not install Python, Docker, or follow tutorials. If onboarding is harder than installing a real app, no one but the developer will ever use it.
+
+**Amendment (2026-06-02):** The "set an encryption passphrase" setup step is removed (see Principle I amendment). Setup is now: open the URL → optionally sign in with Google for Drive sync → start using. The iOS Add-to-Home-Screen nudge still fires before first use (storage-eviction protection); it just no longer precedes a passphrase step.
 
 ### V. Open Source From Day One
 
@@ -101,11 +105,15 @@ User data encryption MUST use AES-256-GCM via the browser's Web Crypto API. The 
 
 **Rationale**: These primitives are the well-trodden path used by Bitwarden, 1Password, Signal, and similar privacy-first tools. The two-factor structure (Google for auth, passphrase for decryption) means a compromise of either does not yield user data.
 
+**SUPERSEDED (2026-06-02):** No encryption layer ships (see Principle I amendment). This principle is retained for history and as the reference design if encryption is ever re-introduced — the AES-256-GCM + PBKDF2-SHA-256/600k primitives above are the path to take then.
+
 ### XI. Sync-Authoritative, Local-As-Cache
 
 The encrypted blob in the user's cloud storage MUST be the source of truth. The local SQLite cache is rebuildable on demand by re-downloading and decrypting. Sync triggers MUST include: on app close, on a manual "sync now" button, and on a configurable automatic schedule (default: on every change). Conflict resolution MUST use per-field last-write-wins with column-level timestamps for editable fields (category, note, etc.), NOT row-level LWW.
 
 **Rationale**: iOS Safari evicts local storage after 7 days of no interaction unless the app is installed to the Home Screen. Treating local storage as a cache (rebuildable from the source of truth in the cloud) eliminates this as a data-loss risk.
+
+**Amendment (2026-06-02):** The cloud blob is now **plaintext JSON** rather than an encrypted blob (see Principle I amendment). It remains the source of truth and local storage stays a rebuildable cache; only the encryption is gone. (Current sync uses whole-blob union-merge; the per-field column-level LWW described above is still the target for a future increment.)
 
 ### XII. Schema Includes Multi-Currency, Refunds, Transfers, And Idempotency From Day One
 
@@ -126,6 +134,8 @@ The application MUST NOT contain any analytics, telemetry, crash reporting servi
 **Rationale**: A single innocuous-looking analytics SDK undoes the entire privacy posture. Default-deny on external network calls is the only durable way to enforce this.
 
 **Amendment (2026-05-25, approved by the architect — single narrow exception):** The Google Identity Services script (`https://accounts.google.com/gsi/client`) MAY be loaded at runtime, but ONLY: (a) lazily, on a user-initiated sign-in action — never on app load; (b) solely to authenticate the user for sync to **their own** Google Drive (`drive.file` scope); and (c) with no other third-party runtime code. This is permitted because it is **user-initiated authentication, not analytics/telemetry/advertising/tracking**, and it does not weaken the privacy posture — the synced blob is client-side-encrypted (AES-256-GCM), so Google stores only ciphertext it cannot read. This is the ONLY sanctioned third-party runtime script; default-deny stands for everything else, and any further exception requires the same explicit, documented approval.
+
+**Follow-up (2026-06-02):** Encryption was later removed (see Principle I amendment), so the "Google stores only ciphertext it cannot read" clause above no longer holds — the synced blob is now plaintext JSON in the user's own Drive. The GIS-script exception itself still stands on its original basis: it is **user-initiated authentication to the user's own Drive**, not analytics/telemetry/advertising/tracking, and remains the only sanctioned third-party runtime script.
 
 ### XIV. Tech Stack Commitments
 
@@ -197,4 +207,4 @@ This constitution supersedes all other practices. It is the contract between the
 - Any violation of a principle MUST be either resolved before merging OR documented under Complexity Tracking in the plan with explicit justification.
 - The default answer to any new feature request that weakens Privacy, Accuracy, or Zero-Cost is NO.
 
-**Version**: 1.0.1 | **Ratified**: 2026-05-23 | **Last Amended**: 2026-05-23
+**Version**: 2.0.0 | **Ratified**: 2026-05-23 | **Last Amended**: 2026-06-02

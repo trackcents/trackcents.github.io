@@ -1,6 +1,6 @@
 /**
  * Persistence for savings goals (US-P4-B), in its own local store key
- * (`mtrb.goals`), encrypted at rest with the session key (store-crypto). Kept
+ * (`mtrb.goals`), stored as plaintext JSON via store-crypto. Kept
  * separate from the synced vault + categorization (like budgets, DECISIONS D14);
  * cross-device sync folds into the future synced-blob task (#79). Money is bigint
  * cents, serialized as decimal strings.

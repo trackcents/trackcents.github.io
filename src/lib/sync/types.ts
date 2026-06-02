@@ -1,29 +1,24 @@
 // Layer 3 sync provider types per specs/001-money-tracker-mvp/contracts/sync-provider.md.
 //
-// A SyncProvider is the abstraction the app uses to push and pull the encrypted
-// data blob.  The provider only ever sees ciphertext — by contract, it MUST NOT
-// inspect, modify, or parse the bytes.
+// A SyncProvider is the abstraction the app uses to push and pull the data blob.
+// The blob is PLAINTEXT JSON — the passphrase/encryption layer was removed at the
+// user's request (see amended Constitution Principle I). The provider still
+// treats the bytes as opaque: it MUST NOT inspect, modify, or parse them.
 
 /**
- * The encrypted database snapshot plus non-secret metadata needed to derive
- * the decryption key from the user's passphrase on a fresh device.
+ * The database snapshot (framed plaintext JSON) plus non-secret metadata.
  *
- * Wire format of `ciphertext`:
+ * Wire format of `bytes`:
  *   [4 bytes  magic 'MTRB']
  *   [4 bytes  blob format version, big-endian]
- *   [12 bytes IV/nonce]
- *   [N bytes  AES-256-GCM ciphertext]
- *   [16 bytes AES-GCM authentication tag]
+ *   [N bytes  UTF-8 JSON of the persisted state]
  */
-export interface EncryptedBlob {
-  ciphertext: Uint8Array;
+export interface SyncBlob {
+  bytes: Uint8Array;
   sidecar: BlobSidecar;
 }
 
 export interface BlobSidecar {
-  salt_b64: string;
-  kdf_algorithm: 'PBKDF2-SHA-256';
-  kdf_iterations: number;
   blob_version: number;
   last_written_at: string; // ISO timestamp
   last_writer_device: string; // opaque device id (random per-device)
@@ -47,14 +42,14 @@ export interface SyncProvider {
   signOut(): Promise<void>;
 
   /** Returns null if no blob exists yet (first sync). */
-  readBlob(): Promise<EncryptedBlob | null>;
+  readBlob(): Promise<SyncBlob | null>;
 
   /**
    * Atomic write.  `if_match_version` is an optimistic-concurrency token; if
    * provided and the remote version no longer matches, throws
    * ConcurrentModificationError.
    */
-  writeBlob(blob: EncryptedBlob, if_match_version?: string): Promise<{ new_version: string }>;
+  writeBlob(blob: SyncBlob, if_match_version?: string): Promise<{ new_version: string }>;
 
   /** Cheap metadata-only read.  Used to detect "should we pull?" without downloading. */
   statBlob(): Promise<BlobMetadata | null>;

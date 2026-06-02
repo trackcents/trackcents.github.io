@@ -1,8 +1,8 @@
 /**
  * Persistence for per-category monthly budget limits (US-P4-A), kept SEPARATE
  * from the categorization store and the synced vault (DECISIONS D14) so it does
- * not touch the IV&V-signed-off merge/backup schemas. Encrypted at rest with the
- * session key by reusing store-crypto. Local-only for now (cross-device sync of
+ * not touch the IV&V-signed-off merge/backup schemas. Stored as plaintext JSON
+ * via store-crypto. Local-only for now (cross-device sync of
  * budgets folds into the future synced-blob task, like categorization #79).
  *
  * Limits are bigint cents (constitution II), serialized as decimal strings.

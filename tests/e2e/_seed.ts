@@ -13,15 +13,15 @@ import type { Page } from '@playwright/test';
 
 /**
  * Mark onboarding as already completed so the first-run redirect to /onboarding
- * does NOT fire. Sets a stored salt before any app script runs (addInitScript),
- * which is what `hasStoredSalt()` checks. Use in tests that exercise the
- * statements/transactions pages directly without going through onboarding.
- * (Tests that seed data don't strictly need this — data alone suppresses the
- * redirect — but it's harmless and makes intent explicit.)
+ * does NOT fire. Sets the `mtrb.onboarded` flag before any app script runs
+ * (addInitScript), which is what the layout's first-run gate checks. Use in
+ * tests that exercise the statements/transactions pages directly without going
+ * through onboarding. (Tests that seed data don't strictly need this — data
+ * alone suppresses the redirect — but it's harmless and makes intent explicit.)
  */
 export async function bypassOnboarding(page: Page): Promise<void> {
   await page.addInitScript(() => {
-    window.localStorage.setItem('mtrb.salt', 'dGVzdC1zYWx0LW5vdC1zZWNyZXQ='); // dummy base64; never used to decrypt plaintext seed data
+    window.localStorage.setItem('mtrb.onboarded', '1');
   });
 }
 

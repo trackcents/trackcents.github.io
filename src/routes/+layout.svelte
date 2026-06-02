@@ -4,14 +4,12 @@
   import { goto } from '$app/navigation';
   import { base } from '$app/paths';
   import { dev } from '$app/environment';
-  import { loadState, isStoreLocked } from '$lib/db/store';
-  import { attemptUnlock, hasStoredSalt } from '$lib/app/unlock';
+  import { loadState } from '$lib/db/store';
   import { initSyncIfReady } from '$lib/sync/sync-controller';
   import { initTheme } from '$lib/app/theme.svelte';
   import { applyPrefs } from '$lib/app/prefs';
   import { installKeyboardInsetTracker } from '$lib/app/keyboard-inset';
   import { page } from '$app/stores';
-  import PassphraseUnlock from '$components/PassphraseUnlock.svelte';
   import Nav from '$components/Nav.svelte';
 
   let { children } = $props();
@@ -19,11 +17,14 @@
   // Apply the saved display currency (USD/INR) before any child renders money.
   if (typeof window !== 'undefined') applyPrefs();
 
-  let locked = $state(false);
   let checking = $state(true);
 
   // Onboarding is a full-screen setup flow — no rail / tab-bar chrome there.
   const onOnboarding = $derived($page.url.pathname.startsWith('/onboarding'));
+
+  function hasOnboarded(): boolean {
+    return typeof localStorage !== 'undefined' && localStorage.getItem('mtrb.onboarded') !== null;
+  }
 
   onMount(async () => {
     initTheme(); // apply persisted light/dark choice ASAP
@@ -31,17 +32,13 @@
     // above the soft keyboard.  Installs a global visualViewport listener
     // that drives --kb-inset-bottom on <html>.  Safe to call multiple times.
     installKeyboardInsetTracker();
-    // Probe storage; loadState sets the locked flag if data is encrypted and no key is loaded.
     const state = await loadState();
-    locked = isStoreLocked();
 
-    // First-run gate (US-P1-A): a brand-new user — never set a passphrase (no
-    // stored salt) AND no imported data — is sent through onboarding (Google
-    // sign-in + passphrase) instead of landing straight on the statements page.
-    // Without this the onboarding/sign-in flow was unreachable. We DON'T redirect
-    // an existing local-only user who already has data, and we stay put once on
-    // /onboarding (no redirect loop).
-    const isFreshUser = !locked && !hasStoredSalt() && state.imports.length === 0;
+    // First-run gate (US-P1-A): a brand-new user — has never finished onboarding
+    // AND has no imported data — is sent through onboarding (Google sign-in /
+    // currency) instead of landing straight on the statements page. We stay put
+    // once on /onboarding (no redirect loop), and don't redirect a returning user.
+    const isFreshUser = !hasOnboarded() && state.imports.length === 0;
     if (
       isFreshUser &&
       typeof window !== 'undefined' &&
@@ -49,7 +46,6 @@
     ) {
       await goto('/onboarding');
     } else if (
-      !locked &&
       state.imports.length > 0 &&
       typeof window !== 'undefined' &&
       window.location.pathname === '/'
@@ -60,7 +56,7 @@
     }
 
     checking = false;
-    if (!locked) initSyncIfReady();
+    initSyncIfReady(); // activate Drive sync if a client ID is configured + signed in
 
     // Register the offline app-shell service worker (SC-006 / FR-054). SvelteKit's
     // auto-register is off (svelte.config serviceWorker.register=false) so we do it
@@ -87,22 +83,11 @@
       }
     }
   });
-
-  async function handleUnlock(passphrase: string): Promise<boolean> {
-    const ok = await attemptUnlock(passphrase);
-    if (ok) {
-      locked = false;
-      initSyncIfReady(); // key is now in memory — wire up sync if a Drive client is configured
-    }
-    return ok;
-  }
 </script>
 
 <div class="min-h-dvh">
   {#if checking}
     <div class="p-6 text-sm" style:color="var(--color-muted)">Loading…</div>
-  {:else if locked}
-    <PassphraseUnlock onUnlock={handleUnlock} />
   {:else if onOnboarding}
     {@render children?.()}
   {:else}

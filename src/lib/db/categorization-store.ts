@@ -1,8 +1,9 @@
 /**
  * Persistence for the categorization layer (US-P2-A), kept SEPARATE from the
  * synced vault (PersistedState) so it does not touch the IV&V-signed-off sync
- * merge. Encrypted at rest with the same session key as the main store
- * (Principle I) by reusing store-crypto's encode/decode.
+ * merge. Stored as plaintext JSON via store-crypto's encode/decode (the
+ * passphrase/encryption layer was removed at the user's request — see amended
+ * Constitution Principle I).
  *
  * v1 limitation (documented): categorization is LOCAL-ONLY — it does not yet sync
  * across devices. Folding these fields into the synced blob (and re-running the

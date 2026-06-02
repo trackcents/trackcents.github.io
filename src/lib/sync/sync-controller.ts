@@ -6,7 +6,6 @@
  * ⚠️ The end-to-end path (GIS consent popup → Drive REST upload) can only be
  * verified in a real browser with a signed-in Google account — see T154.
  */
-import { getSessionKey } from '../crypto/session';
 import { isSyncConfigured } from './drive-auth';
 import { GoogleDriveProvider } from './drive-blob';
 import { configure, isConfigured, sync } from './sync-engine';
@@ -17,15 +16,14 @@ let provider: GoogleDriveProvider | null = null;
 let uninstallTriggers: (() => void) | null = null;
 
 /**
- * Configure the engine once the vault is unlocked (key in memory) AND an OAuth
- * client ID is present. Idempotent. Returns true if sync is now active.
+ * Configure the engine once an OAuth client ID is present (sync is plaintext now,
+ * so there's no key to wait for). Idempotent. Returns true if sync is now active.
  */
 export function initSyncIfReady(): boolean {
   if (isConfigured()) return true;
-  const key = getSessionKey();
-  if (key === null || !isSyncConfigured()) return false;
+  if (!isSyncConfigured()) return false;
   provider = new GoogleDriveProvider();
-  configure(provider, key);
+  configure(provider);
   uninstallTriggers = installSyncTriggers();
   return true;
 }

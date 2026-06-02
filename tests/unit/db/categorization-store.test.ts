@@ -5,9 +5,6 @@ import {
   saveCategorization,
   type CategorizationState
 } from '../../../src/lib/db/categorization-store';
-import { setSessionKey, clearSessionKey } from '../../../src/lib/crypto/session';
-import { deriveKey } from '../../../src/lib/crypto/kdf';
-import { generateSalt } from '../../../src/lib/crypto/salt';
 import { DEFAULT_POCKETS } from '../../../src/lib/app/pockets';
 
 function stubLocalStorage(): Map<string, string> {
@@ -29,10 +26,8 @@ const sample: CategorizationState = {
 
 beforeEach(() => {
   stubLocalStorage();
-  clearSessionKey();
 });
 afterEach(() => {
-  clearSessionKey();
   vi.unstubAllGlobals();
 });
 
@@ -46,16 +41,10 @@ describe('categorization-store', () => {
     });
   });
 
-  test('round-trips plaintext when no session key is loaded', async () => {
+  test('round-trips saved state (stored as plaintext JSON)', async () => {
     await saveCategorization(sample);
-    expect(await loadCategorization()).toEqual(sample);
-  });
-
-  test('encrypts at rest when a session key is loaded, and decrypts back', async () => {
-    const key = await deriveKey('pw', generateSalt(), { iterations: 1000 });
-    setSessionKey(key);
-    await saveCategorization(sample);
-    expect(localStorage.getItem('mtrb.categorization')?.startsWith('MTRBenc1:')).toBe(true);
+    // Stored unencrypted now — no MTRBenc1: marker.
+    expect(localStorage.getItem('mtrb.categorization')?.startsWith('MTRBenc1:')).toBe(false);
     expect(await loadCategorization()).toEqual(sample);
   });
 
@@ -83,38 +72,6 @@ describe('categorization-store', () => {
     expect(typeof parts[0]!.amount_minor).toBe('bigint');
     expect(parts[0]!.amount_minor).toBe(4000_00n);
     expect(parts[1]!.amount_minor).toBe(1000_00n);
-  });
-
-  test('encrypted split with bigint cents round-trips too', async () => {
-    const key = await deriveKey('pw', generateSalt(), { iterations: 1000 });
-    setSessionKey(key);
-    const withSplit: CategorizationState = {
-      categories: [],
-      rules: [],
-      annotations: {
-        'hash#1': {
-          category_id: null,
-          source: 'manual',
-          split: [{ category_id: null, amount_minor: 250n }]
-        }
-      },
-      pockets: [...DEFAULT_POCKETS]
-    };
-    await saveCategorization(withSplit);
-    expect(await loadCategorization()).toEqual(withSplit);
-  });
-
-  test('returns empty (not a throw) when data is encrypted but locked', async () => {
-    const key = await deriveKey('pw', generateSalt(), { iterations: 1000 });
-    setSessionKey(key);
-    await saveCategorization(sample);
-    clearSessionKey(); // now locked
-    expect(await loadCategorization()).toEqual({
-      categories: [],
-      rules: [],
-      annotations: {},
-      pockets: DEFAULT_POCKETS
-    });
   });
 
   test('pockets default in for pre-pocket states, and custom pockets round-trip', async () => {

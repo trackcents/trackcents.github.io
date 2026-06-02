@@ -1,70 +1,29 @@
 /**
- * Encryption-at-rest for the persisted store (T109, constitution Principle X).
+ * Storage codec for the persisted stores — the single chokepoint every store
+ * (store.ts + categorization/budget/goals/recurring) routes through.
  *
- * The serialized-state string is encrypted with the in-memory session key
- * (AES-256-GCM, see crypto/aes) when the user is unlocked. A marker prefix lets
- * plaintext (local-only / pre-onboarding) and encrypted blobs coexist and migrate
- * forward transparently:
- *   - no session key            → stored as plaintext JSON (legacy behavior)
- *   - session key set           → stored as `MTRBenc1:<base64(iv+ciphertext+tag)>`
- *   - encrypted blob but no key  → reported as LOCKED (caller prompts to unlock)
+ * Data is stored as PLAINTEXT JSON. The passphrase / zero-knowledge encryption
+ * layer was removed at the user's explicit request (2026-06-01) so sign-in is
+ * the only step — see the amended Constitution Principle I. These functions are
+ * kept (and kept async-shaped) so callers don't change and a future codec change
+ * (compression, re-introduced encryption) has exactly one place to live.
+ *
+ * The `DecodeResult` union keeps its historical 'decrypted' / 'locked' variants
+ * so existing call sites compile unchanged; decode now only ever returns
+ * 'plaintext' (nothing is ever locked).
  */
-import { encryptBytes, decryptBytes } from '../crypto/aes';
-import { getSessionKey } from '../crypto/session';
-
-const ENC_MARKER = 'MTRBenc1:';
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let binary = '';
-  const CHUNK = 0x8000; // chunk the spread so large blobs don't blow the arg limit
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-  }
-  return btoa(binary);
-}
-
-function base64ToBytes(base64: string): Uint8Array {
-  const binary = atob(base64);
-  const out = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    out[i] = binary.charCodeAt(i);
-  }
-  return out;
-}
-
-/** True if a stored string is an encrypted blob (vs legacy plaintext JSON). */
-export function isEncryptedBlob(stored: string): boolean {
-  return stored.startsWith(ENC_MARKER);
-}
-
-/**
- * Encode a serialized-state string for storage: encrypt with the session key if
- * unlocked, otherwise return the plaintext unchanged (local-only mode).
- */
-export async function encodeStateForStorage(stateJson: string): Promise<string> {
-  const key = getSessionKey();
-  if (!key) return stateJson;
-  const blob = await encryptBytes(key, new TextEncoder().encode(stateJson));
-  return ENC_MARKER + bytesToBase64(blob);
-}
 
 export type DecodeResult =
   | { kind: 'plaintext'; json: string }
   | { kind: 'decrypted'; json: string }
   | { kind: 'locked' };
 
-/**
- * Decode a stored string back to serialized-state JSON. Plaintext passes through;
- * an encrypted blob is decrypted with the session key, or reported as `locked`
- * when no key is loaded. Throws if an encrypted blob fails to decrypt (wrong key
- * or tampered data).
- */
-export async function decodeStateFromStorage(stored: string): Promise<DecodeResult> {
-  if (!isEncryptedBlob(stored)) {
-    return { kind: 'plaintext', json: stored };
-  }
-  const key = getSessionKey();
-  if (!key) return { kind: 'locked' };
-  const plain = await decryptBytes(key, base64ToBytes(stored.slice(ENC_MARKER.length)));
-  return { kind: 'decrypted', json: new TextDecoder().decode(plain) };
+/** Encode a serialized-state string for storage. Plaintext passthrough. */
+export function encodeStateForStorage(stateJson: string): Promise<string> {
+  return Promise.resolve(stateJson);
+}
+
+/** Decode a stored string back to serialized-state JSON. Plaintext passthrough. */
+export function decodeStateFromStorage(stored: string): Promise<DecodeResult> {
+  return Promise.resolve({ kind: 'plaintext', json: stored });
 }

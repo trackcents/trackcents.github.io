@@ -1,28 +1,26 @@
 /**
- * Provider-agnostic sync engine (T155).
+ * Provider-agnostic sync engine.
  *
- * Pushes the encrypted local state to the configured SyncProvider and pulls it
- * back. Conflict model is sync-authoritative (constitution XI): the remote blob
- * is the source of truth, and a concurrent-write conflict on push is resolved by
- * pulling the newer remote, then re-pushing. The engine never hands plaintext to
- * a provider — it encrypts with the in-memory key first.
+ * Pushes the local state (PLAINTEXT JSON, framed) to the configured SyncProvider
+ * and pulls it back. Conflict model is sync-authoritative: the remote blob is the
+ * source of truth, and a concurrent-write conflict on push is resolved by pulling
+ * the newer remote (union-merged so no local import is lost), then re-pushing.
+ *
+ * Encryption was removed at the user's request — the blob is plaintext (see the
+ * amended Constitution Principle I).
  */
-import { encryptBytes, decryptBytes } from '../crypto/aes';
-import { KDF_ITERATIONS } from '../crypto/kdf';
 import { loadState, saveState, serializeState, deserializeState } from '../db/store';
-import { SALT_STORAGE_KEY } from '../app/unlock';
 import { encodeBlobFrame, decodeBlobFrame, BLOB_FORMAT_VERSION } from './blob-format';
 import { mergeState } from './merge';
 import {
   ConcurrentModificationError,
-  type EncryptedBlob,
+  type SyncBlob,
   type SyncProvider,
   type SyncResult,
   type SyncState
 } from './types';
 
 let provider: SyncProvider | null = null;
-let cryptoKey: CryptoKey | null = null;
 let lastSyncAt: string | null = null;
 const listeners = new Set<(s: SyncState) => void>();
 
@@ -47,15 +45,14 @@ function deviceId(): string {
   return id;
 }
 
-/** Wire up the engine with a provider + the in-memory encryption key. */
-export function configure(p: SyncProvider, key: CryptoKey): void {
+/** Wire up the engine with a provider. */
+export function configure(p: SyncProvider): void {
   provider = p;
-  cryptoKey = key;
 }
 
-/** True once a provider + key have been wired in (triggers gate on this). */
+/** True once a provider has been wired in (triggers gate on this). */
 export function isConfigured(): boolean {
-  return provider !== null && cryptoKey !== null;
+  return provider !== null;
 }
 
 /** Subscribe to status changes for the UI. Returns an unsubscribe function. */
@@ -66,16 +63,16 @@ export function onStatusChange(listener: (s: SyncState) => void): () => void {
   };
 }
 
-function requireConfigured(): { provider: SyncProvider; key: CryptoKey } {
-  if (provider === null || cryptoKey === null) {
-    throw new Error('sync: not configured — call configure(provider, key) first');
+function requireConfigured(): SyncProvider {
+  if (provider === null) {
+    throw new Error('sync: not configured — call configure(provider) first');
   }
-  return { provider, key: cryptoKey };
+  return provider;
 }
 
 const PUSHED_FP_KEY = 'mtrb.sync.pushed_fp';
 
-/** SHA-256 hex of the plaintext serialization — used to skip redundant pushes. */
+/** SHA-256 hex of the serialization — used to skip redundant pushes. */
 async function fingerprint(text: string): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return Array.from(new Uint8Array(digest))
@@ -89,16 +86,10 @@ function setPushedFp(fp: string): void {
   if (typeof localStorage !== 'undefined') localStorage.setItem(PUSHED_FP_KEY, fp);
 }
 
-async function buildBlob(key: CryptoKey, json: string): Promise<EncryptedBlob> {
-  const aesBlob = await encryptBytes(key, new TextEncoder().encode(json));
-  const saltB64 =
-    typeof localStorage !== 'undefined' ? (localStorage.getItem(SALT_STORAGE_KEY) ?? '') : '';
+function buildBlob(json: string): SyncBlob {
   return {
-    ciphertext: encodeBlobFrame(aesBlob),
+    bytes: encodeBlobFrame(new TextEncoder().encode(json)),
     sidecar: {
-      salt_b64: saltB64,
-      kdf_algorithm: 'PBKDF2-SHA-256',
-      kdf_iterations: KDF_ITERATIONS,
       blob_version: BLOB_FORMAT_VERSION,
       last_written_at: new Date().toISOString(),
       last_writer_device: deviceId()
@@ -107,7 +98,7 @@ async function buildBlob(key: CryptoKey, json: string): Promise<EncryptedBlob> {
 }
 
 export async function pull(): Promise<{ pulled: boolean; reason: string }> {
-  const { provider: p, key } = requireConfigured();
+  const p = requireConfigured();
   emit({ state: 'pulling' });
   try {
     const blob = await p.readBlob();
@@ -115,8 +106,8 @@ export async function pull(): Promise<{ pulled: boolean; reason: string }> {
       idle();
       return { pulled: false, reason: 'no remote blob yet' };
     }
-    const { aesBlob } = decodeBlobFrame(blob.ciphertext);
-    const json = new TextDecoder().decode(await decryptBytes(key, aesBlob));
+    const { payload } = decodeBlobFrame(blob.bytes);
+    const json = new TextDecoder().decode(payload);
     const remoteState = deserializeState(json);
     // Union, don't overwrite: never lose an unsynced local import (IV&V A1).
     await saveState(mergeState(await loadState(), remoteState));
@@ -130,19 +121,19 @@ export async function pull(): Promise<{ pulled: boolean; reason: string }> {
 }
 
 export async function push(): Promise<{ pushed: boolean; new_version?: string; reason: string }> {
-  const { provider: p, key } = requireConfigured();
+  const p = requireConfigured();
   emit({ state: 'pushing' });
   try {
     const json = serializeState(await loadState());
     const fp = await fingerprint(json);
     const remote = await p.statBlob();
     // Skip when nothing changed since our last push, so we don't pile up
-    // redundant Drive revisions/checkpoints (only meaningful when a remote exists).
+    // redundant Drive revisions (only meaningful when a remote already exists).
     if (remote !== null && fp === getPushedFp()) {
       idle();
       return { pushed: false, reason: 'no local changes since last push' };
     }
-    const { new_version } = await p.writeBlob(await buildBlob(key, json), remote?.version);
+    const { new_version } = await p.writeBlob(buildBlob(json), remote?.version);
     setPushedFp(fp);
     lastSyncAt = new Date().toISOString();
     idle();

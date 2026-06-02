@@ -17,6 +17,12 @@
   import { newManualId } from '$lib/app/manual-entry';
   import { detailedRowsFromImports } from '$lib/app/categorization-glue';
   import { CURRENCIES, loadPrefs, setCurrencyPref, type CurrencyCode } from '$lib/app/prefs';
+  import { isSyncConfigured, signOut as driveSignOut } from '$lib/sync/drive-auth';
+  import { triggerSync, teardownSync } from '$lib/sync/sync-controller';
+
+  const syncAvailable = isSyncConfigured();
+  let syncBusy = $state(false);
+  let syncMsg = $state('');
 
   let backend = $state<string>('');
   let txnCount = $state(0);
@@ -174,6 +180,30 @@
     txnCount = 0;
     message = { kind: 'ok', text: 'All local data erased.' };
   }
+
+  // ── Google Drive sync ──
+  // "Sync now" doubles as sign-in: triggerSync prompts the Google consent popup
+  // the first time (no cached token), then pushes/pulls. Data is plain JSON.
+  async function doSync(): Promise<void> {
+    syncBusy = true;
+    syncMsg = 'Syncing…';
+    try {
+      const r = await triggerSync();
+      syncMsg = `Synced. ${r.pulled ? 'Pulled remote changes. ' : ''}${
+        r.pushed ? 'Uploaded your data.' : 'Already up to date.'
+      }`;
+    } catch (e) {
+      syncMsg = `Sync failed: ${e instanceof Error ? e.message : String(e)}`;
+    } finally {
+      syncBusy = false;
+    }
+  }
+
+  function doSignOut(): void {
+    driveSignOut();
+    teardownSync();
+    syncMsg = 'Signed out of Google. Your local data stays on this device.';
+  }
 </script>
 
 <svelte:head><title>Settings · trackcents</title></svelte:head>
@@ -182,7 +212,7 @@
   <header class="mb-5">
     <h1 class="text-2xl font-semibold text-[var(--color-text)]">Settings</h1>
     <p class="mt-1 text-sm text-[var(--color-muted)]">
-      Backup, restore, export, and manage your data. Everything stays on your device.
+      Back up, restore, export, sync, and manage your data.
     </p>
   </header>
 
@@ -200,6 +230,32 @@
   {/if}
 
   <div class="space-y-5">
+    <section class="card p-5">
+      <h2 class="text-base font-semibold">Google Drive sync</h2>
+      {#if !syncAvailable}
+        <p class="mt-1 text-sm text-[var(--color-muted)]">
+          Drive sync isn't enabled in this build.
+        </p>
+      {:else}
+        <p class="mt-1 text-sm text-[var(--color-muted)]">
+          Back up and sync your data to your own Google Drive so it's there on every device. It's
+          stored as plain JSON in a folder this app creates — the app only ever touches files it
+          made.
+        </p>
+        <div class="mt-4 flex flex-wrap items-center gap-3">
+          <button type="button" class="btn btn-primary" onclick={doSync} disabled={syncBusy}>
+            {syncBusy ? 'Syncing…' : 'Sync now'}
+          </button>
+          <button type="button" class="btn btn-ghost" onclick={doSignOut} disabled={syncBusy}>
+            Sign out of Google
+          </button>
+        </div>
+        {#if syncMsg}
+          <p class="mt-3 text-xs text-[var(--color-muted)]">{syncMsg}</p>
+        {/if}
+      {/if}
+    </section>
+
     <section class="card p-5">
       <h2 class="text-base font-semibold">Currency</h2>
       <p class="mt-1 text-sm text-[var(--color-muted)]">Amounts are shown in this currency.</p>

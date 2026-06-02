@@ -4,12 +4,9 @@ import * as engine from '../../../src/lib/sync/sync-engine';
 import {
   ConcurrentModificationError,
   type SyncProvider,
-  type EncryptedBlob,
+  type SyncBlob,
   type BlobMetadata
 } from '../../../src/lib/sync/types';
-import { setSessionKey, clearSessionKey } from '../../../src/lib/crypto/session';
-import { deriveKey } from '../../../src/lib/crypto/kdf';
-import { generateSalt } from '../../../src/lib/crypto/salt';
 import { clearState } from '../../../src/lib/db/store';
 
 function stubLocalStorage(): void {
@@ -25,7 +22,7 @@ function stubLocalStorage(): void {
 class MockProvider implements SyncProvider {
   id = 'mock';
   display_name = 'Mock';
-  blob: EncryptedBlob | null = null;
+  blob: SyncBlob | null = null;
   version = 0;
   failNextWriteWithConflict = false;
 
@@ -36,18 +33,18 @@ class MockProvider implements SyncProvider {
     return true;
   }
   async signOut(): Promise<void> {}
-  async readBlob(): Promise<EncryptedBlob | null> {
+  async readBlob(): Promise<SyncBlob | null> {
     return this.blob;
   }
   async statBlob(): Promise<BlobMetadata | null> {
     if (this.blob === null) return null;
     return {
-      size_bytes: this.blob.ciphertext.byteLength,
+      size_bytes: this.blob.bytes.byteLength,
       last_modified: new Date().toISOString(),
       version: String(this.version)
     };
   }
-  async writeBlob(blob: EncryptedBlob, ifMatch?: string): Promise<{ new_version: string }> {
+  async writeBlob(blob: SyncBlob, ifMatch?: string): Promise<{ new_version: string }> {
     if (this.failNextWriteWithConflict) {
       this.failNextWriteWithConflict = false;
       throw new ConcurrentModificationError('simulated concurrent write');
@@ -61,24 +58,18 @@ class MockProvider implements SyncProvider {
   }
 }
 
-let key: CryptoKey;
-
 beforeEach(async () => {
   stubLocalStorage();
-  clearSessionKey();
-  key = await deriveKey('sync-pw', generateSalt(), { iterations: 1000 });
-  setSessionKey(key); // store encrypts-at-rest with the same key — consistent
   await clearState();
 });
 afterEach(() => {
-  clearSessionKey();
   vi.unstubAllGlobals();
 });
 
-describe('sync-engine', () => {
-  test('push uploads ciphertext-only; pull applies it back; provider never sees plaintext', async () => {
+describe('sync-engine (plaintext)', () => {
+  test('push uploads the framed plaintext state; pull applies it back', async () => {
     const provider = new MockProvider();
-    engine.configure(provider, key);
+    engine.configure(provider);
 
     const pushed = await engine.push();
     expect(pushed.pushed).toBe(true);
@@ -86,22 +77,24 @@ describe('sync-engine', () => {
     const stored = provider.blob;
     expect(stored).not.toBeNull();
     if (stored === null) throw new Error('expected a stored blob');
-    expect(new TextDecoder().decode(stored.ciphertext)).not.toContain('reconciliation_links');
-    expect(stored.sidecar.kdf_algorithm).toBe('PBKDF2-SHA-256');
+    // Plaintext now: the JSON is visible in the blob bytes (after the 8-byte header).
+    expect(new TextDecoder().decode(stored.bytes)).toContain('reconciliation_links');
+    expect(stored.sidecar.blob_version).toBeGreaterThan(0);
+    expect(stored.sidecar.last_writer_device.length).toBeGreaterThan(0);
 
-    const pulled = await engine.pull(); // decrypt + deserialize must succeed (no throw)
+    const pulled = await engine.pull(); // decode + deserialize must succeed (no throw)
     expect(pulled.pulled).toBe(true);
   });
 
   test('pull is a no-op when no remote blob exists yet', async () => {
     const provider = new MockProvider();
-    engine.configure(provider, key);
+    engine.configure(provider);
     expect((await engine.pull()).pulled).toBe(false);
   });
 
   test('sync() resolves a concurrent-write conflict by pulling then re-pushing', async () => {
     const provider = new MockProvider();
-    engine.configure(provider, key);
+    engine.configure(provider);
     provider.failNextWriteWithConflict = true; // first push conflicts once, then succeeds
     const result = await engine.sync();
     expect(result.conflict_resolved).toBe(true);
@@ -110,7 +103,7 @@ describe('sync-engine', () => {
 
   test('push is skipped when nothing changed since the last push', async () => {
     const provider = new MockProvider();
-    engine.configure(provider, key);
+    engine.configure(provider);
     const first = await engine.push(); // no remote yet → proceeds
     expect(first.pushed).toBe(true);
     const second = await engine.push(); // unchanged + remote now exists → skip
@@ -121,7 +114,7 @@ describe('sync-engine', () => {
     const provider = new MockProvider();
     const states: string[] = [];
     const unsub = engine.onStatusChange((s) => states.push(s.state));
-    engine.configure(provider, key);
+    engine.configure(provider);
     await engine.push();
     unsub();
     expect(states).toContain('pushing');

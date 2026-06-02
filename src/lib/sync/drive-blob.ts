@@ -1,8 +1,9 @@
 /**
  * GoogleDriveProvider (T154) — a SyncProvider backed by the user's own Google
- * Drive, scope `drive.file`. Stores the encrypted blob as `vault.bin` and the
+ * Drive, scope `drive.file`. Stores the data blob as `vault.bin` and the
  * non-secret sidecar as `vault.meta.json` inside a single app-created folder
- * `MoneyTracker/`. It only ever handles ciphertext (contract obligation #1).
+ * `MoneyTracker/`. The blob is plaintext JSON; the provider treats it as opaque
+ * bytes (contract obligation #1).
  *
  * ⚠️ NOT yet exercised against the live Drive API — it type-checks and follows
  * the Drive v3 REST contract, but the real endpoints/error codes must be verified
@@ -16,7 +17,7 @@ import {
   ConcurrentModificationError,
   ProviderQuotaError,
   type SyncProvider,
-  type EncryptedBlob,
+  type SyncBlob,
   type BlobMetadata,
   type BlobSidecar
 } from './types';
@@ -140,7 +141,7 @@ export class GoogleDriveProvider implements SyncProvider {
     authSignOut();
   }
 
-  async readBlob(): Promise<EncryptedBlob | null> {
+  async readBlob(): Promise<SyncBlob | null> {
     const folderId = await getFolderId(false);
     if (folderId === null) return null;
     const blobFile = await fileInfo(BLOB_NAME, folderId);
@@ -150,9 +151,9 @@ export class GoogleDriveProvider implements SyncProvider {
       headers: { Authorization: `Bearer ${token()}` }
     });
     if (!blobRes.ok) throw new Error(`drive: read vault.bin failed ${blobRes.status}`);
-    const ciphertext = new Uint8Array(await blobRes.arrayBuffer());
+    const bytes = new Uint8Array(await blobRes.arrayBuffer());
     const sidecar = (await authedJson(`${DRIVE}/files/${metaFile.id}?alt=media`)) as BlobSidecar;
-    return { ciphertext, sidecar };
+    return { bytes, sidecar };
   }
 
   async statBlob(): Promise<BlobMetadata | null> {
@@ -170,10 +171,7 @@ export class GoogleDriveProvider implements SyncProvider {
     };
   }
 
-  async writeBlob(
-    blob: EncryptedBlob,
-    if_match_version?: string
-  ): Promise<{ new_version: string }> {
+  async writeBlob(blob: SyncBlob, if_match_version?: string): Promise<{ new_version: string }> {
     const folderId = await getFolderId(true);
     if (folderId === null) throw new Error('drive: could not resolve app folder');
 
@@ -195,7 +193,7 @@ export class GoogleDriveProvider implements SyncProvider {
       BLOB_NAME,
       folderId,
       blobFile?.id ?? null,
-      blob.ciphertext as unknown as BodyInit,
+      blob.bytes as unknown as BodyInit,
       'application/octet-stream'
     );
     await uploadMedia(

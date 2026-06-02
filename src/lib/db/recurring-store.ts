@@ -1,8 +1,8 @@
 /**
  * Persistence for the user-owned Recurring (bills + subscriptions) list
- * (spec 002-income-pockets §7.5–§7.10). Local-only, encrypted at rest with the
- * same session key as the other stores (reuses store-crypto), kept separate from
- * the synced vault — same pattern + caveats as categorization-store.
+ * (spec 002-income-pockets §7.5–§7.10). Local-only, stored as plaintext JSON
+ * (reuses store-crypto, like the other stores), kept separate from the synced
+ * vault — same pattern + caveats as categorization-store.
  *
  * `RecurringItem.amount_minor` / `paid_minor` are bigint cents, so we round-trip
  * bigints through the same `{ "$bigint": "<decimal>" }` sentinel as the

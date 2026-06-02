@@ -130,12 +130,6 @@ export function getLastUsedBackend(): StorageBackend {
   return lastUsedBackend;
 }
 
-let storeLocked = false;
-/** True when encrypted data exists on disk but no key is loaded — the user must unlock. */
-export function isStoreLocked(): boolean {
-  return storeLocked;
-}
-
 async function opfsAvailable(): Promise<boolean> {
   if (typeof navigator === 'undefined' || !navigator.storage) return false;
   if (typeof navigator.storage.getDirectory !== 'function') return false;
@@ -155,10 +149,7 @@ async function loadFromOpfs(): Promise<PersistedState | null> {
     const text = await file.text();
     if (text.trim() === '') return null;
     const decoded = await decodeStateFromStorage(text);
-    if (decoded.kind === 'locked') {
-      storeLocked = true;
-      return null;
-    }
+    if (decoded.kind === 'locked') return null; // never happens — plaintext store
     return deserializeState(decoded.json);
   } catch (err) {
     // NotFoundError on first run is expected; anything else is logged but
@@ -186,10 +177,7 @@ async function loadFromLocalStorage(): Promise<PersistedState | null> {
   if (text === null || text.trim() === '') return null;
   try {
     const decoded = await decodeStateFromStorage(text);
-    if (decoded.kind === 'locked') {
-      storeLocked = true;
-      return null;
-    }
+    if (decoded.kind === 'locked') return null; // never happens — plaintext store
     return deserializeState(decoded.json);
   } catch (err) {
     console.warn('store: localStorage load failed, treating as empty', err);
@@ -240,7 +228,6 @@ function serializeWrite<T>(fn: () => Promise<T>): Promise<T> {
  * "lose" that data by preferring an empty OPFS file.
  */
 export async function loadState(): Promise<PersistedState> {
-  storeLocked = false;
   if (await opfsAvailable()) {
     const s = await loadFromOpfs();
     if (s !== null && s.imports.length > 0) {
@@ -324,42 +311,6 @@ export async function clearState(): Promise<boolean> {
     cleared = true;
   }
   return cleared;
-}
-
-/** Read the raw stored blob (encrypted or plaintext) without decoding it. */
-async function readRawStored(): Promise<string | null> {
-  if (await opfsAvailable()) {
-    try {
-      const root = await navigator.storage.getDirectory();
-      const handle = await root.getFileHandle(OPFS_FILE_NAME, { create: false });
-      const text = await (await handle.getFile()).text();
-      if (text.trim() !== '') return text;
-    } catch {
-      // fall through to localStorage
-    }
-  }
-  if (typeof localStorage !== 'undefined') {
-    const t = localStorage.getItem(LS_KEY);
-    if (t !== null && t.trim() !== '') return t;
-  }
-  return null;
-}
-
-/**
- * With the current session key set, test whether the stored data decodes.
- * Returns true if nothing is stored, the blob is plaintext, or it decrypts
- * cleanly; false if an encrypted blob fails to decrypt (wrong key). Used by the
- * returning-user unlock flow (T116).
- */
-export async function tryDecryptWithCurrentKey(): Promise<boolean> {
-  const raw = await readRawStored();
-  if (raw === null) return true;
-  try {
-    const decoded = await decodeStateFromStorage(raw);
-    return decoded.kind !== 'locked';
-  } catch {
-    return false;
-  }
 }
 
 /**
