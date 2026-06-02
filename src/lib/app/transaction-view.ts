@@ -192,6 +192,70 @@ export function applyFilter(rows: UnifiedRow[], filter: TransactionFilter): Unif
   });
 }
 
+/**
+ * One day's worth of rows for the grouped ledger view. `rows` keep the order
+ * they were passed in (the route hands us already-sorted+filtered rows). Groups
+ * are emitted as CONSECUTIVE same-date runs, so for date-sorted input you get
+ * exactly one group per calendar day in display order; for non-date sorts the
+ * caller should render flat (a scattered group-per-row is meaningless).
+ */
+export interface DayGroup {
+  date: string; // ISO YYYY-MM-DD
+  rows: UnifiedRow[];
+  /** Signed sum of every row in the group (income positive, spend negative). */
+  net_minor: bigint;
+}
+
+export function groupRowsByDay(rows: readonly UnifiedRow[]): DayGroup[] {
+  const groups: DayGroup[] = [];
+  let cur: DayGroup | null = null;
+  for (const r of rows) {
+    if (cur === null || cur.date !== r.posted_date) {
+      cur = { date: r.posted_date, rows: [], net_minor: 0n };
+      groups.push(cur);
+    }
+    cur.rows.push(r);
+    cur.net_minor += r.amount_minor;
+  }
+  return groups;
+}
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
+const MONTHS_SHORT = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec'
+] as const;
+
+/**
+ * Friendly heading for a day-group: "Today" / "Yesterday" / "Fri, May 30"
+ * (with the year appended when it differs from `today`). Pure — `today` (ISO
+ * YYYY-MM-DD, the viewer's LOCAL date) is passed in so the function is
+ * deterministic and testable. Calendar-date math only (no clock).
+ */
+export function formatDayHeading(iso: string, today: string): string {
+  if (iso === today) return 'Today';
+  const [ty, tm, td] = today.split('-').map(Number) as [number, number, number];
+  const yest = new Date(Date.UTC(ty, tm - 1, td - 1));
+  const yestIso = `${yest.getUTCFullYear()}-${String(yest.getUTCMonth() + 1).padStart(2, '0')}-${String(
+    yest.getUTCDate()
+  ).padStart(2, '0')}`;
+  if (iso === yestIso) return 'Yesterday';
+  const [yy, mm, dd] = iso.split('-').map(Number) as [number, number, number];
+  const d = new Date(Date.UTC(yy, mm - 1, dd));
+  const heading = `${WEEKDAYS[d.getUTCDay()]}, ${MONTHS_SHORT[mm - 1]} ${dd}`;
+  return yy === ty ? heading : `${heading}, ${yy}`;
+}
+
 /** Sortable columns. */
 export type SortKey = 'date' | 'description' | 'amount' | 'account' | 'type';
 

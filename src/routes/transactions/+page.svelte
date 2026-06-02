@@ -364,8 +364,8 @@
     <div>
       <h1 class="text-2xl font-semibold text-[var(--color-text)]">All transactions</h1>
       <p class="mt-1 text-sm text-[var(--color-muted)]">
-        Search and filter across every imported statement. Click a row to see provenance and source
-        statement.
+        Every transaction across your statements, grouped by day. Tap one to categorize, rename, or
+        see its source.
       </p>
     </div>
     <button type="button" class="btn btn-primary" onclick={() => (quickAddOpen = true)}>

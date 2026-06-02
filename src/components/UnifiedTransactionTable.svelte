@@ -18,6 +18,7 @@
   import { formatMoney, getDisplayCurrencySymbol } from '$lib/util/money';
   const currencySymbol = getDisplayCurrencySymbol();
   import type { UnifiedRow, SortSpec, SortKey } from '$lib/app/transaction-view';
+  import { groupRowsByDay, formatDayHeading, type DayGroup } from '$lib/app/transaction-view';
   import type { Category, TransactionAnnotation, TransactionSplit } from '$lib/app/categorization';
   import { categoryColor, categoryIconName } from '$lib/app/category-visuals';
   import { parseAmountToCents } from '$lib/app/csv-import';
@@ -185,6 +186,32 @@
     expanded = new Set(expanded); // trigger reactivity
   }
 
+  // ── Day-grouped ledger (mobile) ──
+  // The viewer's LOCAL calendar date, for "Today" / "Yesterday" headings.
+  const now = new Date();
+  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+    now.getDate()
+  ).padStart(2, '0')}`;
+  // Group into days; headers only make sense when the list is in date order
+  // (mobile has no sort control, so it always is — this just guards the desktop
+  // user who sorts by amount then narrows the window to the card layout).
+  const dayGroups = $derived(groupRowsByDay(rows));
+  const showDayHeaders = $derived(sort.key === 'date');
+  // The account chip per row is noise when there's only one account.
+  const multiAccount = $derived(
+    new Set(rows.map((r) => `${r.bank_name}|${r.account_last_4 ?? ''}`)).size > 1
+  );
+  /** A day's net across its NON-ignored rows (ignored = excluded from spending). */
+  function dayNetMinor(g: DayGroup): bigint {
+    let s = 0n;
+    for (const r of g.rows) if (!isIgnored(r)) s += r.amount_minor;
+    return s;
+  }
+  function accountChip(r: UnifiedRow): string {
+    const t = ACCOUNT_TYPE_LABELS[r.account_type] ?? r.account_type;
+    return r.account_last_4 ? `${r.bank_name} ${t} ••••${r.account_last_4}` : `${r.bank_name} ${t}`;
+  }
+
   function onHeaderClick(key: SortKey) {
     if (sort.key === key) {
       // Toggle direction
@@ -226,38 +253,9 @@
   </div>
 {/snippet}
 
-<!-- Shared expanded detail panel: provenance + actions + source link. -->
+<!-- Shared expanded detail panel: everyday actions first, then a collapsed
+     "Source & details" provenance block, then the source-statement link. -->
 {#snippet details(r: UnifiedRow)}
-  <dl class="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
-    <div class="flex gap-2">
-      <dt class="text-[var(--color-muted)]">Bank:</dt>
-      <dd class="text-[var(--color-text)]">{r.bank_name}</dd>
-    </div>
-    <div class="flex gap-2">
-      <dt class="text-[var(--color-muted)]">Account type:</dt>
-      <dd class="text-[var(--color-text)]">{r.account_type}</dd>
-    </div>
-    <div class="flex gap-2">
-      <dt class="text-[var(--color-muted)]">Account ••••:</dt>
-      <dd class="font-mono text-[var(--color-text)]">{r.account_last_4 ?? '—'}</dd>
-    </div>
-    <div class="flex gap-2">
-      <dt class="text-[var(--color-muted)]">Parser:</dt>
-      <dd class="font-mono text-[var(--color-text)]">{r.adapter_name} v{r.adapter_version}</dd>
-    </div>
-    <div class="flex gap-2 sm:col-span-2">
-      <dt class="text-[var(--color-muted)]">PDF hash:</dt>
-      <dd class="font-mono break-all text-[var(--color-text)]">{r.pdf_source_hash}</dd>
-    </div>
-    <div class="flex gap-2 sm:col-span-2">
-      <dt class="text-[var(--color-muted)]">Raw text:</dt>
-      <dd
-        class="max-h-32 overflow-y-auto font-mono text-xs break-words whitespace-pre-wrap text-[var(--color-text)]"
-      >
-        {r.raw_text}
-      </dd>
-    </div>
-  </dl>
   {#if showActions}
     <div class="mt-3 border-t pt-3" style="border-color: var(--color-border);">
       <p class="mb-2 text-[11px] font-medium tracking-wide text-[var(--color-muted)] uppercase">
@@ -395,6 +393,44 @@
       {/if}
     </div>
   {/if}
+
+  <details class="provenance mt-3">
+    <summary
+      class="cursor-pointer list-none text-[11px] font-medium tracking-wide text-[var(--color-muted)] uppercase select-none"
+    >
+      <span class="chev">▸</span> Source &amp; details
+    </summary>
+    <dl class="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
+      <div class="flex gap-2">
+        <dt class="text-[var(--color-muted)]">Bank:</dt>
+        <dd class="text-[var(--color-text)]">{r.bank_name}</dd>
+      </div>
+      <div class="flex gap-2">
+        <dt class="text-[var(--color-muted)]">Account type:</dt>
+        <dd class="text-[var(--color-text)]">{r.account_type}</dd>
+      </div>
+      <div class="flex gap-2">
+        <dt class="text-[var(--color-muted)]">Account ••••:</dt>
+        <dd class="font-mono text-[var(--color-text)]">{r.account_last_4 ?? '—'}</dd>
+      </div>
+      <div class="flex gap-2">
+        <dt class="text-[var(--color-muted)]">Parser:</dt>
+        <dd class="font-mono text-[var(--color-text)]">{r.adapter_name} v{r.adapter_version}</dd>
+      </div>
+      <div class="flex gap-2 sm:col-span-2">
+        <dt class="text-[var(--color-muted)]">PDF hash:</dt>
+        <dd class="font-mono break-all text-[var(--color-text)]">{r.pdf_source_hash}</dd>
+      </div>
+      <div class="flex gap-2 sm:col-span-2">
+        <dt class="text-[var(--color-muted)]">Raw text:</dt>
+        <dd
+          class="max-h-32 overflow-y-auto font-mono text-xs break-words whitespace-pre-wrap text-[var(--color-text)]"
+        >
+          {r.raw_text}
+        </dd>
+      </div>
+    </dl>
+  </details>
 
   <div class="mt-3 flex gap-2">
     <button
@@ -547,7 +583,65 @@
   {/if}
 </div>
 
-<!-- ── Phone + tablet: clean hairline-divided list, tap a row to expand (<1024px) ── -->
+<!-- One mobile row (icon · name + badges · category/account · amount), tap to
+     expand.  Shared by the day-grouped and flat (non-date-sort) layouts. -->
+{#snippet mobileRow(r: UnifiedRow)}
+  {@const expandedNow = isExpanded(r)}
+  <div class="row" style="border-color: var(--color-border);">
+    <button
+      type="button"
+      onclick={() => toggleExpanded(r)}
+      class="flex w-full items-center gap-3 px-3.5 py-3 text-left"
+      aria-expanded={expandedNow}
+    >
+      <CategoryIcon
+        icon={categoryIconName(categoryFor?.(r) ? currentCatName(r) : displayName(r))}
+        color={categoryColor(categoryFor?.(r) ?? null)}
+        tint
+      />
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center gap-1.5">
+          <span
+            class="truncate text-[15px] font-medium text-[var(--color-text)]"
+            class:line-through={isIgnored(r)}
+            style:opacity={isIgnored(r) ? '0.5' : '1'}>{displayName(r)}</span
+          >
+          {#if isRecurring(r)}
+            <span class="shrink-0 text-[11px]" style="color: var(--color-accent);" title="Recurring"
+              >↻</span
+            >
+          {/if}
+        </div>
+        <div class="mt-0.5 flex items-center gap-1.5 text-xs text-[var(--color-muted)]">
+          <span class="truncate">{currentCatName(r)}</span>
+          {#if multiAccount}
+            <span class="acct-chip shrink-0">{accountChip(r)}</span>
+          {/if}
+          {#each tagsOf(r) as tag (tag)}
+            <span class="tag-chip shrink-0">#{tag}</span>
+          {/each}
+        </div>
+      </div>
+      <div class="num text-[15px] font-semibold whitespace-nowrap" style:color={amountColor(r)}>
+        {formatMoney(r.amount_minor, { currency: r.currency })}
+      </div>
+    </button>
+    {#if expandedNow}
+      <div class="px-3.5 pb-3.5">
+        {#if showCategory}
+          <div class="mb-3">{@render categoryPicker(r)}</div>
+        {/if}
+        <div class="border-t pt-3 text-xs" style="border-color: var(--color-border);">
+          {@render details(r)}
+        </div>
+      </div>
+    {/if}
+  </div>
+{/snippet}
+
+<!-- ── Phone + tablet (<1024px): a day-grouped ledger.  Each day is its own card
+     with a friendly heading (Today / Yesterday / Fri, May 30) and the day's net,
+     so the date isn't repeated on every row. ── -->
 <div class="lg:hidden">
   {#if rows.length === 0}
     <p
@@ -556,59 +650,35 @@
     >
       No transactions match the current filters.
     </p>
+  {:else if showDayHeaders}
+    {#each dayGroups as g (g.date)}
+      {@const net = dayNetMinor(g)}
+      <section class="mt-4 first:mt-0">
+        <header class="mb-1.5 flex items-baseline justify-between px-1">
+          <h3 class="text-xs font-semibold text-[var(--color-text)]">
+            {formatDayHeading(g.date, todayIso)}
+          </h3>
+          <span class="num text-xs font-medium text-[var(--color-muted)]">
+            {net > 0n ? '+' : ''}{formatMoney(net)}
+          </span>
+        </header>
+        <div
+          class="overflow-hidden rounded-2xl border"
+          style="border-color: var(--color-border); background-color: var(--color-surface);"
+        >
+          {#each g.rows as r (rowKey(r))}
+            {@render mobileRow(r)}
+          {/each}
+        </div>
+      </section>
+    {/each}
   {:else}
     <div
       class="overflow-hidden rounded-2xl border"
       style="border-color: var(--color-border); background-color: var(--color-surface);"
     >
       {#each rows as r (rowKey(r))}
-        {@const expandedNow = isExpanded(r)}
-        <div class="row" style="border-color: var(--color-border);">
-          <button
-            type="button"
-            onclick={() => toggleExpanded(r)}
-            class="flex w-full items-center gap-3 px-3.5 py-3 text-left"
-            aria-expanded={expandedNow}
-          >
-            <CategoryIcon
-              icon={categoryIconName(categoryFor?.(r) ? currentCatName(r) : displayName(r))}
-              color={categoryColor(categoryFor?.(r) ?? null)}
-              tint
-            />
-            <div class="min-w-0 flex-1">
-              <div
-                class="truncate text-[15px] font-medium text-[var(--color-text)]"
-                class:line-through={isIgnored(r)}
-                style:opacity={isIgnored(r) ? '0.5' : '1'}
-              >
-                {displayName(r)}
-                {#if isRecurring(r)}<span
-                    class="ml-1 text-[10px]"
-                    style="color: var(--color-accent);">↻</span
-                  >{/if}
-              </div>
-              <div class="mt-0.5 truncate text-xs text-[var(--color-muted)]">
-                {r.posted_date} · {currentCatName(r)}
-              </div>
-            </div>
-            <div
-              class="num text-[15px] font-semibold whitespace-nowrap"
-              style:color={amountColor(r)}
-            >
-              {formatMoney(r.amount_minor, { currency: r.currency })}
-            </div>
-          </button>
-          {#if expandedNow}
-            <div class="px-3.5 pb-3.5">
-              {#if showCategory}
-                <div class="mb-3">{@render categoryPicker(r)}</div>
-              {/if}
-              <div class="border-t pt-3 text-xs" style="border-color: var(--color-border);">
-                {@render details(r)}
-              </div>
-            </div>
-          {/if}
-        </div>
+        {@render mobileRow(r)}
       {/each}
     </div>
   {/if}
@@ -617,5 +687,30 @@
 <style>
   .row + .row {
     border-top: 1px solid var(--color-border);
+  }
+  /* Small inline chips on a row's sub-line (account when multiple, tags). */
+  .acct-chip,
+  .tag-chip {
+    border-radius: 9999px;
+    border: 1px solid var(--color-border);
+    padding: 0 0.4rem;
+    font-size: 10px;
+    line-height: 1.4;
+    color: var(--color-muted);
+    max-width: 11rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Collapsed provenance: rotate the chevron when open, hide the native marker. */
+  .provenance > summary::-webkit-details-marker {
+    display: none;
+  }
+  .provenance .chev {
+    display: inline-block;
+    transition: transform 0.15s ease;
+  }
+  .provenance[open] .chev {
+    transform: rotate(90deg);
   }
 </style>

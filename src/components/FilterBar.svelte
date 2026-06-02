@@ -3,6 +3,7 @@
   // Binds bidirectionally to the parent's `filter` state; the parent
   // re-applies filtering reactively whenever any control changes.
 
+  import { slide } from 'svelte/transition';
   import type { TransactionFilter } from '$lib/app/transaction-view';
   import { accountKeyString, type AccountKey } from '$lib/app/transaction-view';
   import type { TransactionType } from '$lib/adapters/types';
@@ -103,6 +104,28 @@
       (filter.search && filter.search.trim().length > 0 ? 1 : 0) +
       (filter.types && filter.types.length > 0 ? 1 : 0)
   );
+
+  // Advanced filters (everything except the always-visible search) collapse
+  // behind a toggle so the transaction list isn't buried under filter chrome.
+  let advancedActiveCount = $derived(
+    (filter.account_keys && filter.account_keys.length > 0 ? 1 : 0) +
+      (filter.date_from ? 1 : 0) +
+      (filter.date_to ? 1 : 0) +
+      (filter.amount_min !== undefined ? 1 : 0) +
+      (filter.amount_max !== undefined ? 1 : 0) +
+      (filter.types && filter.types.length > 0 ? 1 : 0)
+  );
+  let advancedOpen = $state(false);
+  let userClosedAdvanced = $state(false);
+  $effect(() => {
+    // Auto-reveal when advanced filters are already active (e.g. landing via
+    // ?month from the home BudgetBox), unless the user has collapsed it.
+    if (advancedActiveCount > 0 && !userClosedAdvanced) advancedOpen = true;
+  });
+  function toggleAdvanced(): void {
+    advancedOpen = !advancedOpen;
+    userClosedAdvanced = !advancedOpen;
+  }
 </script>
 
 <section class="card rise mb-4 p-3 text-sm" aria-label="Filter transactions">
@@ -124,144 +147,190 @@
     </p>
   </div>
 
-  <!-- Search: full-width input -->
-  <div class="mb-3">
-    <label for="filter-search" class="block text-xs text-[var(--color-muted)]"
-      >Search description</label
-    >
+  <!-- Search (always visible) + the advanced-filters toggle -->
+  <div class="flex items-center gap-2">
     <input
       id="filter-search"
       type="search"
+      aria-label="Search transactions"
       value={searchInput}
       oninput={(e) => onSearchInput(e.currentTarget.value)}
       placeholder={searchPlaceholder}
-      class="mt-1 w-full rounded-md border px-3 py-1.5 font-mono text-sm"
+      class="min-w-0 flex-1 rounded-md border px-3 py-1.5 text-sm"
       style="border-color: var(--color-border); background-color: var(--color-bg); color: var(--color-text);"
     />
+    <button
+      type="button"
+      onclick={toggleAdvanced}
+      class="flex shrink-0 items-center gap-1 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors"
+      style:border-color={advancedOpen || advancedActiveCount > 0
+        ? 'var(--color-accent)'
+        : 'var(--color-border)'}
+      style:color={advancedOpen || advancedActiveCount > 0
+        ? 'var(--color-accent)'
+        : 'var(--color-muted)'}
+      style:background-color="var(--color-bg)"
+      aria-expanded={advancedOpen}
+    >
+      <span class="chev" class:open={advancedOpen}>▸</span>
+      Filters{#if advancedActiveCount > 0}
+        <span class="badge">{advancedActiveCount}</span>{/if}
+    </button>
   </div>
 
-  <!-- Date + amount range: 4 columns -->
-  <div class="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-    <div>
-      <label for="filter-date-from" class="block text-xs text-[var(--color-muted)]">Date from</label
-      >
-      <input
-        id="filter-date-from"
-        type="date"
-        value={filter.date_from ?? ''}
-        onchange={(e) =>
-          onFilterChange({ ...filter, date_from: e.currentTarget.value || undefined })}
-        class="mt-1 w-full rounded-md border px-2 py-1 font-mono text-sm"
-        style="border-color: var(--color-border); background-color: var(--color-bg); color: var(--color-text);"
-      />
-    </div>
-    <div>
-      <label for="filter-date-to" class="block text-xs text-[var(--color-muted)]">Date to</label>
-      <input
-        id="filter-date-to"
-        type="date"
-        value={filter.date_to ?? ''}
-        onchange={(e) => onFilterChange({ ...filter, date_to: e.currentTarget.value || undefined })}
-        class="mt-1 w-full rounded-md border px-2 py-1 font-mono text-sm"
-        style="border-color: var(--color-border); background-color: var(--color-bg); color: var(--color-text);"
-      />
-    </div>
-    <div>
-      <label for="filter-amount-min" class="block text-xs text-[var(--color-muted)]"
-        >Min amount ({currencySymbol})</label
-      >
-      <input
-        id="filter-amount-min"
-        type="number"
-        min="0"
-        step="0.01"
-        value={filter.amount_min ?? ''}
-        onchange={(e) => {
-          const v = e.currentTarget.value;
-          onFilterChange({
-            ...filter,
-            amount_min: v === '' ? undefined : parseFloat(v)
-          });
-        }}
-        placeholder="0.00"
-        class="mt-1 w-full rounded-md border px-2 py-1 font-mono text-sm"
-        style="border-color: var(--color-border); background-color: var(--color-bg); color: var(--color-text);"
-      />
-    </div>
-    <div>
-      <label for="filter-amount-max" class="block text-xs text-[var(--color-muted)]"
-        >Max amount ({currencySymbol})</label
-      >
-      <input
-        id="filter-amount-max"
-        type="number"
-        min="0"
-        step="0.01"
-        value={filter.amount_max ?? ''}
-        onchange={(e) => {
-          const v = e.currentTarget.value;
-          onFilterChange({
-            ...filter,
-            amount_max: v === '' ? undefined : parseFloat(v)
-          });
-        }}
-        placeholder="∞"
-        class="mt-1 w-full rounded-md border px-2 py-1 font-mono text-sm"
-        style="border-color: var(--color-border); background-color: var(--color-bg); color: var(--color-text);"
-      />
-    </div>
-  </div>
-
-  <!-- Account multi-select as toggle chips -->
-  {#if accounts.length > 0}
-    <div class="mb-2">
-      <p class="block text-xs text-[var(--color-muted)]">Accounts</p>
-      <div class="mt-1 flex flex-wrap gap-1.5">
-        {#each accounts as acct (accountKeyString(acct))}
-          {@const key = accountKeyString(acct)}
-          {@const selected = isAccountSelected(key)}
-          <button
-            type="button"
-            onclick={() => toggleAccount(key)}
-            class="rounded-md border px-2 py-0.5 text-xs transition-colors"
-            style:border-color={selected ? 'var(--color-accent)' : 'var(--color-border)'}
-            style:color={selected ? 'var(--color-accent)' : 'var(--color-muted)'}
-            style:background-color={selected
-              ? 'color-mix(in oklab, var(--color-accent) 12%, transparent)'
-              : 'var(--color-bg)'}
-            aria-pressed={selected}
+  {#if advancedOpen}
+    <div class="mt-3" transition:slide={{ duration: 150 }}>
+      <!-- Date + amount range: 4 columns -->
+      <div class="mb-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div>
+          <label for="filter-date-from" class="block text-xs text-[var(--color-muted)]"
+            >Date from</label
           >
-            {acct.bank_name}
-            {ACCOUNT_TYPE_LABELS[acct.account_type] ?? acct.account_type}
-            {#if acct.account_last_4}
-              <span class="font-mono">••••{acct.account_last_4}</span>
-            {/if}
-          </button>
-        {/each}
+          <input
+            id="filter-date-from"
+            type="date"
+            value={filter.date_from ?? ''}
+            onchange={(e) =>
+              onFilterChange({ ...filter, date_from: e.currentTarget.value || undefined })}
+            class="mt-1 w-full rounded-md border px-2 py-1 font-mono text-sm"
+            style="border-color: var(--color-border); background-color: var(--color-bg); color: var(--color-text);"
+          />
+        </div>
+        <div>
+          <label for="filter-date-to" class="block text-xs text-[var(--color-muted)]">Date to</label
+          >
+          <input
+            id="filter-date-to"
+            type="date"
+            value={filter.date_to ?? ''}
+            onchange={(e) =>
+              onFilterChange({ ...filter, date_to: e.currentTarget.value || undefined })}
+            class="mt-1 w-full rounded-md border px-2 py-1 font-mono text-sm"
+            style="border-color: var(--color-border); background-color: var(--color-bg); color: var(--color-text);"
+          />
+        </div>
+        <div>
+          <label for="filter-amount-min" class="block text-xs text-[var(--color-muted)]"
+            >Min amount ({currencySymbol})</label
+          >
+          <input
+            id="filter-amount-min"
+            type="number"
+            min="0"
+            step="0.01"
+            value={filter.amount_min ?? ''}
+            onchange={(e) => {
+              const v = e.currentTarget.value;
+              onFilterChange({
+                ...filter,
+                amount_min: v === '' ? undefined : parseFloat(v)
+              });
+            }}
+            placeholder="0.00"
+            class="mt-1 w-full rounded-md border px-2 py-1 font-mono text-sm"
+            style="border-color: var(--color-border); background-color: var(--color-bg); color: var(--color-text);"
+          />
+        </div>
+        <div>
+          <label for="filter-amount-max" class="block text-xs text-[var(--color-muted)]"
+            >Max amount ({currencySymbol})</label
+          >
+          <input
+            id="filter-amount-max"
+            type="number"
+            min="0"
+            step="0.01"
+            value={filter.amount_max ?? ''}
+            onchange={(e) => {
+              const v = e.currentTarget.value;
+              onFilterChange({
+                ...filter,
+                amount_max: v === '' ? undefined : parseFloat(v)
+              });
+            }}
+            placeholder="∞"
+            class="mt-1 w-full rounded-md border px-2 py-1 font-mono text-sm"
+            style="border-color: var(--color-border); background-color: var(--color-bg); color: var(--color-text);"
+          />
+        </div>
+      </div>
+
+      <!-- Account multi-select as toggle chips -->
+      {#if accounts.length > 0}
+        <div class="mb-2">
+          <p class="block text-xs text-[var(--color-muted)]">Accounts</p>
+          <div class="mt-1 flex flex-wrap gap-1.5">
+            {#each accounts as acct (accountKeyString(acct))}
+              {@const key = accountKeyString(acct)}
+              {@const selected = isAccountSelected(key)}
+              <button
+                type="button"
+                onclick={() => toggleAccount(key)}
+                class="rounded-md border px-2 py-0.5 text-xs transition-colors"
+                style:border-color={selected ? 'var(--color-accent)' : 'var(--color-border)'}
+                style:color={selected ? 'var(--color-accent)' : 'var(--color-muted)'}
+                style:background-color={selected
+                  ? 'color-mix(in oklab, var(--color-accent) 12%, transparent)'
+                  : 'var(--color-bg)'}
+                aria-pressed={selected}
+              >
+                {acct.bank_name}
+                {ACCOUNT_TYPE_LABELS[acct.account_type] ?? acct.account_type}
+                {#if acct.account_last_4}
+                  <span class="font-mono">••••{acct.account_last_4}</span>
+                {/if}
+              </button>
+            {/each}
+          </div>
+        </div>
+      {/if}
+
+      <!-- Transaction type chips -->
+      <div>
+        <p class="block text-xs text-[var(--color-muted)]">Transaction types</p>
+        <div class="mt-1 flex flex-wrap gap-1.5">
+          {#each TYPE_OPTIONS as opt (opt.value)}
+            {@const selected = isTypeSelected(opt.value)}
+            <button
+              type="button"
+              onclick={() => toggleType(opt.value)}
+              class="rounded-md border px-2 py-0.5 text-xs transition-colors"
+              style:border-color={selected ? 'var(--color-accent)' : 'var(--color-border)'}
+              style:color={selected ? 'var(--color-accent)' : 'var(--color-muted)'}
+              style:background-color={selected
+                ? 'color-mix(in oklab, var(--color-accent) 12%, transparent)'
+                : 'var(--color-bg)'}
+              aria-pressed={selected}
+            >
+              {opt.label}
+            </button>
+          {/each}
+        </div>
       </div>
     </div>
   {/if}
-
-  <!-- Transaction type chips -->
-  <div>
-    <p class="block text-xs text-[var(--color-muted)]">Transaction types</p>
-    <div class="mt-1 flex flex-wrap gap-1.5">
-      {#each TYPE_OPTIONS as opt (opt.value)}
-        {@const selected = isTypeSelected(opt.value)}
-        <button
-          type="button"
-          onclick={() => toggleType(opt.value)}
-          class="rounded-md border px-2 py-0.5 text-xs transition-colors"
-          style:border-color={selected ? 'var(--color-accent)' : 'var(--color-border)'}
-          style:color={selected ? 'var(--color-accent)' : 'var(--color-muted)'}
-          style:background-color={selected
-            ? 'color-mix(in oklab, var(--color-accent) 12%, transparent)'
-            : 'var(--color-bg)'}
-          aria-pressed={selected}
-        >
-          {opt.label}
-        </button>
-      {/each}
-    </div>
-  </div>
 </section>
+
+<style>
+  .chev {
+    display: inline-block;
+    transition: transform 0.15s ease;
+  }
+  .chev.open {
+    transform: rotate(90deg);
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.05rem;
+    height: 1.05rem;
+    padding: 0 0.3rem;
+    border-radius: 9999px;
+    background-color: var(--color-accent);
+    color: var(--color-accent-fg, #fff);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1;
+  }
+</style>
