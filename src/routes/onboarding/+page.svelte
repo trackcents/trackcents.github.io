@@ -91,6 +91,13 @@
 
   const showcases = [
     {
+      kicker: 'Spending by category',
+      title: 'See exactly where it went.',
+      body: 'One tap turns your spending into a clear, color-coded picture: every category ranked, with its share and total. Tap any slice to drill into its sub-categories and the transactions behind it.',
+      img: 'shot-categories.png',
+      alt: 'Spending-by-category donut chart with each category color-coded, ranked by amount'
+    },
+    {
       kicker: 'Bills & subscriptions',
       title: 'Never miss a bill again.',
       body: 'Every subscription and bill in one place. trackcents spots recurring charges from your statements, you add your own, mark each one paid, and see what is still due this month.',
