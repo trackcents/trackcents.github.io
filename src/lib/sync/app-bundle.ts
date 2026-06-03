@@ -39,15 +39,18 @@ export const SYNC_BUNDLE_SCHEMA = 'mtrb-sync-bundle/1';
 
 /**
  * Side stores (all localStorage JSON) that must travel with the vault. NOTE the
- * deliberate exclusions: `mtrb.device`, `mtrb.sync.*`, `mtrb.budget.anchor`'s
- * sibling per-device flags and `mtrb.onboarded` are PER-DEVICE and are NOT synced.
+ * deliberate exclusions: `mtrb.device`, `mtrb.sync.*`, `mtrb.onboarded` and
+ * `mtrb.theme` are PER-DEVICE (sync bookkeeping / a UI preference) and are NOT
+ * synced. `trackcents.prefs` (home currency) IS synced — within one account the
+ * currency should match on every device (the "it asked USD again" symptom).
  */
 const SIDE_STORE_KEYS = [
   'mtrb.categorization',
   'mtrb.recurring',
   'mtrb.budgets',
   'mtrb.goals',
-  'mtrb.budget.anchor'
+  'mtrb.budget.anchor',
+  'trackcents.prefs'
 ] as const;
 type SideKey = (typeof SIDE_STORE_KEYS)[number];
 
@@ -165,6 +168,9 @@ function mergeSideStore(key: SideKey, localRaw: string | null, remoteVal: unknow
       break;
     case 'mtrb.budget.anchor':
       merged = remoteVal ?? local; // scalar { year, month }
+      break;
+    case 'trackcents.prefs':
+      merged = remoteVal ?? local; // small prefs object { currency }, remote wins
       break;
     default:
       merged = local;

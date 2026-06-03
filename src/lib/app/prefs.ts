@@ -1,6 +1,8 @@
-// Non-sensitive user preferences (no statement data) — stored UNENCRYPTED in
-// localStorage so they can be applied synchronously at app start, before any
-// money is rendered. Sensitive financial data lives only in the encrypted store.
+// Non-sensitive user preferences (no statement data) — stored in localStorage
+// (key `trackcents.prefs`) so they can be applied synchronously at app start,
+// before any money is rendered. The home currency travels with the synced bundle
+// (sync/app-bundle.ts, task #79) so every device in one account agrees on USD vs
+// INR; it is otherwise read/written only here.
 import { setDisplayCurrency } from '$lib/util/money';
 
 export type CurrencyCode = 'USD' | 'INR';

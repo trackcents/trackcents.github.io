@@ -8,7 +8,7 @@
   import { signIn, isSyncConfigured } from '$lib/sync/drive-auth';
   import { initSyncIfReady, triggerSync } from '$lib/sync/sync-controller';
   import { loadState } from '$lib/db/store';
-  import { CURRENCIES, setCurrencyPref, type CurrencyCode } from '$lib/app/prefs';
+  import { CURRENCIES, setCurrencyPref, applyPrefs, type CurrencyCode } from '$lib/app/prefs';
 
   type Step = 'install' | 'signin' | 'currency' | 'ready';
   let step = $state<Step>('signin');
@@ -29,6 +29,9 @@
       // their data back and goes straight to the app, skipping the setup steps.
       initSyncIfReady();
       await triggerSync().catch(() => {});
+      // The pull may have brought this account's saved currency (USD/INR) down
+      // from another device — apply it before we render any money.
+      applyPrefs();
       const s = await loadState();
       if (s.imports.length > 0) {
         try {

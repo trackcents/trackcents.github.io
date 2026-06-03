@@ -111,15 +111,17 @@ describe('app-bundle merge (task #79 — categories/recurring/budgets/goals sync
     expect(r1.amount_minor).toEqual({ $bigint: '500' });
   });
 
-  test('budgets map, goals array, and the paycheck anchor merge', async () => {
+  test('budgets map, goals array, the paycheck anchor, and currency prefs merge', async () => {
     const remote = await remoteBundleWith({
       'mtrb.budgets': { cat1: '1000', cat2: '2000' },
       'mtrb.goals': [{ id: 'g1', name: 'G1' }],
-      'mtrb.budget.anchor': { year: 2026, month: 6 }
+      'mtrb.budget.anchor': { year: 2026, month: 6 },
+      'trackcents.prefs': { currency: 'INR' }
     });
     localStorage.setItem('mtrb.budgets', JSON.stringify({ cat1: '999', cat3: '3000' }));
     localStorage.setItem('mtrb.goals', JSON.stringify([{ id: 'g0', name: 'G0' }]));
     localStorage.setItem('mtrb.budget.anchor', JSON.stringify({ year: 2025, month: 1 }));
+    localStorage.setItem('trackcents.prefs', JSON.stringify({ currency: 'USD' }));
 
     await applyRemotePayload(remote);
 
@@ -136,6 +138,11 @@ describe('app-bundle merge (task #79 — categories/recurring/budgets/goals sync
     expect(JSON.parse(localStorage.getItem('mtrb.budget.anchor') ?? '{}')).toEqual({
       year: 2026,
       month: 6
+    });
+    // Currency was USD locally; the synced account uses INR — remote wins so the
+    // second device stops defaulting to USD ("it asked the USD question again").
+    expect(JSON.parse(localStorage.getItem('trackcents.prefs') ?? '{}')).toEqual({
+      currency: 'INR'
     });
   });
 
