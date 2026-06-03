@@ -105,11 +105,11 @@
       alt: 'Income split into paychecks, extra, and savings pockets with what is left to spend'
     },
     {
-      kicker: 'Every transaction, sorted',
-      title: 'Months of statements, clear in seconds.',
-      body: 'Drop in a bank or card PDF. Every transaction is parsed on your device, grouped by day, and auto-categorized. Rename, split, or re-tag any of them.',
-      img: 'shot-transactions.png',
-      alt: 'Transactions grouped by day with categories, amounts, and merchant icons'
+      kicker: 'See the big picture',
+      title: 'Know exactly where it goes.',
+      body: 'Once it is all tracked, a live breakdown by category, sub-category, and merchant. Tap any slice to drill from a category down to the transactions behind it.',
+      img: 'shot-dashboard.png',
+      alt: 'Dashboard with a spending-by-category ring chart and money in, out, and net cards'
     }
   ];
 
@@ -187,7 +187,7 @@
 
         <div class="hero-art" aria-hidden="true">
           <div class="phone tilt">
-            <img src="{base}/shot-dashboard.png" alt="" />
+            <img src="{base}/shot-transactions.png" alt="" />
           </div>
         </div>
       </div>
@@ -310,24 +310,26 @@
       <span class="spin" aria-hidden="true"></span>
       Signing in…
     {:else}
-      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-        <path
-          fill="#4285F4"
-          d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"
-        />
-        <path
-          fill="#34A853"
-          d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.71H.96v2.33A9 9 0 0 0 9 18z"
-        />
-        <path
-          fill="#FBBC05"
-          d="M3.97 10.71A5.41 5.41 0 0 1 3.68 9c0-.59.1-1.17.29-1.71V4.96H.96A9 9 0 0 0 0 9c0 1.45.35 2.82.96 4.04l3.01-2.33z"
-        />
-        <path
-          fill="#EA4335"
-          d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.59A9 9 0 0 0 .96 4.96l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"
-        />
-      </svg>
+      <span class="gwrap" aria-hidden="true">
+        <svg width="18" height="18" viewBox="0 0 18 18">
+          <path
+            fill="#4285F4"
+            d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"
+          />
+          <path
+            fill="#34A853"
+            d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.71H.96v2.33A9 9 0 0 0 9 18z"
+          />
+          <path
+            fill="#FBBC05"
+            d="M3.97 10.71A5.41 5.41 0 0 1 3.68 9c0-.59.1-1.17.29-1.71V4.96H.96A9 9 0 0 0 0 9c0 1.45.35 2.82.96 4.04l3.01-2.33z"
+          />
+          <path
+            fill="#EA4335"
+            d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.59A9 9 0 0 0 .96 4.96l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"
+          />
+        </svg>
+      </span>
       Sign in with Google
     {/if}
   </button>
@@ -611,46 +613,61 @@
     color: var(--color-muted);
   }
 
-  /* ── Google sign-in button ── */
+  /* ── Google sign-in button — brand-coloured so it is the unmissable CTA, with
+     the Google G in a white chip so the mark stays recognizable. ── */
   .gbtn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 0.6rem;
+    gap: 0.65rem;
     border-radius: var(--radius-sm);
-    background-color: var(--color-surface);
-    color: var(--color-text);
-    border: 1px solid var(--color-border);
-    box-shadow: var(--shadow);
+    background-image: var(--grad-primary);
+    color: var(--color-accent-fg);
+    border: none;
+    box-shadow: var(--shadow-primary);
     font-weight: 600;
-    font-size: 1rem;
-    padding: 0.85rem 1.5rem;
+    font-size: 1.05rem;
+    padding: 0.5rem 1.6rem 0.5rem 0.5rem;
     cursor: pointer;
     transition:
       transform 0.16s ease,
-      box-shadow 0.16s ease;
+      box-shadow 0.16s ease,
+      filter 0.16s ease;
   }
   .gbtn:hover:not(:disabled) {
-    box-shadow: var(--shadow-md);
-    transform: translateY(-1px);
+    transform: translateY(-2px);
+    filter: brightness(1.05);
+    box-shadow: var(--shadow-md), var(--shadow-primary);
   }
   .gbtn:active:not(:disabled) {
     transform: translateY(0) scale(0.98);
   }
   .gbtn:disabled {
-    opacity: 0.7;
+    opacity: 0.8;
     cursor: default;
+    gap: 0.55rem;
+    padding: 0.8rem 1.6rem;
+  }
+  .gwrap {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    background-color: #fff;
+    flex: none;
   }
   .btn.big {
     padding: 0.85rem 1.75rem;
     font-size: 1rem;
   }
   .spin {
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
     border-radius: 999px;
-    border: 2px solid color-mix(in oklab, var(--color-text) 30%, transparent);
-    border-top-color: var(--color-accent);
+    border: 2px solid rgba(255, 255, 255, 0.45);
+    border-top-color: #fff;
     animation: spin 0.7s linear infinite;
   }
   @keyframes spin {
