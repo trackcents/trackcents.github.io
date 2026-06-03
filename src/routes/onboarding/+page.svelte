@@ -105,11 +105,11 @@
       alt: 'Income split into paychecks, extra, and savings pockets with what is left to spend'
     },
     {
-      kicker: 'See the big picture',
-      title: 'Know exactly where it goes.',
-      body: 'Once it is all tracked, a live breakdown by category, sub-category, and merchant. Tap any slice to drill from a category down to the transactions behind it.',
-      img: 'shot-dashboard.png',
-      alt: 'Dashboard with a spending-by-category ring chart and money in, out, and net cards'
+      kicker: 'Every transaction, sorted',
+      title: 'Every statement, sorted in seconds.',
+      body: 'Drop in a bank or card PDF and every transaction is parsed on your device, grouped by day, and auto-categorized. Rename, split, or re-tag any of them.',
+      img: 'shot-transactions.png',
+      alt: 'Transactions grouped by day with categories, amounts, and merchant icons'
     }
   ];
 
@@ -167,6 +167,13 @@
             Import a bank or card statement and trackcents sorts every transaction, tracks your
             bills, and shows you exactly what is left. Private to you.
           </p>
+          <p class="cta-prompt">
+            {#if syncAvailable}
+              Sign in with Google to start tracking your money, free.
+            {:else}
+              Start tracking your money, free.
+            {/if}
+          </p>
           <div class="cta">
             {#if syncAvailable}
               {@render googleBtn(handleSignIn, signingIn)}
@@ -178,16 +185,16 @@
           </div>
           <p class="microtrust">
             {#if syncAvailable}
-              Free. Open source. Your data lives in your own Google Drive.
+              Open source. No ads. Your data stays in your own Google Drive.
             {:else}
-              Free. Open source. Everything stays on your device.
+              Open source. No ads. Everything stays on your device.
             {/if}
           </p>
         </div>
 
         <div class="hero-art" aria-hidden="true">
           <div class="phone tilt">
-            <img src="{base}/shot-transactions.png" alt="" />
+            <img src="{base}/shot-cashflow.png" alt="" />
           </div>
         </div>
       </div>
@@ -424,8 +431,14 @@
     line-height: 1.6;
     color: var(--color-muted);
   }
+  .cta-prompt {
+    margin-top: 1.5rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text);
+  }
   .cta {
-    margin-top: 1.75rem;
+    margin-top: 0.9rem;
     display: flex;
   }
   .cta.center {
@@ -445,6 +458,62 @@
   }
   .br {
     display: none;
+  }
+
+  /* Hero entrance: copy rises in (staggered), the chart slides up, then floats. */
+  .hero-copy > * {
+    animation: heroRise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .hero-copy > *:nth-child(2) {
+    animation-delay: 0.08s;
+  }
+  .hero-copy > *:nth-child(3) {
+    animation-delay: 0.16s;
+  }
+  .hero-copy > *:nth-child(4) {
+    animation-delay: 0.24s;
+  }
+  .hero-copy > *:nth-child(5) {
+    animation-delay: 0.32s;
+  }
+  .hero-copy > *:nth-child(6) {
+    animation-delay: 0.4s;
+  }
+  @keyframes heroRise {
+    from {
+      opacity: 0;
+      transform: translateY(18px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .hero-art {
+    animation: artIn 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: 0.22s;
+  }
+  @keyframes artIn {
+    from {
+      opacity: 0;
+      transform: translateY(26px) scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .hero-art .phone {
+    animation: float 5.5s ease-in-out 1.1s infinite;
+  }
+  @keyframes float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-9px);
+    }
   }
 
   /* Phone frame */
@@ -679,10 +748,10 @@
   /* ── Scroll reveal (progressive enhancement: only hidden once JS arms it) ── */
   :global(.reveal-armed) {
     opacity: 0;
-    transform: translateY(30px);
+    transform: translateY(46px) scale(0.965);
     transition:
-      opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
-      transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+      opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+      transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
     will-change: opacity, transform;
   }
   :global(.reveal-armed.in) {
@@ -733,6 +802,18 @@
     }
     .phone.tilt {
       transform: perspective(1400px) rotateY(-12deg) rotateX(3deg);
+    }
+    .hero-art .phone.tilt {
+      animation: floatTilt 5.5s ease-in-out 1.1s infinite;
+    }
+    @keyframes floatTilt {
+      0%,
+      100% {
+        transform: perspective(1400px) rotateY(-12deg) rotateX(3deg) translateY(0);
+      }
+      50% {
+        transform: perspective(1400px) rotateY(-12deg) rotateX(3deg) translateY(-12px);
+      }
     }
     .phone {
       max-width: 300px;
