@@ -66,6 +66,7 @@ export default ts.config(
       'node_modules/',
       '.specify/',
       '.claude/',
+      '.agents/',
       'specs/',
       'coverage/',
       'playwright-report/',
