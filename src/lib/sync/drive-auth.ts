@@ -42,8 +42,59 @@ declare global {
   }
 }
 
-let cachedToken: { value: string; expiresAt: number } | null = null;
+interface CachedToken {
+  value: string;
+  expiresAt: number;
+}
+
+// The access token is cached BOTH in memory and in sessionStorage. sessionStorage
+// survives a page reload within the same tab — which matters because "Sync now"
+// reloads the page after a pull (to render freshly-synced stores), and without
+// persistence that reload dropped the in-memory token, so the very next sync had
+// to re-prompt the Google account picker EVERY time. With it, the token is reused
+// across reloads for its full ~1h lifetime, so the picker only appears on the
+// first sign-in (or after the token genuinely expires). Token is short-lived and
+// narrow (drive.file); sessionStorage clears it when the tab closes.
+const TOKEN_CACHE_KEY = 'mtrb.sync.token';
+let cachedToken: CachedToken | null = null;
 let gisLoad: Promise<void> | null = null;
+
+function readCachedToken(): CachedToken | null {
+  if (cachedToken !== null) return cachedToken;
+  if (typeof sessionStorage === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(TOKEN_CACHE_KEY);
+    if (raw === null) return null;
+    const parsed = JSON.parse(raw) as Partial<CachedToken>;
+    if (typeof parsed.value === 'string' && typeof parsed.expiresAt === 'number') {
+      cachedToken = { value: parsed.value, expiresAt: parsed.expiresAt };
+      return cachedToken;
+    }
+  } catch {
+    /* ignore a corrupt/unavailable cache */
+  }
+  return null;
+}
+
+function writeCachedToken(tok: CachedToken): void {
+  cachedToken = tok;
+  if (typeof sessionStorage === 'undefined') return;
+  try {
+    sessionStorage.setItem(TOKEN_CACHE_KEY, JSON.stringify(tok));
+  } catch {
+    /* best-effort — a quota/private-mode failure just means we re-prompt sooner */
+  }
+}
+
+function clearCachedToken(): void {
+  cachedToken = null;
+  if (typeof sessionStorage === 'undefined') return;
+  try {
+    sessionStorage.removeItem(TOKEN_CACHE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 
 /** True when a client ID is configured — i.e. Drive sync is available. */
 export function isSyncConfigured(): boolean {
@@ -52,8 +103,9 @@ export function isSyncConfigured(): boolean {
 
 /** The current access token if one is cached and not (nearly) expired; else null. */
 export function getAccessToken(): string | null {
-  if (cachedToken && Date.now() < cachedToken.expiresAt) {
-    return cachedToken.value;
+  const tok = readCachedToken();
+  if (tok && Date.now() < tok.expiresAt) {
+    return tok.value;
   }
   return null;
 }
@@ -132,10 +184,10 @@ function runTokenClient(silent: boolean): Promise<string> {
             return;
           }
           const ttlMs = (response.expires_in ?? 3600) * 1000;
-          cachedToken = {
+          writeCachedToken({
             value: response.access_token,
             expiresAt: Date.now() + ttlMs - TOKEN_SAFETY_MARGIN_MS
-          };
+          });
           resolve(response.access_token);
         }
       });
@@ -176,8 +228,8 @@ export async function ensureToken(): Promise<string> {
 
 /** Revoke the current token and clear local auth state. */
 export function signOut(): void {
-  const token = cachedToken?.value;
-  cachedToken = null;
+  const token = cachedToken?.value ?? readCachedToken()?.value;
+  clearCachedToken();
   if (token) {
     window.google?.accounts?.oauth2?.revoke(token);
   }
