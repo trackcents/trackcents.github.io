@@ -6,7 +6,7 @@
  * ⚠️ The end-to-end path (GIS consent popup → Drive REST upload) can only be
  * verified in a real browser with a signed-in Google account — see T154.
  */
-import { isSyncConfigured } from './drive-auth';
+import { isSyncConfigured, ensureToken } from './drive-auth';
 import { GoogleDriveProvider } from './drive-blob';
 import { configure, isConfigured, sync } from './sync-engine';
 import { installSyncTriggers } from './triggers';
@@ -29,14 +29,17 @@ export function initSyncIfReady(): boolean {
 }
 
 /**
- * User-facing sync (the "Sync now" button): runs a full sync, and if the
- * provider reports it isn't authenticated yet, kicks off the Google sign-in
- * consent flow once and retries.
+ * User-facing sync (the "Sync now" button). Ensures a valid access token FIRST
+ * (cached, then a silent refresh, then interactive consent) so an expired
+ * in-memory token doesn't trigger a popup mid-sync that desktop browsers block.
+ * If the blob read/write still reports an auth failure, falls back to one
+ * interactive sign-in and retries.
  */
 export async function triggerSync(): Promise<SyncResult> {
   if (!initSyncIfReady()) {
-    throw new Error('sync unavailable — vault locked or no Drive client configured');
+    throw new Error('sync unavailable — no Google Drive client is configured');
   }
+  await ensureToken();
   try {
     return await sync();
   } catch (err) {
