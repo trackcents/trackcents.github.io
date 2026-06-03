@@ -31,7 +31,10 @@
 
   async function syncNow(): Promise<void> {
     try {
-      await triggerSync();
+      const r = await triggerSync();
+      // A pull rewrote the local stores (categories, paychecks, bills, …) under a
+      // page that already read the old ones — reload once so the merged data shows.
+      if (r.pulled && typeof location !== 'undefined') location.reload();
     } catch {
       // The status listener already surfaces the 'error' state; nothing to do.
     }

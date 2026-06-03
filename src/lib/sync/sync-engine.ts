@@ -9,9 +9,8 @@
  * Encryption was removed at the user's request — the blob is plaintext (see the
  * amended Constitution Principle I).
  */
-import { loadState, saveState, serializeState, deserializeState } from '../db/store';
 import { encodeBlobFrame, decodeBlobFrame, BLOB_FORMAT_VERSION } from './blob-format';
-import { mergeState } from './merge';
+import { buildBundleString, applyRemotePayload } from './app-bundle';
 import {
   ConcurrentModificationError,
   type SyncBlob,
@@ -71,6 +70,14 @@ function requireConfigured(): SyncProvider {
 }
 
 const PUSHED_FP_KEY = 'mtrb.sync.pushed_fp';
+// Provider version token (etag-like) of the remote blob we last reconciled with —
+// set on every successful push AND on every applied pull. The pull gate compares
+// the current remote version against it so we only MERGE a blob that genuinely
+// changed since we last saw it. Without this, a pull-before-push (the sync()
+// order) would re-merge our OWN last push and could revert a local edit we hadn't
+// pushed yet (remote-wins side-store merge). With it, a device never reverts its
+// own unpushed edits, and another device's changes still flow in.
+const SYNCED_VERSION_KEY = 'mtrb.sync.remote_version';
 
 /** SHA-256 hex of the serialization — used to skip redundant pushes. */
 async function fingerprint(text: string): Promise<string> {
@@ -84,6 +91,12 @@ function getPushedFp(): string | null {
 }
 function setPushedFp(fp: string): void {
   if (typeof localStorage !== 'undefined') localStorage.setItem(PUSHED_FP_KEY, fp);
+}
+function getSyncedVersion(): string | null {
+  return typeof localStorage !== 'undefined' ? localStorage.getItem(SYNCED_VERSION_KEY) : null;
+}
+function setSyncedVersion(v: string): void {
+  if (typeof localStorage !== 'undefined') localStorage.setItem(SYNCED_VERSION_KEY, v);
 }
 
 function buildBlob(json: string): SyncBlob {
@@ -101,6 +114,17 @@ export async function pull(): Promise<{ pulled: boolean; reason: string }> {
   const p = requireConfigured();
   emit({ state: 'pulling' });
   try {
+    const meta = await p.statBlob();
+    if (meta === null) {
+      idle();
+      return { pulled: false, reason: 'no remote blob yet' };
+    }
+    // Skip when the remote hasn't changed since we last reconciled — so a
+    // pull-before-push never re-applies (and possibly reverts) our own last push.
+    if (meta.version === getSyncedVersion()) {
+      idle();
+      return { pulled: false, reason: 'remote unchanged since last sync' };
+    }
     const blob = await p.readBlob();
     if (blob === null) {
       idle();
@@ -108,9 +132,10 @@ export async function pull(): Promise<{ pulled: boolean; reason: string }> {
     }
     const { payload } = decodeBlobFrame(blob.bytes);
     const json = new TextDecoder().decode(payload);
-    const remoteState = deserializeState(json);
-    // Union, don't overwrite: never lose an unsynced local import (IV&V A1).
-    await saveState(mergeState(await loadState(), remoteState));
+    // Union ALL stores (vault + categories + recurring + budgets + goals + anchor),
+    // don't overwrite: never lose an unsynced local import (IV&V A1) or local edit.
+    await applyRemotePayload(json);
+    setSyncedVersion(meta.version);
     lastSyncAt = new Date().toISOString();
     idle();
     return { pulled: true, reason: 'merged remote blob' };
@@ -124,7 +149,7 @@ export async function push(): Promise<{ pushed: boolean; new_version?: string; r
   const p = requireConfigured();
   emit({ state: 'pushing' });
   try {
-    const json = serializeState(await loadState());
+    const json = await buildBundleString();
     const fp = await fingerprint(json);
     const remote = await p.statBlob();
     // Skip when nothing changed since our last push, so we don't pile up
@@ -135,6 +160,7 @@ export async function push(): Promise<{ pushed: boolean; new_version?: string; r
     }
     const { new_version } = await p.writeBlob(buildBlob(json), remote?.version);
     setPushedFp(fp);
+    setSyncedVersion(new_version);
     lastSyncAt = new Date().toISOString();
     idle();
     return { pushed: true, new_version, reason: 'uploaded' };

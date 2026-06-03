@@ -192,6 +192,11 @@
       syncMsg = `Synced. ${r.pulled ? 'Pulled remote changes. ' : ''}${
         r.pushed ? 'Uploaded your data.' : 'Already up to date.'
       }`;
+      // A pull rewrote the local stores (categories, paychecks, bills, …); reload
+      // shortly so every page picks up the merged data instead of the stale copy.
+      if (r.pulled && typeof location !== 'undefined') {
+        setTimeout(() => location.reload(), 900);
+      }
     } catch (e) {
       syncMsg = `Sync failed: ${e instanceof Error ? e.message : String(e)}`;
     } finally {

@@ -1,8 +1,9 @@
 /**
  * Persistence for the user-owned Recurring (bills + subscriptions) list
- * (spec 002-income-pockets §7.5–§7.10). Local-only, stored as plaintext JSON
- * (reuses store-crypto, like the other stores), kept separate from the synced
- * vault — same pattern + caveats as categorization-store.
+ * (spec 002-income-pockets §7.5–§7.10). Stored as plaintext JSON (reuses
+ * store-crypto, like the other stores) in its own localStorage key; it now
+ * SYNCS across devices via the bundle in sync/app-bundle.ts (task #79) — items
+ * and sections union-merge by id — same pattern as categorization-store.
  *
  * `RecurringItem.amount_minor` / `paid_minor` are bigint cents, so we round-trip
  * bigints through the same `{ "$bigint": "<decimal>" }` sentinel as the

@@ -1,9 +1,9 @@
 /**
  * Persistence for savings goals (US-P4-B), in its own local store key
  * (`mtrb.goals`), stored as plaintext JSON via store-crypto. Kept
- * separate from the synced vault + categorization (like budgets, DECISIONS D14);
- * cross-device sync folds into the future synced-blob task (#79). Money is bigint
- * cents, serialized as decimal strings.
+ * separate from the synced vault + categorization (like budgets, DECISIONS D14).
+ * Now SYNCED across devices via sync/app-bundle.ts (task #79) — goals union-merge
+ * by id. Money is bigint cents, serialized as decimal strings.
  */
 import { encodeStateForStorage, decodeStateFromStorage } from './store-crypto';
 import type { SavingsGoal } from '../app/savings-goal';

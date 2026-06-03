@@ -5,9 +5,11 @@
  * passphrase/encryption layer was removed at the user's request — see amended
  * Constitution Principle I).
  *
- * v1 limitation (documented): categorization is LOCAL-ONLY — it does not yet sync
- * across devices. Folding these fields into the synced blob (and re-running the
- * sync IV&V on the extended merge) is a deliberate later increment (task #79).
+ * Cross-device sync (task #79, DONE): this store is now folded into the synced
+ * blob by `sync/app-bundle.ts` — its categories, rules, annotations and pockets
+ * union-merge across devices alongside the main vault. It still lives in its own
+ * localStorage key (separate from the IV&V-signed PersistedState merge); the
+ * bundle merges it as opaque JSON, so this file's read/write path is unchanged.
  */
 import { encodeStateForStorage, decodeStateFromStorage } from './store-crypto';
 import type { Category, CategoryRule, TransactionAnnotation } from '../app/categorization';

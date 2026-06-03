@@ -2,8 +2,8 @@
  * Persistence for per-category monthly budget limits (US-P4-A), kept SEPARATE
  * from the categorization store and the synced vault (DECISIONS D14) so it does
  * not touch the IV&V-signed-off merge/backup schemas. Stored as plaintext JSON
- * via store-crypto. Local-only for now (cross-device sync of
- * budgets folds into the future synced-blob task, like categorization #79).
+ * via store-crypto. Now SYNCED across devices via sync/app-bundle.ts (task #79) —
+ * the per-category limit map shallow-merges, remote-wins on a shared category.
  *
  * Limits are bigint cents (constitution II), serialized as decimal strings.
  */

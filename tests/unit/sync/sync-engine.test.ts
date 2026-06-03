@@ -67,9 +67,19 @@ afterEach(() => {
 });
 
 describe('sync-engine (plaintext)', () => {
-  test('push uploads the framed plaintext state; pull applies it back', async () => {
+  test('push uploads the framed bundle (vault + side stores); a fresh device pulls + applies it', async () => {
     const provider = new MockProvider();
     engine.configure(provider);
+
+    // Device A has a category in the previously-local-only categorization store.
+    localStorage.setItem(
+      'mtrb.categorization',
+      JSON.stringify({
+        categories: [{ id: 'food', name: 'Food', color: '#f00' }],
+        rules: [],
+        annotations: {}
+      })
+    );
 
     const pushed = await engine.push();
     expect(pushed.pushed).toBe(true);
@@ -77,13 +87,32 @@ describe('sync-engine (plaintext)', () => {
     const stored = provider.blob;
     expect(stored).not.toBeNull();
     if (stored === null) throw new Error('expected a stored blob');
-    // Plaintext now: the JSON is visible in the blob bytes (after the 8-byte header).
-    expect(new TextDecoder().decode(stored.bytes)).toContain('reconciliation_links');
+    // Plaintext bundle: the JSON is visible in the blob bytes (after the 8-byte header).
+    const decoded = new TextDecoder().decode(stored.bytes);
+    expect(decoded).toContain('reconciliation_links'); // main vault travels
+    expect(decoded).toContain('mtrb.categorization'); // side store travels (task #79)
+    expect(decoded).toContain('Food');
     expect(stored.sidecar.blob_version).toBeGreaterThan(0);
     expect(stored.sidecar.last_writer_device.length).toBeGreaterThan(0);
 
-    const pulled = await engine.pull(); // decode + deserialize must succeed (no throw)
+    // Simulate a FRESH device B: it hasn't reconciled this remote version, and it
+    // has no categories of its own yet.
+    localStorage.removeItem('mtrb.categorization');
+    localStorage.removeItem('mtrb.sync.remote_version');
+
+    const pulled = await engine.pull();
     expect(pulled.pulled).toBe(true);
+    // The category arrived — the bug the user hit ("everything needs a category"
+    // on the second device) is fixed.
+    expect(localStorage.getItem('mtrb.categorization')).toContain('Food');
+  });
+
+  test('pull is a no-op when the remote has not changed since our last sync', async () => {
+    const provider = new MockProvider();
+    engine.configure(provider);
+    await engine.push(); // we are now reconciled with the remote we just wrote
+    const pulled = await engine.pull(); // same remote version → nothing to re-apply
+    expect(pulled.pulled).toBe(false);
   });
 
   test('pull is a no-op when no remote blob exists yet', async () => {
