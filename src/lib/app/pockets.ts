@@ -31,6 +31,7 @@ import type { ImportRecord } from '../db/store';
 import { transactionCategoryKey, type TransactionAnnotation } from './categorization';
 import { INCOME_INTENTS, inferAllFlowIntents, type FlowIntent } from './flow-intent';
 import { flowIntentRowsFromImports, type SpendableFlowOptions } from './categorization-glue';
+import type { PaymentRecord } from './recurring-items';
 
 /** A named income box. `logo` is an emoji; `color` is an app token name. */
 export interface Pocket {
@@ -140,7 +141,18 @@ export function pocketSummariesForMonth(
    * CARRIED-IN (never "new this month"), so the pocket "remaining" reflects the
    * real account balance, not just income−out since the first statement.
    */
-  startingBalanceMinor: bigint = 0n
+  startingBalanceMinor: bigint = 0n,
+  /**
+   * Recurring bills/subscriptions the user has marked PAID (flattened payment
+   * records across all items). Each is real money out, so it draws down the
+   * pocket it was paid from — even when there's NO matching bank row (a manual
+   * bill, or a statement not yet imported). Tagged by the budget month it covers.
+   *
+   * NOTE (known limitation, manual↔statement reconciliation is deferred): if the
+   * SAME charge is BOTH on an imported statement AND marked paid here, it draws
+   * the pocket twice. Track a given bill one way or the other until linking lands.
+   */
+  recurringPayments: readonly PaymentRecord[] = []
 ): PocketSummary[] {
   const ordered = [...pockets].sort((a, b) => a.order - b.order);
   // Defensive: an empty pocket list would lose all routing — fall back to defaults.
@@ -227,6 +239,17 @@ export function pocketSummariesForMonth(
         }
       }
     });
+  }
+
+  // Recurring bills/subscriptions marked PAID also draw down their pocket. Each
+  // payment is positive cents tagged with the budget month it covers and the
+  // pocket it came from — current month → this month's "used", earlier months →
+  // "used before" (so it folds into carry-in), future → not in this view.
+  for (const pay of recurringPayments) {
+    if (pay.month > month) continue;
+    const a = acc.get(resolvePocket(pay.paid_from))!;
+    if (pay.month === month) a.usedThis += pay.amount_minor;
+    else a.usedBefore += pay.amount_minor;
   }
 
   // Seed the pre-tracking balance into the main pot as carried-in money. It's

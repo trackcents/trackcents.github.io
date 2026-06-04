@@ -56,9 +56,25 @@
   const showCategory = $derived(onAssignCategory !== undefined);
   const showActions = $derived(onUpdateAnnotation !== undefined);
 
+  /** True for a manual quick-add left UNNAMED — its description defaults to the
+   *  word "Expense"/"Income" (optionally time-prefixed, e.g. "12:30 PM · Expense"). */
+  function isPlaceholderDesc(desc: string): boolean {
+    const tail = desc.includes('·') ? desc.slice(desc.lastIndexOf('·') + 1) : desc;
+    return /^(expense|income)$/i.test(tail.trim());
+  }
+
   function displayName(r: UnifiedRow): string {
     const cn = annotationFor?.(r)?.custom_name;
-    return cn !== undefined && cn !== '' ? cn : r.description;
+    if (cn !== undefined && cn !== '') return cn;
+    // An unnamed manual entry shows the generic word "Expense"/"Income". If the
+    // user DID pick a (sub-)category, show THAT as the row's name instead — the
+    // sub-category is the title, its parent category the subtitle (Bug fix: the
+    // user wanted the sub-category name to appear, not the word "Expense").
+    if (isPlaceholderDesc(r.description)) {
+      const leaf = currentCatName(r);
+      if (leaf !== 'Uncategorized') return leaf;
+    }
+    return r.description;
   }
   function isIgnored(r: UnifiedRow): boolean {
     return annotationFor?.(r)?.ignored === true;
@@ -138,6 +154,28 @@
     const id = categoryFor?.(r) ?? null;
     if (id === null) return 'Uncategorized';
     return categories.find((c) => c.id === id)?.name ?? id;
+  }
+
+  /** The PARENT category's name when this row's category is a sub-category, else
+   *  null (top-level category or uncategorized). */
+  function parentCatName(r: UnifiedRow): string | null {
+    const id = categoryFor?.(r) ?? null;
+    const leaf = id === null ? undefined : categories.find((c) => c.id === id);
+    const pid = leaf?.parent_id;
+    if (pid === undefined || pid === '') return null;
+    return categories.find((c) => c.id === pid)?.name ?? null;
+  }
+
+  /** The subtitle shown under a row's name. When the NAME already shows the
+   *  sub-category (an unnamed manual entry), the subtitle is the PARENT category;
+   *  for a normal merchant row it's the (sub-)category as before. '' = render none. */
+  function secondaryCatLabel(r: UnifiedRow): string {
+    const nameShowsCategory =
+      (annotationFor?.(r)?.custom_name ?? '') === '' &&
+      isPlaceholderDesc(r.description) &&
+      currentCatName(r) !== 'Uncategorized';
+    if (nameShowsCategory) return parentCatName(r) ?? '';
+    return currentCatName(r);
   }
 
   function amountColor(r: UnifiedRow): string {
@@ -613,7 +651,9 @@
           {/if}
         </div>
         <div class="mt-0.5 flex items-center gap-1.5 text-xs text-[var(--color-muted)]">
-          <span class="truncate">{currentCatName(r)}</span>
+          {#if secondaryCatLabel(r) !== ''}
+            <span class="truncate">{secondaryCatLabel(r)}</span>
+          {/if}
           {#if multiAccount}
             <span class="acct-chip shrink-0">{accountChip(r)}</span>
           {/if}

@@ -38,6 +38,7 @@
   import { categoryColor, categoryIconName } from '$lib/app/category-visuals';
   import { goalProgress, type SavingsGoal } from '$lib/app/savings-goal';
   import { loadGoals } from '$lib/db/goals-store';
+  import { loadRecurring, type RecurringState } from '$lib/db/recurring-store';
   import { formatMoney } from '$lib/util/money';
   import CategoryIcon from '$components/CategoryIcon.svelte';
   import PocketCards from '$components/PocketCards.svelte';
@@ -60,6 +61,7 @@
   let imports = $state<ImportRecord[]>([]);
   let cat = $state<CategorizationState>({ categories: [], rules: [], annotations: {} });
   let goals = $state<SavingsGoal[]>([]);
+  let recurring = $state<RecurringState>({ items: [], sections: [] });
   /** The pocket whose per-pocket "manage" sheet is open (null = closed). */
   let managePocketId = $state<string | null>(null);
   /** Paycheck-window anchor (which month the first paycheck funds) + the confirm sheet. */
@@ -70,6 +72,7 @@
     imports = (await loadState()).imports;
     cat = await loadCategorization();
     goals = await loadGoals();
+    recurring = await loadRecurring();
     payAnchor = loadAnchor();
     loading = false;
     // Auto-seed the starter category + rule set (REQ-B0.2) whenever the
@@ -352,6 +355,12 @@
   // Money already in the bank before tracking began (earliest statement opening
   // balance) — so a pocket's "remaining" is the real balance, not just income−out.
   const startingBalance = $derived(startingLiquidBalanceMinor(imports));
+  // Recurring bills/subscriptions marked PAID draw down their pocket too (real
+  // money out even with no matching bank row). Flatten every non-archived item's
+  // payment history; pocketSummariesForMonth attributes each to its budget month.
+  const recurringPayments = $derived(
+    recurring.items.filter((it) => it.archived !== true).flatMap((it) => it.payments)
+  );
   const activePocketSummaries = $derived(
     pocketSummariesForMonth(
       imports,
@@ -360,7 +369,8 @@
       activePockets,
       {},
       salaryMonths,
-      startingBalance
+      startingBalance,
+      recurringPayments
     )
   );
   // Offer the one-time paycheck setup when we detect a cadence but have no anchor.

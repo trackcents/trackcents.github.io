@@ -439,6 +439,77 @@ describe('robustness', () => {
   });
 });
 
+describe('recurring payments draw down their pocket (Bug: paid bill not deducted)', () => {
+  // A $25 subscription marked PAID from Paychecks in May, plus a $200 bill paid
+  // from Paychecks in April (a prior month), plus a $40 bill paid from Extra.
+  const payments = [
+    { month: '2026-05', amount_minor: 25_00n, paid_date: '2026-05-03', paid_from: 'paychecks' },
+    { month: '2026-04', amount_minor: 200_00n, paid_date: '2026-04-10', paid_from: 'paychecks' },
+    { month: '2026-05', amount_minor: 40_00n, paid_date: '2026-05-06', paid_from: 'extra' }
+  ];
+
+  test('a subscription marked paid in May reduces Paychecks remaining by $25', () => {
+    const base = pocket(
+      pocketSummariesForMonth([may], {}, '2026-05', DEFAULT_POCKETS),
+      'paychecks'
+    );
+    const withPay = pocket(
+      pocketSummariesForMonth([may], {}, '2026-05', DEFAULT_POCKETS, {}, new Map(), 0n, payments),
+      'paychecks'
+    );
+    // base used = $75 (Costco 100 − 25 refund); now + $25 sub + $200 April bill
+    // (a prior month → carry-in) — this month's "used" rises by just the $25.
+    expect(withPay.used).toBe(base.used + 25_00n);
+    expect(withPay.remaining).toBe(base.remaining - 25_00n - 200_00n);
+  });
+
+  test('a payment tagged paid_from = Extra draws from Extra, not Paychecks', () => {
+    const sums = pocketSummariesForMonth(
+      [may],
+      {},
+      '2026-05',
+      DEFAULT_POCKETS,
+      {},
+      new Map(),
+      0n,
+      payments
+    );
+    expect(pocket(sums, 'extra').used).toBe(40_00n);
+    expect(pocket(sums, 'extra').remaining).toBe(500_00n - 40_00n); // $500 gift − $40
+  });
+
+  test('a prior-month payment lands in carry-in (used-before), not this month', () => {
+    const sums = pocketSummariesForMonth(
+      [may],
+      {},
+      '2026-05',
+      DEFAULT_POCKETS,
+      {},
+      new Map(),
+      0n,
+      payments
+    );
+    // April $200 reduces the Paychecks carry-in; May income is $3,000, May used is
+    // $75 + $25 = $100 → remaining = 3000 − 100 − 200 = $2,700.
+    expect(pocket(sums, 'paychecks').remaining).toBe(2700_00n);
+  });
+
+  test('a future-month payment is not counted in this view', () => {
+    const future = [
+      { month: '2026-09', amount_minor: 99_00n, paid_date: '2026-09-01', paid_from: 'paychecks' }
+    ];
+    const withFuture = pocket(
+      pocketSummariesForMonth([may], {}, '2026-05', DEFAULT_POCKETS, {}, new Map(), 0n, future),
+      'paychecks'
+    );
+    const base = pocket(
+      pocketSummariesForMonth([may], {}, '2026-05', DEFAULT_POCKETS),
+      'paychecks'
+    );
+    expect(withFuture.remaining).toBe(base.remaining);
+  });
+});
+
 describe('CONSERVATION — pockets reconcile with spendableFlowByMonth', () => {
   test('Σ newIncome across pockets == headline income for the month', () => {
     const sums = pocketSummariesForMonth([may], {}, '2026-05', DEFAULT_POCKETS);
