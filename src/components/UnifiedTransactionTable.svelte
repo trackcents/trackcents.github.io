@@ -37,6 +37,9 @@
     // in the expanded row only when onUpdateAnnotation is wired (US-P3-E + T-R2).
     annotationFor?: (r: UnifiedRow) => TransactionAnnotation | undefined;
     onUpdateAnnotation?: (r: UnifiedRow, patch: Partial<TransactionAnnotation>) => void;
+    // Delete a row (only offered for manually-added transactions; statement rows
+    // use "Exclude from spending" instead). When wired, a Delete action appears.
+    onDelete?: (r: UnifiedRow) => void;
     // Candidate original purchases (outflows) a refund can be linked to (US-P3-C).
     // key = the stable annotation key (`<pdf_source_hash>#<txIndex>`).
     refundCandidates?: Array<{ key: string; label: string }>;
@@ -50,11 +53,31 @@
     onAssignCategory,
     annotationFor,
     onUpdateAnnotation,
+    onDelete,
     refundCandidates = []
   }: Props = $props();
 
   const showCategory = $derived(onAssignCategory !== undefined);
   const showActions = $derived(onUpdateAnnotation !== undefined);
+
+  /** Only manually-added transactions can be deleted as a unit (a statement row
+   *  belongs to a multi-row import). Two-tap confirm to avoid an accidental tap. */
+  function canDelete(r: UnifiedRow): boolean {
+    return onDelete !== undefined && r.adapter_name === 'manual';
+  }
+  let pendingDeleteKey = $state<string | null>(null);
+  function rowDeleteKey(r: UnifiedRow): string {
+    return `${r.pdf_source_hash}#${r.transaction_index}`;
+  }
+  function onDeleteClick(r: UnifiedRow): void {
+    const k = rowDeleteKey(r);
+    if (pendingDeleteKey === k) {
+      pendingDeleteKey = null;
+      onDelete?.(r);
+    } else {
+      pendingDeleteKey = k;
+    }
+  }
 
   /** True for a manual quick-add left UNNAMED — its description defaults to the
    *  word "Expense"/"Income" (optionally time-prefixed, e.g. "12:30 PM · Expense"). */
@@ -156,26 +179,25 @@
     return categories.find((c) => c.id === id)?.name ?? id;
   }
 
-  /** The PARENT category's name when this row's category is a sub-category, else
-   *  null (top-level category or uncategorized). */
-  function parentCatName(r: UnifiedRow): string | null {
-    const id = categoryFor?.(r) ?? null;
-    const leaf = id === null ? undefined : categories.find((c) => c.id === id);
-    const pid = leaf?.parent_id;
-    if (pid === undefined || pid === '') return null;
-    return categories.find((c) => c.id === pid)?.name ?? null;
-  }
-
-  /** The subtitle shown under a row's name. When the NAME already shows the
-   *  sub-category (an unnamed manual entry), the subtitle is the PARENT category;
-   *  for a normal merchant row it's the (sub-)category as before. '' = render none. */
+  /** The subtitle under a row's name — shows BOTH the category and sub-category
+   *  (Hemanth: "in small names the category and sub category also has to be
+   *  visible"). For a normal/named row that's the full "Category › Sub-category"
+   *  path. For an UNNAMED manual entry the name already shows the sub-category, so
+   *  the subtitle is just the parent category (together they read Category / Sub).
+   *  '' = nothing to show (top-level category on an unnamed manual row). */
   function secondaryCatLabel(r: UnifiedRow): string {
-    const nameShowsCategory =
-      (annotationFor?.(r)?.custom_name ?? '') === '' &&
-      isPlaceholderDesc(r.description) &&
-      currentCatName(r) !== 'Uncategorized';
-    if (nameShowsCategory) return parentCatName(r) ?? '';
-    return currentCatName(r);
+    const id = categoryFor?.(r) ?? null;
+    if (id === null) return 'Uncategorized';
+    const leaf = categories.find((c) => c.id === id);
+    if (leaf === undefined) return id;
+    const parent =
+      leaf.parent_id !== undefined && leaf.parent_id !== ''
+        ? categories.find((c) => c.id === leaf.parent_id)
+        : undefined;
+    const nameShowsSub =
+      (annotationFor?.(r)?.custom_name ?? '') === '' && isPlaceholderDesc(r.description);
+    if (nameShowsSub) return parent?.name ?? '';
+    return parent !== undefined ? `${parent.name} › ${leaf.name}` : leaf.name;
   }
 
   function amountColor(r: UnifiedRow): string {
@@ -343,14 +365,22 @@
           />
           <span>Exclude from spending</span>
         </label>
-        <label class="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={isRecurring(r)}
-            onchange={(e) => onUpdateAnnotation?.(r, { is_recurring: e.currentTarget.checked })}
-          />
-          <span>Mark as recurring</span>
-        </label>
+        <!-- The old per-row "Mark as recurring" toggle was removed: it only painted
+             a ↻ icon and did NOT connect to the Recurring tab, which confused
+             Hemanth. Recurring bills live on the Recurring tab. -->
+        {#if canDelete(r)}
+          <button
+            type="button"
+            class="ml-auto rounded-md border px-2.5 py-1 text-xs font-medium transition-colors"
+            style:border-color={pendingDeleteKey === rowDeleteKey(r)
+              ? 'var(--color-danger)'
+              : 'var(--color-border)'}
+            style:color="var(--color-danger)"
+            onclick={() => onDeleteClick(r)}
+          >
+            {pendingDeleteKey === rowDeleteKey(r) ? 'Tap to confirm' : 'Delete'}
+          </button>
+        {/if}
       </div>
 
       {#if r.amount_minor > 0n && refundCandidates.length > 0}

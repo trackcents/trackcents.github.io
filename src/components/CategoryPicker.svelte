@@ -281,23 +281,32 @@
     addSubName = '';
     addSubIcon = '';
   }
-  /** Create the sub and KEEP the input open + focused so the user can add
-   *  several in a row (Breakfast, Lunch, Dinner, Snacks) without re-tapping.
-   *  The parent stays expanded so the just-added sub appears immediately under
-   *  it — fixing "after adding, the category minimized / I can't see what
-   *  happened". Tap ✕ / Done to finish. */
+  /** Create the sub, then CLOSE the add row and DISMISS the keyboard so the
+   *  just-added sub is actually visible (Hemanth: "after adding a sub-category the
+   *  keyboard doesn't minimise and the new sub hides under it, I have to scroll").
+   *  The parent stays expanded so the new sub shows under it, and it's scrolled
+   *  into view. Tap "+ sub" again to add another. */
   function submitAddSub(): void {
     if (onCreate === undefined || addSubParentId === null) return;
     const name = addSubName.trim();
     if (name.length === 0) return;
     const parentId = addSubParentId;
     onCreate(name, parentId, addSubIcon === '' ? undefined : addSubIcon);
+    // Dismiss the keyboard first (blur the input while it still exists)…
+    try {
+      addSubInputEl?.blur();
+      if (typeof document !== 'undefined') (document.activeElement as HTMLElement | null)?.blur();
+    } catch {
+      /* noop */
+    }
+    // …then close the add row and reveal the new sub under its (expanded) parent.
+    addSubParentId = null;
     addSubName = '';
     addSubIcon = '';
     expandedIds = new Set(expandedIds).add(parentId);
     tick().then(() => {
       try {
-        addSubInputEl?.focus();
+        document.querySelector(`[data-cat-id="${parentId}"]`)?.scrollIntoView({ block: 'nearest' });
       } catch {
         /* noop */
       }
@@ -462,7 +471,12 @@
         {@const depth = row.depth}
         {@const kidCount = row.kidCount}
         {@const isChild = depth > 0}
-        <div class="row" class:selected={c.id === selectedId} class:child={isChild}>
+        <div
+          class="row"
+          class:selected={c.id === selectedId}
+          class:child={isChild}
+          data-cat-id={c.id}
+        >
           <button
             type="button"
             class="row-main"

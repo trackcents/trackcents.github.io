@@ -17,6 +17,8 @@
   import { detectTransfers, type TransferTxn } from '$lib/app/transfer-detector';
   import { suggestRefundLinks } from '$lib/app/refund-match';
   import type { ImportRecord } from '$lib/db/store';
+  import { removeImport } from '$lib/db/store';
+  import { MANUAL_ADAPTER_NAME } from '$lib/app/manual-entry';
   import { formatMoney } from '$lib/util/money';
   import {
     toUnifiedRows,
@@ -85,6 +87,23 @@
     }
     annotations = Object.fromEntries(next);
     await saveCategorization({ categories, rules, annotations });
+  }
+
+  /** Delete a manually-added transaction. Each manual entry is its own
+   *  single-transaction import (hash `manual-<id>`), so removing that import
+   *  deletes exactly this row; its annotation is dropped too. Statement rows are
+   *  not deletable here (the table only offers Delete for manual rows). */
+  async function deleteRow(r: UnifiedRow): Promise<void> {
+    if (r.adapter_name !== MANUAL_ADAPTER_NAME) return;
+    await removeImport(r.pdf_source_hash);
+    const k = rowKey(r);
+    if (annotations[k] !== undefined) {
+      const next = { ...annotations };
+      delete next[k];
+      annotations = next;
+      await saveCategorization({ categories, rules, annotations });
+    }
+    await refreshAfterSave({ learned: false });
   }
 
   // ── Manual transaction entry — uses the same QuickAddSheet as Home, so the
@@ -548,6 +567,7 @@
       onAssignCategory={assignCategory}
       annotationFor={annotationForRow}
       onUpdateAnnotation={updateAnnotation}
+      onDelete={deleteRow}
       {refundCandidates}
     />
   {/if}

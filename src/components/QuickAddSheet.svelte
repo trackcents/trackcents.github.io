@@ -113,6 +113,12 @@
   let time = $state('');
   let desc = $state('');
   let note = $state('');
+  /** Optional user-given NAME for the transaction. Empty → the row shows the
+   *  sub-category as its name (the agreed default). */
+  let name = $state('');
+  /** True while the Notes textarea is focused — keeps Notes visible even when the
+   *  keyboard-open compaction would otherwise hide it (so tapping Notes works). */
+  let notesFocused = $state(false);
   let amount = $state('');
   let direction = $state<Direction>('expense');
   let account = $state('Cash');
@@ -223,6 +229,7 @@
         time = '';
         desc = '';
         note = '';
+        name = '';
         amount = '';
         direction = initialType;
         account = defaultAccount(initialType);
@@ -434,6 +441,13 @@
     userTouchedAccount = true;
   }
 
+  /** Fill TIME with the current clock time (the "Now" tick). */
+  function setTimeNow(): void {
+    const d = new Date();
+    time = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    userTouchedTime = true;
+  }
+
   async function save(): Promise<void> {
     error = null;
     saving = true;
@@ -451,7 +465,11 @@
         return;
       }
       const signed = direction === 'income' ? abs : -abs;
-      const baseDesc = desc.trim() || direction.charAt(0).toUpperCase() + direction.slice(1);
+      // Name wins; else the smart "what you spent" text; else the generic word
+      // ("Expense"/"Income") — which the transactions list renders as the chosen
+      // sub-category instead (the agreed default-name behaviour).
+      const baseDesc =
+        name.trim() || desc.trim() || direction.charAt(0).toUpperCase() + direction.slice(1);
       const parsedTime = parseFreeFormTime(time);
       const finalDesc = parsedTime && parsedTime !== '' ? `${parsedTime} · ${baseDesc}` : baseDesc;
       const accountFinal = account || defaultAccount(direction);
@@ -594,6 +612,7 @@
   <div
     class="qas-sheet"
     class:keyboard-open={keyboardOpen}
+    class:notes-focused={notesFocused}
     role="dialog"
     aria-modal="true"
     aria-label={title}
@@ -648,6 +667,21 @@
           oninput={() => (userTouchedAmount = true)}
         />
       </div>
+
+      <!-- Name — optional. Empty → the list shows the chosen sub-category as the
+           name; type one to override (Hemanth: "give an option to add a Name"). -->
+      <label class="qas-block qas-name-block">
+        <span class="qas-lbl"
+          >Name <span class="qas-opt">(optional — defaults to the sub-category)</span></span
+        >
+        <input
+          type="text"
+          bind:value={name}
+          placeholder="e.g. Lunch with team"
+          class="qas-field"
+          autocomplete="off"
+        />
+      </label>
 
       <!-- Category + Account in one row — the original pre-sub-category
            layout.  Sub-category as a separate field was tried and then
@@ -725,7 +759,11 @@
           />
         </label>
         <div class="qas-block">
-          <span class="qas-lbl">Time <span class="qas-opt">(optional)</span></span>
+          <span class="qas-lbl-row">
+            <span class="qas-lbl">Time <span class="qas-opt">(optional)</span></span>
+            <!-- One-tap "Now" — fills the current clock time (Hemanth's ask). -->
+            <button type="button" class="qas-now-btn" onclick={setTimeNow}>Now</button>
+          </span>
           <!-- Segmented HH : MM AM/PM control — no typing the colon, AM/PM is
              a tappable toggle.  Two-way bound to the 24-hour `time` string,
              which both the NL autofill and the save path already speak. -->
@@ -743,6 +781,12 @@
           class="qas-field qas-notes"
           rows="2"
           autocomplete="off"
+          onfocus={(e) => {
+            notesFocused = true;
+            // Bring Notes above the keyboard once the compaction settles.
+            setTimeout(() => e.currentTarget?.scrollIntoView({ block: 'center' }), 80);
+          }}
+          onblur={() => (notesFocused = false)}
         ></textarea>
       </label>
     </div>
@@ -1002,6 +1046,27 @@
     font-weight: 500;
     text-transform: none;
     letter-spacing: 0;
+  }
+  /* Time label row: the "Now" tick sits to the right of the TIME label. */
+  .qas-lbl-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+  .qas-now-btn {
+    margin-bottom: 0.25rem;
+    padding: 0.05rem 0.5rem;
+    border-radius: 999px;
+    border: 1px solid var(--color-accent);
+    background: var(--color-accent-soft);
+    color: var(--color-accent);
+    font-size: 0.68rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .qas-now-btn:active {
+    transform: scale(0.96);
   }
   .qas-field {
     width: 100%;
@@ -1369,10 +1434,11 @@
     justify-content: flex-end;
     min-height: 0;
   }
-  /* Notes is optional ("for future you").  Hide it while typing so
-     Date / Time and Save are reachable; user can dismiss the keyboard
-     to access Notes when they actually want to add one. */
-  .qas-sheet.keyboard-open .qas-notes-block {
+  /* Notes is optional ("for future you").  Hide it while typing in another
+     field so Date / Time and Save are reachable — BUT keep it visible when the
+     user is actually focused in Notes (otherwise focusing it opens the keyboard,
+     which hides it, which drops focus → the keyboard never opens: Hemanth's bug). */
+  .qas-sheet.keyboard-open:not(.notes-focused) .qas-notes-block {
     display: none;
   }
   /* Tighten the Amount + dropdown heights so the saved-pixels add up. */
