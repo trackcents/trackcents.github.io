@@ -93,6 +93,29 @@ html {
   scrollbar-gutter: stable;
   /* Stop the rubber-band horizontal pan that can reveal sub-pixel overflow. */
   overscroll-behavior-x: none;
+  /* Don't let iOS/Android auto-inflate text in landscape or on reflow — we set
+     sizes deliberately. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* ── iOS "zoom in on input focus" guard (reported on iPhone: "appears zoomed in,
+   have to pinch out every time") ──
+   iOS Safari ZOOMS THE WHOLE PAGE IN whenever a focused <input>/<select>/<textarea>
+   has a computed font-size < 16px, and never zooms back. While zoomed, `position:
+   fixed` anchors to the LAYOUT viewport, so the bottom nav floats into the middle
+   of the screen (the other reported glitch). Forcing 16px on the actual text
+   controls removes the trigger entirely — far better than `maximum-scale=1`, which
+   would disable pinch-zoom (an accessibility regression).
+   UNLAYERED on purpose: it must beat Tailwind's layered `.text-sm`/`.text-xs`
+   utilities that some fields carry. Phones/tablets only; desktop never zoom-traps.
+   Checkbox/radio/range carry no text, so they're excluded. */
+@media (max-width: 1023.98px) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
 body {

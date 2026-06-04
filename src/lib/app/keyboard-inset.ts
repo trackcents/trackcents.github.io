@@ -44,12 +44,21 @@ export function installKeyboardInsetTracker(): void {
   installed = true;
   const root = document.documentElement;
   function update(): void {
-    if (!window.visualViewport) return;
-    // Difference between the layout viewport (innerHeight) and the visual
-    // viewport (visualViewport.height) ≈ the part covered by the keyboard
-    // (plus tiny browser chrome on some Android skins).  Clamp at 0 so
-    // pull-to-refresh overscroll doesn't push the sheet up.
-    const inset = Math.max(0, window.innerHeight - window.visualViewport.height);
+    const v = window.visualViewport;
+    if (!v) return;
+    // When the user has PINCH-ZOOMED (scale != 1), the visual viewport shrinks
+    // from the zoom — not the keyboard — so `innerHeight - height` is dominated
+    // by the zoom and would over-lift the sheet (the reported iPhone gap above
+    // the keyboard). Don't trust the inset while zoomed; the 16px input rule
+    // means a tap no longer zooms, so this is belt-and-braces.
+    if ((v.scale ?? 1) > 1.01) {
+      root.style.setProperty('--kb-inset-bottom', '0px');
+      return;
+    }
+    // Keyboard height ≈ layout viewport minus the visible viewport and its
+    // offset from the top. Clamp at 0 so pull-to-refresh overscroll (which can
+    // make the difference momentarily negative/odd) never pushes the sheet up.
+    const inset = Math.max(0, window.innerHeight - v.height - v.offsetTop);
     root.style.setProperty('--kb-inset-bottom', `${inset}px`);
   }
   // Fire once so the variable exists from the start.
