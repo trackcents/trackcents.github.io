@@ -134,8 +134,8 @@
       <span class="rail-label">{it.label}</span>
     </a>
   {/each}
-  <div class="mt-auto flex flex-col items-center gap-2 pt-2">
-    <SyncStatusIndicator />
+  <div class="mt-auto flex w-full flex-col items-center gap-2 pt-2">
+    <SyncStatusIndicator compact />
     <ThemeToggle />
   </div>
 </nav>
