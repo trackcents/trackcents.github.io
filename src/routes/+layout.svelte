@@ -9,10 +9,17 @@
   import { initTheme } from '$lib/app/theme.svelte';
   import { applyPrefs } from '$lib/app/prefs';
   import { installKeyboardInsetTracker } from '$lib/app/keyboard-inset';
+  import { initAppUpdate, updateAvailable } from '$lib/app/app-update.svelte';
   import { page } from '$app/stores';
   import Nav from '$components/Nav.svelte';
+  import AppTopBar from '$components/AppTopBar.svelte';
 
   let { children } = $props();
+
+  // The installed (home-screen / standalone) app has no browser reload button, so
+  // we show our own top bar there. In a normal browser tab we only show it when an
+  // update is waiting (the browser's own refresh covers manual reloads).
+  let standalone = $state(false);
 
   // Apply the saved display currency (USD/INR) before any child renders money.
   if (typeof window !== 'undefined') applyPrefs();
@@ -21,6 +28,7 @@
 
   // Onboarding is a full-screen setup flow — no rail / tab-bar chrome there.
   const onOnboarding = $derived($page.url.pathname.startsWith('/onboarding'));
+  const showTopBar = $derived((standalone || updateAvailable()) && !onOnboarding);
 
   function hasOnboarded(): boolean {
     return typeof localStorage !== 'undefined' && localStorage.getItem('mtrb.onboarded') !== null;
@@ -28,6 +36,11 @@
 
   onMount(async () => {
     initTheme(); // apply persisted light/dark choice ASAP
+    // Is the app running from the Home Screen (no browser chrome)? → show our own
+    // top bar with a Refresh button. Covers iOS (navigator.standalone) + others.
+    standalone =
+      window.matchMedia?.('(display-mode: standalone)').matches === true ||
+      (navigator as unknown as { standalone?: boolean }).standalone === true;
     // Bottom-sheet pickers (CategoryPicker / AccountPicker) need to lift
     // above the soft keyboard.  Installs a global visualViewport listener
     // that drives --kb-inset-bottom on <html>.  Safe to call multiple times.
@@ -77,7 +90,11 @@
         });
       }
       try {
-        await navigator.serviceWorker.register(`${base}/service-worker.js`, { type: 'module' });
+        const reg = await navigator.serviceWorker.register(`${base}/service-worker.js`, {
+          type: 'module'
+        });
+        // Watch for a newly-deployed version so the top bar can offer "Update".
+        initAppUpdate(reg);
       } catch {
         // A registration failure must never block the app — offline is an enhancement.
       }
@@ -92,8 +109,16 @@
     {@render children?.()}
   {:else}
     <Nav />
+    {#if showTopBar}
+      <AppTopBar />
+    {/if}
     <div class="md:pl-20">
-      <div class="pb-24 md:pb-2">
+      <!-- When the top bar is shown, pad content below it (bar height + the iOS
+           status-bar safe area) so the first row isn't hidden underneath. -->
+      <div
+        class="pb-24 md:pb-2"
+        style={showTopBar ? 'padding-top: calc(2.85rem + env(safe-area-inset-top));' : undefined}
+      >
         {@render children?.()}
       </div>
     </div>

@@ -14,12 +14,17 @@ const CACHE = `mtrb-cache-${version}`;
 const PRECACHE = [...build, ...files];
 
 sw.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches
-      .open(CACHE)
-      .then((cache) => cache.addAll(PRECACHE))
-      .then(() => sw.skipWaiting())
-  );
+  // Precache the new shell, but DON'T skipWaiting — a freshly-deployed version
+  // WAITS so the app can show a "New version · Update" prompt instead of silently
+  // reloading mid-use. It activates when the user taps Update (the SKIP_WAITING
+  // message below) or when the PWA is next fully relaunched.
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(PRECACHE)));
+});
+
+// The app posts this when the user taps "Update" — only then does the waiting
+// version take over (then `activate` claims clients → the page reloads once).
+sw.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') void sw.skipWaiting();
 });
 
 sw.addEventListener('activate', (event) => {
