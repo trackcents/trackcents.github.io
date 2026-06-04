@@ -14,12 +14,14 @@
   //     parser version) inline beneath the row.
 
   import { goto } from '$app/navigation';
+  import { base } from '$app/paths';
   import type { TransactionType } from '$lib/adapters/types';
   import { formatMoney, getDisplayCurrencySymbol } from '$lib/util/money';
   const currencySymbol = getDisplayCurrencySymbol();
   import type { UnifiedRow, SortSpec, SortKey } from '$lib/app/transaction-view';
   import { groupRowsByDay, formatDayHeading, type DayGroup } from '$lib/app/transaction-view';
   import type { Category, TransactionAnnotation, TransactionSplit } from '$lib/app/categorization';
+  import { isRecurringRow } from '$lib/app/recurring-rows';
   import { categoryColor, categoryIconName } from '$lib/app/category-visuals';
   import { parseAmountToCents } from '$lib/app/csv-import';
   import { centsToDecimal } from '$lib/app/export-csv';
@@ -186,6 +188,9 @@
    *  the subtitle is just the parent category (together they read Category / Sub).
    *  '' = nothing to show (top-level category on an unnamed manual row). */
   function secondaryCatLabel(r: UnifiedRow): string {
+    // A recurring-bill payment row shows its section (Bills/Subscriptions), not a
+    // spending category — it isn't categorisable here.
+    if (isRecurringRow(r)) return r.recurring_label ?? 'Recurring';
     const id = categoryFor?.(r) ?? null;
     if (id === null) return 'Uncategorized';
     const leaf = categories.find((c) => c.id === id);
@@ -316,7 +321,20 @@
 <!-- Shared expanded detail panel: everyday actions first, then a collapsed
      "Source & details" provenance block, then the source-statement link. -->
 {#snippet details(r: UnifiedRow)}
-  {#if showActions}
+  {#if isRecurringRow(r)}
+    <!-- A recurring-bill payment: read-only here, managed on the Recurring tab. -->
+    <div
+      class="rounded-lg border p-3 text-xs"
+      style="border-color: var(--color-border); background-color: var(--color-bg);"
+    >
+      <p class="font-medium text-[var(--color-text)]">↻ Recurring payment</p>
+      <p class="mt-1 text-[var(--color-muted)]">
+        This row comes from a bill you marked paid. To edit or undo it, open the
+        <a href="{base}/recurring" class="underline" style:color="var(--color-accent)">Recurring</a>
+        tab.
+      </p>
+    </div>
+  {:else if showActions}
     <div class="mt-3 border-t pt-3" style="border-color: var(--color-border);">
       <p class="mb-2 text-[11px] font-medium tracking-wide text-[var(--color-muted)] uppercase">
         Actions
@@ -462,54 +480,56 @@
     </div>
   {/if}
 
-  <details class="provenance mt-3">
-    <summary
-      class="cursor-pointer list-none text-[11px] font-medium tracking-wide text-[var(--color-muted)] uppercase select-none"
-    >
-      <span class="chev">▸</span> Source &amp; details
-    </summary>
-    <dl class="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
-      <div class="flex gap-2">
-        <dt class="text-[var(--color-muted)]">Bank:</dt>
-        <dd class="text-[var(--color-text)]">{r.bank_name}</dd>
-      </div>
-      <div class="flex gap-2">
-        <dt class="text-[var(--color-muted)]">Account type:</dt>
-        <dd class="text-[var(--color-text)]">{r.account_type}</dd>
-      </div>
-      <div class="flex gap-2">
-        <dt class="text-[var(--color-muted)]">Account ••••:</dt>
-        <dd class="font-mono text-[var(--color-text)]">{r.account_last_4 ?? '—'}</dd>
-      </div>
-      <div class="flex gap-2">
-        <dt class="text-[var(--color-muted)]">Parser:</dt>
-        <dd class="font-mono text-[var(--color-text)]">{r.adapter_name} v{r.adapter_version}</dd>
-      </div>
-      <div class="flex gap-2 sm:col-span-2">
-        <dt class="text-[var(--color-muted)]">PDF hash:</dt>
-        <dd class="font-mono break-all text-[var(--color-text)]">{r.pdf_source_hash}</dd>
-      </div>
-      <div class="flex gap-2 sm:col-span-2">
-        <dt class="text-[var(--color-muted)]">Raw text:</dt>
-        <dd
-          class="max-h-32 overflow-y-auto font-mono text-xs break-words whitespace-pre-wrap text-[var(--color-text)]"
-        >
-          {r.raw_text}
-        </dd>
-      </div>
-    </dl>
-  </details>
+  {#if !isRecurringRow(r)}
+    <details class="provenance mt-3">
+      <summary
+        class="cursor-pointer list-none text-[11px] font-medium tracking-wide text-[var(--color-muted)] uppercase select-none"
+      >
+        <span class="chev">▸</span> Source &amp; details
+      </summary>
+      <dl class="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
+        <div class="flex gap-2">
+          <dt class="text-[var(--color-muted)]">Bank:</dt>
+          <dd class="text-[var(--color-text)]">{r.bank_name}</dd>
+        </div>
+        <div class="flex gap-2">
+          <dt class="text-[var(--color-muted)]">Account type:</dt>
+          <dd class="text-[var(--color-text)]">{r.account_type}</dd>
+        </div>
+        <div class="flex gap-2">
+          <dt class="text-[var(--color-muted)]">Account ••••:</dt>
+          <dd class="font-mono text-[var(--color-text)]">{r.account_last_4 ?? '—'}</dd>
+        </div>
+        <div class="flex gap-2">
+          <dt class="text-[var(--color-muted)]">Parser:</dt>
+          <dd class="font-mono text-[var(--color-text)]">{r.adapter_name} v{r.adapter_version}</dd>
+        </div>
+        <div class="flex gap-2 sm:col-span-2">
+          <dt class="text-[var(--color-muted)]">PDF hash:</dt>
+          <dd class="font-mono break-all text-[var(--color-text)]">{r.pdf_source_hash}</dd>
+        </div>
+        <div class="flex gap-2 sm:col-span-2">
+          <dt class="text-[var(--color-muted)]">Raw text:</dt>
+          <dd
+            class="max-h-32 overflow-y-auto font-mono text-xs break-words whitespace-pre-wrap text-[var(--color-text)]"
+          >
+            {r.raw_text}
+          </dd>
+        </div>
+      </dl>
+    </details>
 
-  <div class="mt-3 flex gap-2">
-    <button
-      type="button"
-      onclick={() => goto(`/statements/${encodeURIComponent(r.pdf_source_hash)}`)}
-      class="rounded-md border px-2 py-1 text-xs text-[var(--color-muted)] transition-colors hover:text-[var(--color-text)]"
-      style="border-color: var(--color-border); background-color: var(--color-bg);"
-    >
-      View source statement →
-    </button>
-  </div>
+    <div class="mt-3 flex gap-2">
+      <button
+        type="button"
+        onclick={() => goto(`/statements/${encodeURIComponent(r.pdf_source_hash)}`)}
+        class="rounded-md border px-2 py-1 text-xs text-[var(--color-muted)] transition-colors hover:text-[var(--color-text)]"
+        style="border-color: var(--color-border); background-color: var(--color-bg);"
+      >
+        View source statement →
+      </button>
+    </div>
+  {/if}
 {/snippet}
 
 <!-- ── Desktop: sortable table (≥1024px only — phones/tablets get the card list
@@ -674,7 +694,7 @@
             class:line-through={isIgnored(r)}
             style:opacity={isIgnored(r) ? '0.5' : '1'}>{displayName(r)}</span
           >
-          {#if isRecurring(r)}
+          {#if isRecurring(r) || isRecurringRow(r)}
             <span class="shrink-0 text-[11px]" style="color: var(--color-accent);" title="Recurring"
               >↻</span
             >
@@ -684,7 +704,7 @@
           {#if secondaryCatLabel(r) !== ''}
             <span class="truncate">{secondaryCatLabel(r)}</span>
           {/if}
-          {#if multiAccount}
+          {#if multiAccount && !isRecurringRow(r)}
             <span class="acct-chip shrink-0">{accountChip(r)}</span>
           {/if}
           {#each tagsOf(r) as tag (tag)}
@@ -698,7 +718,7 @@
     </button>
     {#if expandedNow}
       <div class="px-3.5 pb-3.5">
-        {#if showCategory}
+        {#if showCategory && !isRecurringRow(r)}
           <div class="mb-3">{@render categoryPicker(r)}</div>
         {/if}
         <div class="border-t pt-3 text-xs" style="border-color: var(--color-border);">

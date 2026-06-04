@@ -30,6 +30,9 @@
     type UnifiedRow
   } from '$lib/app/transaction-view';
   import type { ImportSuccess } from '$lib/app/import';
+  import { recurringPaymentRows, isRecurringRow } from '$lib/app/recurring-rows';
+  import { loadRecurring, type RecurringState } from '$lib/db/recurring-store';
+  import { getDisplayCurrency } from '$lib/util/money';
   import { loadCategorization, saveCategorization } from '$lib/db/categorization-store';
   import { DEFAULT_POCKETS, type Pocket } from '$lib/app/pockets';
   import {
@@ -46,6 +49,7 @@
   import { listAllAccounts } from '$lib/app/accounts';
 
   let imports = $state<ImportSuccess[]>([]);
+  let recurring = $state<RecurringState>({ items: [], sections: [] });
   let hydrating = $state(true);
   let loadError = $state<string | null>(null);
 
@@ -63,6 +67,7 @@
     return annotations[rowKey(r)]?.category_id ?? null;
   }
   async function assignCategory(r: UnifiedRow, categoryId: string | null): Promise<void> {
+    if (isRecurringRow(r)) return; // recurring rows are read-only here
     const next = setManualCategory(new Map(Object.entries(annotations)), rowKey(r), categoryId);
     annotations = Object.fromEntries(next);
     await saveCategorization({ categories, rules, annotations });
@@ -76,6 +81,7 @@
     r: UnifiedRow,
     patch: Partial<TransactionAnnotation>
   ): Promise<void> {
+    if (isRecurringRow(r)) return; // recurring rows are read-only here
     const next = setAnnotation(new Map(Object.entries(annotations)), rowKey(r), patch);
     // Normalize via the tested pure helper: drop cleared extras, delete the entry
     // entirely if nothing meaningful remains.
@@ -125,6 +131,7 @@
     rules = c.rules;
     annotations = c.annotations;
     pockets = c.pockets !== undefined && c.pockets.length > 0 ? c.pockets : [...DEFAULT_POCKETS];
+    recurring = await loadRecurring();
   }
 
   // Filter + sort state.  Filter starts empty (show everything); sort
@@ -175,6 +182,7 @@
       categories = c.categories;
       rules = c.rules;
       annotations = c.annotations;
+      recurring = await loadRecurring();
     } catch (err) {
       loadError = err instanceof Error ? err.message : String(err);
     } finally {
@@ -184,8 +192,17 @@
   });
 
   // Derived: flatten all imports into rows once per imports change.
-  let allRows = $derived(toUnifiedRows(imports));
-  let accounts = $derived(listAccounts(allRows));
+  let importRows = $derived(toUnifiedRows(imports));
+  // Plus read-only rows for every PAID recurring bill/subscription, so marking a
+  // bill paid on the Recurring tab shows up here too (D2). Display-only — these
+  // aren't real imports, so the pocket/dashboard math is untouched (it already
+  // counts recurring payments once). Accounts / refund / transfer lists below use
+  // importRows only, so the synthetic rows never pollute them.
+  let recurringRows = $derived(
+    recurringPaymentRows(recurring.items, recurring.sections, getDisplayCurrency())
+  );
+  let allRows = $derived([...importRows, ...recurringRows]);
+  let accounts = $derived(listAccounts(importRows));
 
   // Account list for the manual-add form — single source of truth in
   // src/lib/app/accounts.ts (Batch A).  Combines imported accounts (with
@@ -262,7 +279,7 @@
   // Refund-link candidates (US-P3-C): every outflow, labelled, keyed by the stable
   // annotation key so a refund can be linked to its original purchase.
   let refundCandidates = $derived(
-    allRows
+    importRows
       .filter((r) => r.amount_minor < 0n)
       .map((r) => ({ key: rowKey(r), label: `${r.posted_date} · ${r.description}` }))
   );
@@ -271,7 +288,7 @@
   // DIFFERENT account → suggest excluding both from spending. account_id groups
   // statements of the same real account (bank + type + last4).
   let transferTxns = $derived<TransferTxn[]>(
-    allRows.map((r) => ({
+    importRows.map((r) => ({
       key: rowKey(r),
       account_id: `${r.bank_name}|${r.account_type}|${r.account_last_4 ?? ''}`,
       posted_date: r.posted_date,

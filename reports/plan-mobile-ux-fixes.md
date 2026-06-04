@@ -26,10 +26,13 @@ Status legend: [ ] todo · [~] in progress · [x] done + verified
 - [x] **D1. Removed the confusing per-row "Mark as recurring" checkbox** (it only
   painted a ↻ icon and didn't link to the Recurring tab). Recurring bills live on
   the Recurring tab. (verified — gone from actions)
-- [ ] **D2. A recurring bill marked PAID should appear in Transactions.** DEFERRED
-  to its own pass — it already deducts from the Home pocket; surfacing it as a
-  read-only ledger row (not double-counting, not editable like a normal row) is a
-  bigger change to the transactions view. Planned next.
+- [x] **D2. A recurring bill marked PAID now appears in Transactions.** Each paid
+  PaymentRecord shows as a read-only ledger row (↻ marker, section as subtitle,
+  brand icon), interleaved by day with real transactions. Display-only — not
+  categorisable/renamable/deletable here; expanding it shows a note linking to the
+  Recurring tab. No double-count (pockets/dashboard read recurring payments once,
+  separately). New `src/lib/app/recurring-rows.ts`. Verified: Netflix −$200 shows
+  under "Yesterday" next to a real Lunch row.
 
 ## Verify + ship
 - [x] `pnpm verify` green + browser-verified the batch with synthetic data (real data

@@ -38,6 +38,12 @@ export interface UnifiedRow {
   // Source coordinates (lets the UI link back to the statement detail page).
   import_index: number;
   transaction_index: number;
+
+  /** Set only on SYNTHETIC rows that aren't real imports — e.g. a recurring
+   *  bill marked paid (adapter_name === 'recurring'). Holds the section name
+   *  ("Bills"/"Subscriptions") shown as the row's subtitle. Real import rows
+   *  leave this undefined. */
+  recurring_label?: string;
 }
 
 /**
