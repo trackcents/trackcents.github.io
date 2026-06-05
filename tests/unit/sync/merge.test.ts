@@ -18,6 +18,26 @@ describe('mergeState (sync union)', () => {
     expect(merged.imports.map((i) => i.pdf_source_hash)).toEqual(['A', 'B']);
   });
 
+  test('on a hash collision the NEWER imported_at wins (an edited manual entry propagates, not reverts)', () => {
+    const stale = {
+      pdf_source_hash: 'manual-1',
+      imported_at: '2026-06-01T10:00:00.000Z',
+      bank_name: 'old'
+    } as unknown as ImportRecord;
+    const edited = {
+      pdf_source_hash: 'manual-1',
+      imported_at: '2026-06-05T09:00:00.000Z',
+      bank_name: 'edited'
+    } as unknown as ImportRecord;
+    // Newer wins regardless of which side it's on, and the entry isn't duplicated.
+    const m1 = mergeState(state([stale]), state([edited]));
+    const m2 = mergeState(state([edited]), state([stale]));
+    expect(m1.imports.length).toBe(1);
+    expect(m2.imports.length).toBe(1);
+    expect((m1.imports[0] as unknown as { bank_name: string }).bank_name).toBe('edited');
+    expect((m2.imports[0] as unknown as { bank_name: string }).bank_name).toBe('edited');
+  });
+
   test('is idempotent: merge(s, s) keeps each import once', () => {
     const s = state([imp('A'), imp('B')]);
     expect(mergeState(s, s).imports.map((i) => i.pdf_source_hash)).toEqual(['A', 'B']);

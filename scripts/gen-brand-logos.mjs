@@ -354,6 +354,34 @@ const BRANDS = [
     text: 'AI',
     color: '#10A37F',
     fg: '#FFFFFF'
+  },
+  // ── Cloud storage (Pushpa: "one drive logo also pls add") ─────────────
+  {
+    key: 'onedrive',
+    title: 'OneDrive',
+    slug: 'microsoftonedrive',
+    keywords: ['onedrive', 'one drive'],
+    text: 'OD',
+    color: '#0078D4',
+    fg: '#FFFFFF'
+  },
+  {
+    key: 'googledrive',
+    title: 'Google Drive',
+    slug: 'googledrive',
+    keywords: ['google drive', 'gdrive', 'google one'],
+    text: 'GD',
+    color: '#1FA463',
+    fg: '#FFFFFF'
+  },
+  {
+    key: 'dropbox',
+    title: 'Dropbox',
+    slug: 'dropbox',
+    keywords: ['dropbox'],
+    text: 'Db',
+    color: '#0061FF',
+    fg: '#FFFFFF'
   }
 ];
 

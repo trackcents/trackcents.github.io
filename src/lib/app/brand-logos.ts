@@ -12,7 +12,7 @@
  * here only to identify the service a user is tracking (nominative use); no
  * affiliation or endorsement is implied. See NOTICE-brands.md.
  *
- * Stats: 34 official marks, 31 lettermark tiles.
+ * Stats: 36 official marks, 32 lettermark tiles.
  */
 
 /** An official single-path mark drawn in the brand colour. */
@@ -104,7 +104,10 @@ export type BrandKey =
   | 'notion'
   | 'figma'
   | 'adobe'
-  | 'chatgpt';
+  | 'chatgpt'
+  | 'onedrive'
+  | 'googledrive'
+  | 'dropbox';
 
 export const BRAND_LOGOS: Record<BrandKey, BrandLogo> = {
   netflix: {
@@ -341,7 +344,20 @@ export const BRAND_LOGOS: Record<BrandKey, BrandLogo> = {
     path: 'M15.852 8.981h-4.588V0h4.588c2.476 0 4.49 2.014 4.49 4.49s-2.014 4.491-4.49 4.491zM12.735 7.51h3.117c1.665 0 3.019-1.355 3.019-3.019s-1.355-3.019-3.019-3.019h-3.117V7.51zm0 1.471H8.148c-2.476 0-4.49-2.014-4.49-4.49S5.672 0 8.148 0h4.588v8.981zm-4.587-7.51c-1.665 0-3.019 1.355-3.019 3.019s1.354 3.02 3.019 3.02h3.117V1.471H8.148zm4.587 15.019H8.148c-2.476 0-4.49-2.014-4.49-4.49s2.014-4.49 4.49-4.49h4.588v8.98zM8.148 8.981c-1.665 0-3.019 1.355-3.019 3.019s1.355 3.019 3.019 3.019h3.117V8.981H8.148zM8.172 24c-2.489 0-4.515-2.014-4.515-4.49s2.014-4.49 4.49-4.49h4.588v4.441c0 2.503-2.047 4.539-4.563 4.539zm-.024-7.51a3.023 3.023 0 0 0-3.019 3.019c0 1.665 1.365 3.019 3.044 3.019 1.705 0 3.093-1.376 3.093-3.068v-2.97H8.148zm7.704 0h-.098c-2.476 0-4.49-2.014-4.49-4.49s2.014-4.49 4.49-4.49h.098c2.476 0 4.49 2.014 4.49 4.49s-2.014 4.49-4.49 4.49zm-.097-7.509c-1.665 0-3.019 1.355-3.019 3.019s1.355 3.019 3.019 3.019h.098c1.665 0 3.019-1.355 3.019-3.019s-1.355-3.019-3.019-3.019h-.098z'
   },
   adobe: { kind: 'letter', title: 'Adobe', hex: '#FF0000', text: 'A', fg: '#FFFFFF' },
-  chatgpt: { kind: 'letter', title: 'ChatGPT', hex: '#10A37F', text: 'AI', fg: '#FFFFFF' }
+  chatgpt: { kind: 'letter', title: 'ChatGPT', hex: '#10A37F', text: 'AI', fg: '#FFFFFF' },
+  onedrive: { kind: 'letter', title: 'OneDrive', hex: '#0078D4', text: 'OD', fg: '#FFFFFF' },
+  googledrive: {
+    kind: 'mark',
+    title: 'Google Drive',
+    hex: '#4285F4',
+    path: 'M12.01 1.485c-2.082 0-3.754.02-3.743.047.01.02 1.708 3.001 3.774 6.62l3.76 6.574h3.76c2.081 0 3.753-.02 3.742-.047-.005-.02-1.708-3.001-3.775-6.62l-3.76-6.574zm-4.76 1.73a789.828 789.861 0 0 0-3.63 6.319L0 15.868l1.89 3.298 1.885 3.297 3.62-6.335 3.618-6.33-1.88-3.287C8.1 4.704 7.255 3.22 7.25 3.214zm2.259 12.653-.203.348c-.114.198-.96 1.672-1.88 3.287a423.93 423.948 0 0 1-1.698 2.97c-.01.026 3.24.042 7.222.042h7.244l1.796-3.157c.992-1.734 1.85-3.23 1.906-3.323l.104-.167h-7.249z'
+  },
+  dropbox: {
+    kind: 'mark',
+    title: 'Dropbox',
+    hex: '#0061FF',
+    path: 'M6 1.807L0 5.629l6 3.822 6.001-3.822L6 1.807zM18 1.807l-6 3.822 6 3.822 6-3.822-6-3.822zM0 13.274l6 3.822 6.001-3.822L6 9.452l-6 3.822zM18 9.452l-6 3.822 6 3.822 6-3.822-6-3.822zM6 18.371l6.001 3.822 6-3.822-6-3.822L6 18.371z'
+  }
 };
 
 /** [keyword, brandKey] pairs, longest keyword first (so the most specific wins). */
@@ -353,6 +369,7 @@ export const BRAND_KEYWORDS: ReadonlyArray<readonly [string, BrandKey]> = [
   ['youtube music', 'youtubemusic'],
   ['make my trip', 'makemytrip'],
   ['apple arcade', 'applearcade'],
+  ['google drive', 'googledrive'],
   ['prime video', 'primevideo'],
   ['disney plus', 'disneyplus'],
   ['jio hotstar', 'jiohotstar'],
@@ -372,6 +389,7 @@ export const BRAND_KEYWORDS: ReadonlyArray<readonly [string, BrandKey]> = [
   ['big basket', 'bigbasket'],
   ['google pay', 'googlepay'],
   ['amazon pay', 'amazonpay'],
+  ['google one', 'googledrive'],
   ['jiocinema', 'jiocinema'],
   ['aha video', 'aha'],
   ['apple tv+', 'appletv'],
@@ -386,6 +404,7 @@ export const BRAND_KEYWORDS: ReadonlyArray<readonly [string, BrandKey]> = [
   ['app store', 'applearcade'],
   ['game pass', 'xbox'],
   ['photoshop', 'adobe'],
+  ['one drive', 'onedrive'],
   ['sony liv', 'sonyliv'],
   ['apple tv', 'appletv'],
   ['yt music', 'youtubemusic'],
@@ -396,6 +415,7 @@ export const BRAND_KEYWORDS: ReadonlyArray<readonly [string, BrandKey]> = [
   ['phone pe', 'phonepe'],
   ['razorpay', 'razorpay'],
   ['vodafone', 'vodafone'],
+  ['onedrive', 'onedrive'],
   ['netflix', 'netflix'],
   ['hotstar', 'hotstar'],
   ['disney+', 'disneyplus'],
@@ -415,6 +435,7 @@ export const BRAND_KEYWORDS: ReadonlyArray<readonly [string, BrandKey]> = [
   ['phonepe', 'phonepe'],
   ['ps plus', 'playstation'],
   ['chatgpt', 'chatgpt'],
+  ['dropbox', 'dropbox'],
   ['disney', 'disneyplus'],
   ['sunnxt', 'sunnxt'],
   ['hbomax', 'hbomax'],
@@ -431,6 +452,7 @@ export const BRAND_KEYWORDS: ReadonlyArray<readonly [string, BrandKey]> = [
   ['icloud', 'applearcade'],
   ['notion', 'notion'],
   ['openai', 'chatgpt'],
+  ['gdrive', 'googledrive'],
   ['zee 5', 'zee5'],
   ['gaana', 'gaana'],
   ['irctc', 'irctc'],

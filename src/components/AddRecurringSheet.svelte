@@ -416,26 +416,28 @@
       </div>
     {/if}
 
-    <div class="ar-two">
-      <div class="ar-field">
-        <span class="ar-lbl">{repeats === 'once' ? 'Due date' : 'First due date'}</span>
-        <input class="ar-date" type="date" bind:value={dueDate} onfocus={scrollIntoView} />
-      </div>
-      <div class="ar-field">
-        <span class="ar-lbl">Pay from</span>
-        <div class="ar-pockets">
-          {#each ordered as p (p.id)}
-            <button
-              type="button"
-              class="ar-chip"
-              class:on={paidFrom === p.id}
-              onclick={() => (paidFrom = p.id)}
-            >
-              {p.logo}
-              {p.name}
-            </button>
-          {/each}
-        </div>
+    <!-- Due date + Pay from are STACKED full-width (not a 2-col grid): the date
+         control and a wrapping pocket-chip strip have very different heights, and
+         on iOS Safari the native date picker is wider than a half-column — both
+         made this row look misaligned (Pushpa's circled alignment report). -->
+    <div class="ar-field">
+      <span class="ar-lbl">{repeats === 'once' ? 'Due date' : 'First due date'}</span>
+      <input class="ar-date" type="date" bind:value={dueDate} onfocus={scrollIntoView} />
+    </div>
+    <div class="ar-field">
+      <span class="ar-lbl">Pay from</span>
+      <div class="ar-pockets">
+        {#each ordered as p (p.id)}
+          <button
+            type="button"
+            class="ar-chip"
+            class:on={paidFrom === p.id}
+            onclick={() => (paidFrom = p.id)}
+          >
+            {p.logo}
+            {p.name}
+          </button>
+        {/each}
       </div>
     </div>
 

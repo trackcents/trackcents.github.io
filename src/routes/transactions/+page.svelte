@@ -31,6 +31,7 @@
     type UnifiedRow
   } from '$lib/app/transaction-view';
   import type { ManualEditSeed } from '$lib/app/manual-entry';
+  import { findManualDuplicates, duplicateExtraCount } from '$lib/app/duplicate-detect';
   import { centsToDecimal } from '$lib/app/export-csv';
   import type { ImportSuccess } from '$lib/app/import';
   import { recurringPaymentRows, isRecurringRow } from '$lib/app/recurring-rows';
@@ -154,6 +155,26 @@
     editSeed = null;
   }
 
+  // ── Possible duplicates (Pushpa: "after sync every transaction came 2 times").
+  // Surfaced for review only — NOTHING is auto-deleted; the user removes the
+  // extras with the SAME per-row delete used elsewhere. Two-tap to confirm.
+  // (`duplicateGroups`/`dupExtras` derive from importRows, declared below.)
+  let dupPendingKey = $state<string | null>(null);
+  function dupKey(r: UnifiedRow): string {
+    return `${r.pdf_source_hash}#${r.transaction_index}`;
+  }
+  async function deleteDuplicate(r: UnifiedRow): Promise<void> {
+    if (dupPendingKey === dupKey(r)) {
+      dupPendingKey = null;
+      await deleteRow(r); // reuse the existing, tested manual-delete path
+    } else {
+      dupPendingKey = dupKey(r);
+    }
+  }
+  function dupName(r: UnifiedRow): string {
+    return splitLeadingTime(r.description).rest || r.description;
+  }
+
   // QuickAddSheet's onSaved now passes a {learned} flag; this view doesn't show
   // a toast so we ignore it, but the signature has to match the prop type.
   async function refreshAfterSave(info: {
@@ -240,6 +261,10 @@
   );
   let allRows = $derived([...importRows, ...recurringRows]);
   let accounts = $derived(listAccounts(importRows));
+
+  // Possible-duplicate detection runs over the real (manual) import rows only.
+  let duplicateGroups = $derived(findManualDuplicates(importRows));
+  let dupExtras = $derived(duplicateExtraCount(duplicateGroups));
 
   // Account list for the manual-add form — single source of truth in
   // src/lib/app/accounts.ts (Batch A).  Combines imported accounts (with
@@ -483,6 +508,54 @@
       matchedCount={visibleRows.length}
       totalCount={allRows.length}
     />
+
+    {#if dupExtras > 0}
+      <section
+        class="card rise mt-3 p-4"
+        style="border-color: var(--color-warning); background-color: color-mix(in oklab, var(--color-warning) 8%, transparent);"
+      >
+        <h2 class="text-sm font-semibold">
+          Possible duplicates · {dupExtras} extra {dupExtras === 1 ? 'entry' : 'entries'}
+        </h2>
+        <p class="mt-0.5 mb-2 text-xs text-[var(--color-muted)]">
+          These manual entries look identical to another (same day, amount and name) — usually the
+          same thing entered on two phones. Nothing is removed automatically; delete the copies you
+          don't want. Keep one of each.
+        </p>
+        <div class="space-y-3">
+          {#each duplicateGroups as g (g.signature)}
+            <div class="rounded-lg border" style="border-color: var(--color-border);">
+              {#each g.rows as r, i (dupKey(r))}
+                <div
+                  class="flex items-center justify-between gap-2 px-3 py-2 text-sm"
+                  class:border-t={i > 0}
+                  style:border-color="var(--color-border)"
+                >
+                  <span class="min-w-0">
+                    <span class="font-medium text-[var(--color-text)]">{dupName(r)}</span>
+                    <span class="text-xs text-[var(--color-muted)]">
+                      · {formatMoney(r.amount_minor, { currency: r.currency })} · {r.posted_date}
+                      {#if i === 0}· <span style:color="var(--color-success)">keep</span>{/if}
+                    </span>
+                  </span>
+                  <button
+                    type="button"
+                    class="shrink-0 rounded-md border px-2.5 py-1 text-xs font-medium"
+                    style:border-color={dupPendingKey === dupKey(r)
+                      ? 'var(--color-danger)'
+                      : 'var(--color-border)'}
+                    style:color="var(--color-danger)"
+                    onclick={() => deleteDuplicate(r)}
+                  >
+                    {dupPendingKey === dupKey(r) ? 'Tap to confirm' : 'Delete'}
+                  </button>
+                </div>
+              {/each}
+            </div>
+          {/each}
+        </div>
+      </section>
+    {/if}
 
     {#if transferPairs.length > 0}
       <section class="card rise mt-3 p-4">
