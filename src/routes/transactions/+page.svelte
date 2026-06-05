@@ -25,10 +25,13 @@
     listAccounts,
     applyFilter,
     sortRows,
+    splitLeadingTime,
     type TransactionFilter,
     type SortSpec,
     type UnifiedRow
   } from '$lib/app/transaction-view';
+  import type { ManualEditSeed } from '$lib/app/manual-entry';
+  import { centsToDecimal } from '$lib/app/export-csv';
   import type { ImportSuccess } from '$lib/app/import';
   import { recurringPaymentRows, isRecurringRow } from '$lib/app/recurring-rows';
   import { loadRecurring, type RecurringState } from '$lib/db/recurring-store';
@@ -116,6 +119,40 @@
   // experience is consistent (chips, NL parser, AUTO badge, category at entry).
   // Both personas in round-2 review flagged the duplicate inline form here.
   let quickAddOpen = $state(false);
+  // EDIT (Pushpa: "we need a transaction edit option"). Seeds the same
+  // QuickAddSheet from an existing MANUAL row; saving rewrites it in place.
+  let editSeed = $state<ManualEditSeed | null>(null);
+  function startEdit(r: UnifiedRow): void {
+    if (r.adapter_name !== MANUAL_ADAPTER_NAME) return;
+    const ann = annotations[rowKey(r)];
+    const { time, rest } = splitLeadingTime(r.description);
+    const isPlaceholder = /^(expense|income)$/i.test(rest.trim());
+    const direction: 'expense' | 'income' | 'transfer' =
+      ann?.flow_intent === 'transfer_self'
+        ? 'transfer'
+        : r.amount_minor < 0n
+          ? 'expense'
+          : 'income';
+    const absMinor = r.amount_minor < 0n ? -r.amount_minor : r.amount_minor;
+    editSeed = {
+      id: r.pdf_source_hash.replace(/^manual-/, ''),
+      amount: centsToDecimal(absMinor),
+      direction,
+      name:
+        ann?.custom_name && ann.custom_name !== '' ? ann.custom_name : isPlaceholder ? '' : rest,
+      note: ann?.note ?? '',
+      date: r.posted_date,
+      time: time ?? '',
+      account: r.bank_name,
+      categoryId: ann?.category_id ?? null,
+      paidFrom: ann?.paid_from ?? 'paychecks'
+    };
+    quickAddOpen = true;
+  }
+  function closeQuickAdd(): void {
+    quickAddOpen = false;
+    editSeed = null;
+  }
 
   // QuickAddSheet's onSaved now passes a {learned} flag; this view doesn't show
   // a toast so we ignore it, but the signature has to match the prop type.
@@ -404,7 +441,14 @@
         see its source.
       </p>
     </div>
-    <button type="button" class="btn btn-primary" onclick={() => (quickAddOpen = true)}>
+    <button
+      type="button"
+      class="btn btn-primary"
+      onclick={() => {
+        editSeed = null;
+        quickAddOpen = true;
+      }}
+    >
       + Add
     </button>
   </header>
@@ -585,6 +629,7 @@
       annotationFor={annotationForRow}
       onUpdateAnnotation={updateAnnotation}
       onDelete={deleteRow}
+      onEdit={startEdit}
       {refundCandidates}
     />
   {/if}
@@ -595,12 +640,13 @@
   <QuickAddSheet
     open={quickAddOpen}
     initialType="expense"
+    {editSeed}
     {categories}
     {rules}
     {annotations}
     {pockets}
     accounts={accountList}
-    onClose={() => (quickAddOpen = false)}
+    onClose={closeQuickAdd}
     onSaved={refreshAfterSave}
     onCreateCategory={handleCreateCategory}
     onDeleteCategory={handleDeleteCategory}

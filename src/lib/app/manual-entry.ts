@@ -39,6 +39,26 @@ export interface ManualTxnInput {
   transaction_type?: TransactionType;
 }
 
+/**
+ * Pre-filled values to seed QuickAddSheet when EDITING an existing manual
+ * transaction (Pushpa: "we need a transaction edit option as well"). `id` is the
+ * manual entry's stable id (the `pdf_source_hash` with the `manual-` prefix
+ * removed) so saving rewrites the SAME record in place rather than creating a
+ * duplicate. All other fields mirror the QuickAddSheet form controls.
+ */
+export interface ManualEditSeed {
+  id: string;
+  amount: string;
+  direction: 'expense' | 'income' | 'transfer';
+  name: string;
+  note: string;
+  date: string;
+  time: string;
+  account: string;
+  categoryId: string | null;
+  paidFrom: string;
+}
+
 export class ManualEntryError extends Error {
   constructor(message: string) {
     super(message);

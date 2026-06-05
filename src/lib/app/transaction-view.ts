@@ -262,6 +262,69 @@ export function formatDayHeading(iso: string, today: string): string {
   return yy === ty ? heading : `${heading}, ${yy}`;
 }
 
+/**
+ * Pull a leading clock time off a transaction description.
+ *
+ * Manual entries are stored as `"HH:MM · rest"` (24-hour, see manual-entry +
+ * QuickAddSheet.save). Some older rows used a 12-hour `"H:MM AM/PM · rest"`
+ * prefix. This recognises BOTH, returns the time normalised to 24-hour `"HH:MM"`
+ * (or null when there's no leading time), and the description with that prefix
+ * removed. Pure + display-layer only — the stored description is untouched, so
+ * it works on transactions that were already added. Rows with no time prefix
+ * (statement imports, recurring rows) return `{ time: null, rest: description }`.
+ */
+export function splitLeadingTime(description: string): { time: string | null; rest: string } {
+  // 12-hour first ("7:05 pm · ...") so the AM/PM isn't left dangling, then 24h.
+  const ampm = description.match(/^\s*(\d{1,2}):(\d{2})\s*([AaPp][Mm])\s*·\s*(.*)$/s);
+  if (ampm !== null) {
+    let h = Number(ampm[1]);
+    const min = Number(ampm[2]);
+    const isPm = ampm[3]!.toLowerCase() === 'pm';
+    if (h >= 0 && h <= 12 && min >= 0 && min <= 59) {
+      if (h === 12) h = isPm ? 12 : 0;
+      else if (isPm) h += 12;
+      return {
+        time: `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`,
+        rest: ampm[4]!.trim()
+      };
+    }
+  }
+  const h24 = description.match(/^\s*(\d{1,2}):(\d{2})\s*·\s*(.*)$/s);
+  if (h24 !== null) {
+    const h = Number(h24[1]);
+    const min = Number(h24[2]);
+    if (h >= 0 && h <= 23 && min >= 0 && min <= 59) {
+      return {
+        time: `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`,
+        rest: h24[3]!.trim()
+      };
+    }
+  }
+  return { time: null, rest: description };
+}
+
+/** Format a 24-hour `"HH:MM"` as a friendly 12-hour `"9:53 AM"`. '' / null → ''. */
+export function formatClockTime(hhmm: string | null | undefined): string {
+  if (hhmm === null || hhmm === undefined || hhmm === '') return '';
+  const m = hhmm.match(/^(\d{1,2}):(\d{2})$/);
+  if (m === null) return '';
+  let h = Number(m[1]);
+  const min = Number(m[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(min)) return '';
+  const period = h >= 12 ? 'PM' : 'AM';
+  if (h === 0) h = 12;
+  else if (h > 12) h -= 12;
+  return `${h}:${String(min).padStart(2, '0')} ${period}`;
+}
+
+/** A row's sortable instant: ISO date + the time parsed off its description
+ *  (midnight when none). Lets a date sort order same-day rows by clock time so
+ *  "most recent first" works WITHIN a day, while rows with no time stay a pure
+ *  tie (preserving stable order). */
+function rowInstant(r: UnifiedRow): string {
+  return `${r.posted_date}T${splitLeadingTime(r.description).time ?? '00:00'}`;
+}
+
 /** Sortable columns. */
 export type SortKey = 'date' | 'description' | 'amount' | 'account' | 'type';
 
@@ -283,8 +346,16 @@ export function sortRows(rows: UnifiedRow[], spec: SortSpec): UnifiedRow[] {
   const out = [...rows];
   out.sort((a, b) => {
     switch (spec.key) {
-      case 'date':
-        return sign * a.posted_date.localeCompare(b.posted_date);
+      case 'date': {
+        // Compare the full instant (date + intra-day clock time) so a desc sort
+        // puts the most-recent transaction of a day at the TOP (Pushpa's ask).
+        // Same-day rows with no time share an instant → pure tie → stable order
+        // is preserved (the IV&V stability contract), so this only re-orders
+        // rows that actually carry a clock time.
+        const ia = rowInstant(a);
+        const ib = rowInstant(b);
+        return sign * ia.localeCompare(ib);
+      }
       case 'description':
         return sign * a.description.toLowerCase().localeCompare(b.description.toLowerCase());
       case 'amount': {

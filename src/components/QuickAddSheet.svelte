@@ -20,13 +20,19 @@
   import { detectAccount } from '$lib/app/account-guess';
   import { buildSuggestTerms, suggestCompletion } from '$lib/app/autosuggest';
   import { extractRulePattern, isDuplicateRule } from '$lib/app/rule-from-desc';
-  import { makeManualImport, newManualId, ManualEntryError } from '$lib/app/manual-entry';
+  import {
+    makeManualImport,
+    newManualId,
+    ManualEntryError,
+    type ManualEditSeed
+  } from '$lib/app/manual-entry';
   import { parseAmountToCents, CsvImportError } from '$lib/app/csv-import';
   import { addImport } from '$lib/db/store';
   import { saveCategorization } from '$lib/db/categorization-store';
   import {
     setManualCategory,
     setAnnotation,
+    pruneAnnotation,
     transactionCategoryKey,
     type Category,
     type CategoryRule,
@@ -59,6 +65,10 @@
     open: boolean;
     /** 'expense' | 'income' | 'transfer' — preset from the "+" tab. */
     initialType: Direction;
+    /** When set, the sheet opens in EDIT mode pre-filled from this manual
+     *  transaction; saving rewrites that record in place (Pushpa's "edit
+     *  option"). Null/undefined → normal add mode. */
+    editSeed?: ManualEditSeed | null;
     categories: Category[];
     rules: CategoryRule[];
     annotations: Record<string, TransactionAnnotation>;
@@ -87,6 +97,7 @@
   const {
     open,
     initialType,
+    editSeed = null,
     categories,
     rules,
     annotations,
@@ -225,6 +236,30 @@
   $effect(() => {
     if (open) {
       untrack(() => {
+        if (editSeed !== null) {
+          // EDIT mode — seed every field from the existing transaction. Mark the
+          // pre-filled fields as "user-touched" so the live description parser
+          // (which clears un-touched fields when desc is empty) doesn't wipe the
+          // seeded amount / date / time / category / account.
+          date = editSeed.date;
+          time = editSeed.time;
+          desc = '';
+          note = editSeed.note;
+          name = editSeed.name;
+          amount = editSeed.amount;
+          direction = editSeed.direction;
+          account = editSeed.account;
+          paidFrom = editSeed.paidFrom || 'paychecks';
+          categoryId = editSeed.categoryId;
+          userPickedCategory = true;
+          userTouchedAmount = true;
+          userTouchedTime = true;
+          userTouchedAccount = true;
+          userTouchedDate = true;
+          saving = false;
+          error = null;
+          return;
+        }
         date = today();
         time = '';
         desc = '';
@@ -488,13 +523,47 @@
           account_nickname: accountFinal,
           currency: getDisplayCurrency()
         },
-        newManualId(),
+        // EDIT mode reuses the original id, so the stable `manual-<id>` hash is
+        // identical and addImport (which replaces same-hash) rewrites in place.
+        editSeed !== null ? editSeed.id : newManualId(),
         new Date().toISOString()
       );
       await addImport(rec);
       // Persist category + (when transfer) flow_intent override + note.
       const key = transactionCategoryKey(rec.pdf_source_hash, 0);
       const trimmedNote = note.trim();
+
+      if (editSeed !== null) {
+        // Re-derive this row's annotation from the edited form so cleared fields
+        // actually clear. Category/note/paid-from/transfer come from the form;
+        // custom_name is cleared because the NAME now lives in the rewritten
+        // description; tags/split/ignored/refund_of are preserved by
+        // setManualCategory's extras pass-through, then normalized by prune.
+        let map = new Map(Object.entries(annotations));
+        map = setManualCategory(map, key, categoryId);
+        map = setAnnotation(map, key, {
+          note: trimmedNote,
+          custom_name: '',
+          paid_from:
+            direction === 'expense' && paidFrom !== 'paychecks' && paidFrom !== '' ? paidFrom : '',
+          flow_intent: direction === 'transfer' ? 'transfer_self' : ''
+        });
+        const a = map.get(key);
+        if (a !== undefined) {
+          const pruned = pruneAnnotation(a);
+          if (pruned === null) map.delete(key);
+          else map.set(key, pruned);
+        }
+        await saveCategorization({
+          categories,
+          rules,
+          annotations: Object.fromEntries(map),
+          pockets
+        });
+        onSaved({ learned: categoryId !== null, rulePattern: null });
+        onClose();
+        return;
+      }
 
       // ── Learn-from-pick (Hemanth: "if I select category to that, then
       //    from next time if I add that name again, the same category
@@ -590,12 +659,13 @@
     }
   }
 
+  const verb = $derived(editSeed !== null ? 'Edit' : 'Add');
   const title = $derived(
     direction === 'income'
-      ? 'Add income'
+      ? `${verb} income`
       : direction === 'transfer'
-        ? 'Add transfer'
-        : 'Add expense'
+        ? `${verb} transfer`
+        : `${verb} expense`
   );
 
   const descPlaceholder = $derived(
@@ -797,7 +867,11 @@
          keyboard and never covered. The summary above fills in live as you
          type here. This is the Option-1 layout. -->
     <div class="qas-dock">
-      <span class="qas-type-hint">↑ Type what you spent — we fill the rest</span>
+      <span class="qas-type-hint">
+        {editSeed !== null
+          ? '↑ Edit the fields above, then tap to save'
+          : '↑ Type what you spent — we fill the rest'}
+      </span>
       <div class="qas-dock-row">
         <div class="qas-dock-field">
           {#if suggestion !== null}

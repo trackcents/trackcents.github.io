@@ -11,7 +11,9 @@ import {
   listAccounts,
   accountKeyString,
   applyFilter,
-  sortRows
+  sortRows,
+  splitLeadingTime,
+  formatClockTime
 } from '../../../src/lib/app/transaction-view';
 import type { ImportSuccess } from '../../../src/lib/app/import';
 import type {
@@ -293,5 +295,61 @@ describe('sortRows', () => {
     sortRows(rows, { key: 'amount', dir: 'desc' });
     const after = rows.map((r) => r.description);
     expect(before).toEqual(after);
+  });
+
+  // Newest-first WITHIN a day (Pushpa: "recently one at the top"). Same-day rows
+  // whose descriptions carry a "HH:MM · " clock-time prefix order by that time.
+  test('date desc puts the latest intra-day time at the top; asc the earliest', () => {
+    const rows = toUnifiedRows([
+      mkImport('Cash', 'cash', null, [
+        mkTxn('2026-06-01', -10, 'purchase', '09:00 · A'),
+        mkTxn('2026-06-01', -20, 'purchase', '13:30 · B'),
+        mkTxn('2026-06-01', -30, 'purchase', '08:15 · C')
+      ])
+    ]);
+    const desc = sortRows(rows, { key: 'date', dir: 'desc' }).map((r) => r.description);
+    const asc = sortRows(rows, { key: 'date', dir: 'asc' }).map((r) => r.description);
+    expect(desc).toEqual(['13:30 · B', '09:00 · A', '08:15 · C']);
+    expect(asc).toEqual(['08:15 · C', '09:00 · A', '13:30 · B']);
+  });
+});
+
+// ── splitLeadingTime / formatClockTime ───────────────────────────────────────
+
+describe('splitLeadingTime', () => {
+  test('pulls a 24-hour "HH:MM · " prefix off the description', () => {
+    expect(splitLeadingTime('09:53 · Income')).toEqual({ time: '09:53', rest: 'Income' });
+    expect(splitLeadingTime('13:30 · Auto')).toEqual({ time: '13:30', rest: 'Auto' });
+  });
+
+  test('normalises a legacy 12-hour "H:MM AM/PM · " prefix to 24-hour', () => {
+    expect(splitLeadingTime('7:05 pm · Lunch')).toEqual({ time: '19:05', rest: 'Lunch' });
+    expect(splitLeadingTime('12:30 AM · Snack')).toEqual({ time: '00:30', rest: 'Snack' });
+    expect(splitLeadingTime('12:15 PM · Tea')).toEqual({ time: '12:15', rest: 'Tea' });
+  });
+
+  test('returns the whole description untouched when there is no leading time', () => {
+    expect(splitLeadingTime('Whole Foods Market')).toEqual({
+      time: null,
+      rest: 'Whole Foods Market'
+    });
+    // An out-of-range "time" is not a time — leave the text alone.
+    expect(splitLeadingTime('25:00 · nope')).toEqual({ time: null, rest: '25:00 · nope' });
+    // A 12-hour clock can't read "13" — fall through to no-time, untouched.
+    expect(splitLeadingTime('13:00 pm · nope')).toEqual({ time: null, rest: '13:00 pm · nope' });
+  });
+});
+
+describe('formatClockTime', () => {
+  test('formats 24-hour HH:MM as a friendly 12-hour clock', () => {
+    expect(formatClockTime('09:53')).toBe('9:53 AM');
+    expect(formatClockTime('13:30')).toBe('1:30 PM');
+    expect(formatClockTime('00:30')).toBe('12:30 AM');
+    expect(formatClockTime('12:15')).toBe('12:15 PM');
+  });
+  test('empty / null / malformed → empty string', () => {
+    expect(formatClockTime('')).toBe('');
+    expect(formatClockTime(null)).toBe('');
+    expect(formatClockTime('nope')).toBe('');
   });
 });

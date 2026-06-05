@@ -99,22 +99,35 @@ html {
   text-size-adjust: 100%;
 }
 
-/* ── iOS "zoom in on input focus" guard (reported on iPhone: "appears zoomed in,
-   have to pinch out every time") ──
+/* ── iOS "zoom in on input focus" guard (reported on iPhone 14 Pro Max: "appears
+   zoomed in, have to pinch out every time — since the beginning") ──
    iOS Safari ZOOMS THE WHOLE PAGE IN whenever a focused <input>/<select>/<textarea>
    has a computed font-size < 16px, and never zooms back. While zoomed, `position:
    fixed` anchors to the LAYOUT viewport, so the bottom nav floats into the middle
    of the screen (the other reported glitch). Forcing 16px on the actual text
    controls removes the trigger entirely — far better than `maximum-scale=1`, which
    would disable pinch-zoom (an accessibility regression).
-   UNLAYERED on purpose: it must beat Tailwind's layered `.text-sm`/`.text-xs`
-   utilities that some fields carry. Phones/tablets only; desktop never zoom-traps.
+
+   `!important` IS REQUIRED HERE (this is why the earlier non-important version
+   leaked): component-scoped Svelte styles like `.qas-field { font-size: 0.93rem }`
+   or any `.text-xs`/`.text-sm` on an input are CLASS selectors (specificity 0,1,0)
+   and out-rank a bare element selector `input` (0,0,1) — so without !important the
+   16px rule silently lost to dozens of component inputs and they kept triggering
+   the zoom. !important wins regardless of source specificity.
+
+   The single deliberately-large field — the quick-add hero Amount (.qas-amount,
+   2rem) — is EXCLUDED so it keeps its size; it's already well over 16px, so it
+   never triggers the zoom anyway. Add the `.no-zoom-clamp` class to opt any other
+   intentionally-large input out of the clamp.
+   UNLAYERED on purpose. Phones/tablets only; desktop never zoom-traps.
    Checkbox/radio/range carry no text, so they're excluded. */
 @media (max-width: 1023.98px) {
-  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
+  input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']):not(
+      .qas-amount
+    ):not(.no-zoom-clamp),
   select,
   textarea {
-    font-size: 16px;
+    font-size: 16px !important;
   }
 }
 

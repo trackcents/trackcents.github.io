@@ -19,10 +19,16 @@
   import { formatMoney, getDisplayCurrencySymbol } from '$lib/util/money';
   const currencySymbol = getDisplayCurrencySymbol();
   import type { UnifiedRow, SortSpec, SortKey } from '$lib/app/transaction-view';
-  import { groupRowsByDay, formatDayHeading, type DayGroup } from '$lib/app/transaction-view';
+  import {
+    groupRowsByDay,
+    formatDayHeading,
+    splitLeadingTime,
+    formatClockTime,
+    type DayGroup
+  } from '$lib/app/transaction-view';
   import type { Category, TransactionAnnotation, TransactionSplit } from '$lib/app/categorization';
   import { isRecurringRow } from '$lib/app/recurring-rows';
-  import { categoryColor, categoryIconName } from '$lib/app/category-visuals';
+  import { categoryColor, categoryIconName, type GlyphKey } from '$lib/app/category-visuals';
   import { parseAmountToCents } from '$lib/app/csv-import';
   import { centsToDecimal } from '$lib/app/export-csv';
   import CategoryIcon from './CategoryIcon.svelte';
@@ -42,6 +48,9 @@
     // Delete a row (only offered for manually-added transactions; statement rows
     // use "Exclude from spending" instead). When wired, a Delete action appears.
     onDelete?: (r: UnifiedRow) => void;
+    // Edit a row (manually-added transactions only) — reopens the quick-add sheet
+    // pre-filled. When wired, an Edit action appears alongside Delete.
+    onEdit?: (r: UnifiedRow) => void;
     // Candidate original purchases (outflows) a refund can be linked to (US-P3-C).
     // key = the stable annotation key (`<pdf_source_hash>#<txIndex>`).
     refundCandidates?: Array<{ key: string; label: string }>;
@@ -56,6 +65,7 @@
     annotationFor,
     onUpdateAnnotation,
     onDelete,
+    onEdit,
     refundCandidates = []
   }: Props = $props();
 
@@ -66,6 +76,10 @@
    *  belongs to a multi-row import). Two-tap confirm to avoid an accidental tap. */
   function canDelete(r: UnifiedRow): boolean {
     return onDelete !== undefined && r.adapter_name === 'manual';
+  }
+  /** Manual rows can be edited (reopen the quick-add sheet pre-filled). */
+  function canEdit(r: UnifiedRow): boolean {
+    return onEdit !== undefined && r.adapter_name === 'manual';
   }
   let pendingDeleteKey = $state<string | null>(null);
   function rowDeleteKey(r: UnifiedRow): string {
@@ -88,18 +102,47 @@
     return /^(expense|income)$/i.test(tail.trim());
   }
 
+  /** The description with any leading clock time ("HH:MM · ") removed — the time
+   *  is rendered separately + small, never inside the name (Hemanth: "the time
+   *  appears in front of the name which is very bad"). Works on already-saved
+   *  rows since it parses the stored description. */
+  function cleanDescription(r: UnifiedRow): string {
+    return splitLeadingTime(r.description).rest;
+  }
+  /** The row's clock time as a friendly "9:53 AM" (or '' when none). */
+  function rowTime(r: UnifiedRow): string {
+    return formatClockTime(splitLeadingTime(r.description).time);
+  }
+
   function displayName(r: UnifiedRow): string {
     const cn = annotationFor?.(r)?.custom_name;
     if (cn !== undefined && cn !== '') return cn;
+    const clean = cleanDescription(r);
     // An unnamed manual entry shows the generic word "Expense"/"Income". If the
     // user DID pick a (sub-)category, show THAT as the row's name instead — the
     // sub-category is the title, its parent category the subtitle (Bug fix: the
     // user wanted the sub-category name to appear, not the word "Expense").
-    if (isPlaceholderDesc(r.description)) {
+    if (isPlaceholderDesc(clean)) {
       const leaf = currentCatName(r);
       if (leaf !== 'Uncategorized') return leaf;
     }
-    return r.description;
+    return clean;
+  }
+
+  /** The glyph for a row's icon. Honours the icon the user explicitly set on the
+   *  assigned (sub-)category (Pushpa: "I set an emoji for the sub-category but it
+   *  still showed a different one"); falls back to the name-derived icon, and for
+   *  uncategorised rows derives one from the (time-stripped) merchant name. */
+  function rowGlyph(r: UnifiedRow): GlyphKey {
+    const id = categoryFor?.(r) ?? null;
+    if (id !== null) {
+      const c = categories.find((cat) => cat.id === id);
+      if (c !== undefined) {
+        if (c.icon !== undefined && c.icon !== '') return c.icon as GlyphKey;
+        return categoryIconName(c.name);
+      }
+    }
+    return categoryIconName(displayName(r));
   }
   function isIgnored(r: UnifiedRow): boolean {
     return annotationFor?.(r)?.ignored === true;
@@ -298,11 +341,7 @@
 <!-- Shared category picker (used in the desktop column and the mobile card). -->
 {#snippet categoryPicker(r: UnifiedRow)}
   <div class="flex items-center gap-2">
-    <CategoryIcon
-      icon={categoryIconName(categoryFor?.(r) ? currentCatName(r) : displayName(r))}
-      color={categoryColor(categoryFor?.(r) ?? null)}
-      size={15}
-    />
+    <CategoryIcon icon={rowGlyph(r)} color={categoryColor(categoryFor?.(r) ?? null)} size={15} />
     <select
       class="min-w-0 flex-1 rounded-md border px-1.5 py-1 text-xs"
       style="border-color: var(--color-border); background-color: var(--color-surface); color: var(--color-text);"
@@ -386,18 +425,32 @@
         <!-- The old per-row "Mark as recurring" toggle was removed: it only painted
              a ↻ icon and did NOT connect to the Recurring tab, which confused
              Hemanth. Recurring bills live on the Recurring tab. -->
-        {#if canDelete(r)}
-          <button
-            type="button"
-            class="ml-auto rounded-md border px-2.5 py-1 text-xs font-medium transition-colors"
-            style:border-color={pendingDeleteKey === rowDeleteKey(r)
-              ? 'var(--color-danger)'
-              : 'var(--color-border)'}
-            style:color="var(--color-danger)"
-            onclick={() => onDeleteClick(r)}
-          >
-            {pendingDeleteKey === rowDeleteKey(r) ? 'Tap to confirm' : 'Delete'}
-          </button>
+        {#if canEdit(r) || canDelete(r)}
+          <div class="ml-auto flex items-center gap-2">
+            {#if canEdit(r)}
+              <button
+                type="button"
+                class="rounded-md border px-2.5 py-1 text-xs font-medium transition-colors"
+                style="border-color: var(--color-border); color: var(--color-text);"
+                onclick={() => onEdit?.(r)}
+              >
+                Edit
+              </button>
+            {/if}
+            {#if canDelete(r)}
+              <button
+                type="button"
+                class="rounded-md border px-2.5 py-1 text-xs font-medium transition-colors"
+                style:border-color={pendingDeleteKey === rowDeleteKey(r)
+                  ? 'var(--color-danger)'
+                  : 'var(--color-border)'}
+                style:color="var(--color-danger)"
+                onclick={() => onDeleteClick(r)}
+              >
+                {pendingDeleteKey === rowDeleteKey(r) ? 'Tap to confirm' : 'Delete'}
+              </button>
+            {/if}
+          </div>
         {/if}
       </div>
 
@@ -599,6 +652,9 @@
         >
           <td class="px-3 py-2 font-mono text-xs whitespace-nowrap text-[var(--color-text)]">
             {r.posted_date}
+            {#if rowTime(r) !== ''}
+              <span class="mt-0.5 block text-[10px] text-[var(--color-muted)]">{rowTime(r)}</span>
+            {/if}
           </td>
           <td class="px-3 py-2 text-[var(--color-text)]">
             <button
@@ -675,6 +731,7 @@
      expand.  Shared by the day-grouped and flat (non-date-sort) layouts. -->
 {#snippet mobileRow(r: UnifiedRow)}
   {@const expandedNow = isExpanded(r)}
+  {@const time = rowTime(r)}
   <div class="row" style="border-color: var(--color-border);">
     <button
       type="button"
@@ -682,11 +739,7 @@
       class="flex w-full items-center gap-3 px-3.5 py-3 text-left"
       aria-expanded={expandedNow}
     >
-      <CategoryIcon
-        icon={categoryIconName(categoryFor?.(r) ? currentCatName(r) : displayName(r))}
-        color={categoryColor(categoryFor?.(r) ?? null)}
-        tint
-      />
+      <CategoryIcon icon={rowGlyph(r)} color={categoryColor(categoryFor?.(r) ?? null)} tint />
       <div class="min-w-0 flex-1">
         <div class="flex items-center gap-1.5">
           <span
@@ -701,7 +754,11 @@
           {/if}
         </div>
         <div class="mt-0.5 flex items-center gap-1.5 text-xs text-[var(--color-muted)]">
+          {#if time !== ''}
+            <span class="row-time shrink-0">{time}</span>
+          {/if}
           {#if secondaryCatLabel(r) !== ''}
+            {#if time !== ''}<span class="shrink-0 opacity-50" aria-hidden="true">·</span>{/if}
             <span class="truncate">{secondaryCatLabel(r)}</span>
           {/if}
           {#if multiAccount && !isRecurringRow(r)}
@@ -777,6 +834,13 @@
 <style>
   .row + .row {
     border-top: 1px solid var(--color-border);
+  }
+  /* The transaction time — small, muted, tabular, on the sub-line (never in the
+     name). Sits just before the category breadcrumb. */
+  .row-time {
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-muted);
   }
   /* Small inline chips on a row's sub-line (account when multiple, tags). */
   .acct-chip,

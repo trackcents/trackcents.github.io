@@ -110,4 +110,38 @@ describe('guessCategoryId', () => {
     ];
     expect(guessCategoryId('morning coffee 80', cats, seedRules)).toBe('c-coffee');
   });
+
+  // ── Pushpa's loophole: broaden recognition + resolve an intent to a
+  //    DIFFERENTLY-named user category (no longer needs an exact name match). ──
+  it('recognises Indian app/service names (rapido → Transport, blinkit → Groceries)', () => {
+    const cats: Category[] = [
+      { id: 'c-transport', name: 'Transport' },
+      { id: 'c-groceries', name: 'Groceries' }
+    ];
+    expect(guessCategoryId('rapido bike ride', cats, NO_RULES)).toBe('c-transport');
+    expect(guessCategoryId('blinkit order', cats, NO_RULES)).toBe('c-groceries');
+  });
+
+  it('maps a cloud/SaaS name to a Subscriptions category (onedrive → Subscriptions)', () => {
+    const cats: Category[] = [{ id: 'c-subs', name: 'Subscriptions' }];
+    expect(guessCategoryId('one drive monthly', cats, NO_RULES)).toBe('c-subs');
+    expect(guessCategoryId('icloud storage', cats, NO_RULES)).toBe('c-subs');
+  });
+
+  it('resolves an intent to a differently-named category via synonyms (Travel, not Transport)', () => {
+    // The user named their transport bucket "Travel" — an "uber" intent must
+    // still land there even though "transport" isn't in the name.
+    const cats: Category[] = [{ id: 'c-travel', name: 'Travel' }];
+    expect(guessCategoryId('uber to office', cats, NO_RULES)).toBe('c-travel');
+    expect(guessCategoryId('petrol fill', cats, NO_RULES)).toBe('c-travel');
+  });
+
+  it('prefers a matching SUB-category over its parent for an intent (Food › Dining)', () => {
+    const cats: Category[] = [
+      { id: 'c-food', name: 'Food' },
+      { id: 'c-dining', name: 'Dining', parent_id: 'c-food' }
+    ];
+    // "swiggy" → food intent; the Dining sub's synonym ('dining') wins over Food.
+    expect(guessCategoryId('swiggy dinner', cats, NO_RULES)).toBe('c-dining');
+  });
 });

@@ -96,6 +96,52 @@ const INTENT_KEYWORDS: Record<string, string[]> = {
     'panera',
     'taco bell'
   ],
+  transport: [
+    'uber',
+    'ola',
+    'lyft',
+    'rapido',
+    'porter',
+    'metro',
+    'bus',
+    'train',
+    'taxi',
+    'cab',
+    'auto',
+    'rickshaw',
+    'petrol',
+    'diesel',
+    'gas',
+    'fuel',
+    'parking',
+    'toll',
+    'fastag',
+    'irctc',
+    'redbus',
+    'blablacar',
+    'namma yatri',
+    'rapido bike'
+  ],
+  housing: ['rent', 'mortgage', 'maintenance', 'society', 'pg'],
+  loans: ['emi', 'loan'],
+  shopping: [
+    'amazon',
+    'flipkart',
+    'shopping',
+    'mall',
+    'clothes',
+    'apparel',
+    'ebay',
+    'etsy',
+    'myntra',
+    'ajio',
+    'meesho',
+    'nykaa',
+    'snapdeal',
+    'tatacliq',
+    'decathlon',
+    'ikea'
+  ],
   groceries: [
     'groceries',
     'grocery',
@@ -107,38 +153,37 @@ const INTENT_KEYWORDS: Record<string, string[]> = {
     'target',
     'supermarket',
     'instacart',
-    'whole foods'
+    'whole foods',
+    // Indian quick-commerce / grocery (Bhargav + cousins type the app name).
+    'blinkit',
+    'zepto',
+    'instamart',
+    'dunzo',
+    'jiomart',
+    'dmart',
+    'd mart',
+    'milk',
+    'vegetables',
+    'kirana',
+    'more supermarket',
+    'reliance fresh'
   ],
-  transport: [
-    'uber',
-    'ola',
-    'lyft',
-    'metro',
-    'bus',
-    'train',
-    'taxi',
-    'auto',
-    'rickshaw',
-    'petrol',
-    'gas',
-    'fuel',
-    'parking',
-    'toll'
+  health: [
+    'gym',
+    'doctor',
+    'medicine',
+    'pharmacy',
+    'hospital',
+    'medical',
+    'clinic',
+    'apollo',
+    'pharmeasy',
+    '1mg',
+    'netmeds',
+    'practo',
+    'cult',
+    'cultfit'
   ],
-  housing: ['rent', 'mortgage', 'maintenance'],
-  loans: ['emi', 'loan'],
-  shopping: [
-    'amazon',
-    'flipkart',
-    'shopping',
-    'mall',
-    'clothes',
-    'apparel',
-    'ebay',
-    'etsy',
-    'myntra'
-  ],
-  health: ['gym', 'doctor', 'medicine', 'pharmacy', 'hospital', 'medical', 'clinic'],
   entertainment: [
     'netflix',
     'spotify',
@@ -147,11 +192,123 @@ const INTENT_KEYWORDS: Record<string, string[]> = {
     'concert',
     'cinema',
     'amazon prime',
+    'prime video',
     'disney',
-    'hbo'
+    'hotstar',
+    'zee5',
+    'sonyliv',
+    'sony liv',
+    'jiocinema',
+    'jio cinema',
+    'hbo',
+    'bookmyshow',
+    'pvr',
+    'inox',
+    'gaming',
+    'playstation',
+    'xbox',
+    'steam'
   ],
-  bills: ['electricity', 'water', 'wifi', 'internet', 'phone', 'bill', 'utility', 'gas bill'],
-  income: ['salary', 'bonus', 'paycheck', 'pay check', 'refund', 'wage', 'stipend', 'cashback']
+  subscriptions: [
+    'subscription',
+    'membership',
+    'onedrive',
+    'one drive',
+    'icloud',
+    'google one',
+    'google drive',
+    'dropbox',
+    'github',
+    'chatgpt',
+    'openai',
+    'notion',
+    'canva',
+    'adobe',
+    'microsoft 365',
+    'office 365',
+    'linkedin premium'
+  ],
+  bills: [
+    'electricity',
+    'water',
+    'wifi',
+    'internet',
+    'broadband',
+    'phone',
+    'mobile',
+    'recharge',
+    'postpaid',
+    'prepaid',
+    'dth',
+    'bill',
+    'utility',
+    'gas bill',
+    'jio',
+    'airtel',
+    'vi ',
+    'vodafone',
+    'bsnl',
+    'tata power',
+    'electricity bill'
+  ],
+  income: [
+    'salary',
+    'bonus',
+    'paycheck',
+    'pay check',
+    'refund',
+    'wage',
+    'stipend',
+    'cashback',
+    'interest',
+    'dividend',
+    'reimbursement',
+    'freelance'
+  ]
+};
+
+/**
+ * For each intent, the words that should match the USER's own category names —
+ * so an intent resolves to a category even when the user named it differently
+ * (intent "transport" → a category called "Travel" or "Cab"). This closes the
+ * "auto-category only works when the typed text IS literally a category name"
+ * loophole Pushpa reported. First category (by list order) whose name contains
+ * any synonym wins; the bare intent word is always included as a fallback.
+ */
+const INTENT_CATEGORY_SYNONYMS: Record<string, string[]> = {
+  food: ['food', 'dining', 'restaurant', 'eat', 'meal', 'snack', 'cafe', 'tiffin', 'swiggy'],
+  groceries: ['grocer', 'grocery', 'supermarket', 'provision', 'vegetable', 'kirana', 'mart'],
+  transport: [
+    'transport',
+    'travel',
+    'commute',
+    'cab',
+    'taxi',
+    'auto',
+    'ride',
+    'fuel',
+    'petrol',
+    'uber',
+    'ola'
+  ],
+  housing: ['housing', 'rent', 'home', 'house', 'accommodation'],
+  loans: ['loan', 'emi', 'debt', 'installment'],
+  shopping: ['shopping', 'shop', 'retail', 'clothes', 'apparel', 'fashion'],
+  health: ['health', 'medical', 'medicine', 'pharmacy', 'doctor', 'fitness', 'gym'],
+  entertainment: ['entertain', 'movie', 'cinema', 'stream', 'ott', 'fun', 'leisure', 'game'],
+  subscriptions: ['subscription', 'subscriptions', 'membership'],
+  bills: [
+    'bill',
+    'utility',
+    'utilities',
+    'electric',
+    'water',
+    'internet',
+    'phone',
+    'recharge',
+    'mobile'
+  ],
+  income: ['income', 'salary', 'pay', 'wage', 'earning', 'revenue']
 };
 
 function matchIntent(text: string): string | null {
@@ -239,10 +396,26 @@ export function guessCategoryId(
   );
   if (parentMatch !== null) return parentMatch;
 
-  // 3. Intent keyword fallback → resolved against the user's category names.
+  // 3. Intent keyword fallback → resolved against the user's category names via a
+  //    synonym set, so the intent matches even a differently-named category
+  //    ("transport" intent → a category called "Travel"/"Cab"). Prefer a SUB
+  //    match (more specific) over a top-level one. This closes Pushpa's loophole
+  //    where auto-categorise only fired when the typed text was literally a
+  //    category name.
   const intent = matchIntent(desc);
   if (intent === null) return null;
   const intentLower = intent.toLowerCase();
+  const synonyms = INTENT_CATEGORY_SYNONYMS[intent] ?? [intentLower];
+  const terms = synonyms.includes(intentLower) ? synonyms : [...synonyms, intentLower];
+  const nameMatches = (c: Category): boolean => {
+    const n = c.name.toLowerCase();
+    return terms.some((t) => n.includes(t));
+  };
+  const subHit = categories.find((c) => isSubCategory(c) && nameMatches(c));
+  if (subHit !== undefined) return subHit.id;
+  const parentHit = categories.find((c) => !isSubCategory(c) && nameMatches(c));
+  if (parentHit !== undefined) return parentHit.id;
+  // Last resort: any category whose name contains the intent word itself.
   const cat = categories.find((c) => c.name.toLowerCase().includes(intentLower));
   return cat?.id ?? null;
 }
