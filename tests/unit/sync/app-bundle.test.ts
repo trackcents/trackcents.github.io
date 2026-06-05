@@ -2,11 +2,13 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import { buildBundleString, applyRemotePayload } from '../../../src/lib/sync/app-bundle';
 import {
+  addImport,
   clearState,
   loadState,
   serializeState,
   type PersistedState
 } from '../../../src/lib/db/store';
+import { makeManualImport } from '../../../src/lib/app/manual-entry';
 
 function stubLocalStorage(): void {
   const m = new Map<string, string>();
@@ -159,6 +161,36 @@ describe('app-bundle merge (task #79 — categories/recurring/budgets/goals sync
 
     const rec = JSON.parse(localStorage.getItem('mtrb.recurring') ?? '{}');
     expect(rec.items[0].id).toBe('keep');
+  });
+
+  test("SINGLE-DEVICE IDEMPOTENCY: applying the device's OWN bundle does NOT double the imports", async () => {
+    // Reproduces Pushpa's report: one phone, click Sync (pull then push). The pull
+    // applies the blob this device pushed earlier — i.e. its own data. If the
+    // serialize→deserialize→merge round-trip isn't idempotent, every transaction
+    // (and so every derived income/spend total) doubles.
+    await addImport(
+      makeManualImport(
+        { posted_date: '2026-06-04', description: 'Salary', amount_minor: 1000000n },
+        'id-salary',
+        '2026-06-04T10:00:00.000Z'
+      )
+    );
+    await addImport(
+      makeManualImport(
+        { posted_date: '2026-06-04', description: 'Auto', amount_minor: -20000n },
+        'id-auto',
+        '2026-06-04T11:00:00.000Z'
+      )
+    );
+    const before = (await loadState()).imports.map((i) => i.pdf_source_hash).sort();
+    expect(before.length).toBe(2);
+
+    // Pull = apply the bundle we ourselves built (our last push) back into local.
+    const ownBundle = await buildBundleString();
+    await applyRemotePayload(ownBundle);
+
+    const after = (await loadState()).imports.map((i) => i.pdf_source_hash).sort();
+    expect(after).toEqual(before); // 2, not 4 — nothing doubled
   });
 
   test('a legacy main-only blob (no bundle schema) is still accepted and unioned', async () => {

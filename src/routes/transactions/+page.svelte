@@ -175,6 +175,37 @@
     return splitLeadingTime(r.description).rest || r.description;
   }
 
+  // Bulk cleanup for a fully-doubled dataset: keep the FIRST (earliest-created)
+  // row of each duplicate group, remove the rest. Two-tap to confirm; removes via
+  // the same store path as the per-row delete, then refreshes once. After this,
+  // a Sync pushes the cleaned set up (the version gate skips the pull when the
+  // cloud hasn't changed since the last sync), so it doesn't re-double.
+  let dupBulkConfirm = $state(false);
+  async function removeAllDuplicates(): Promise<void> {
+    if (!dupBulkConfirm) {
+      dupBulkConfirm = true;
+      return;
+    }
+    dupBulkConfirm = false;
+    const extras = duplicateGroups.flatMap((g) => g.rows.slice(1));
+    let nextAnn = { ...annotations };
+    let annChanged = false;
+    for (const r of extras) {
+      if (r.adapter_name !== MANUAL_ADAPTER_NAME) continue;
+      await removeImport(r.pdf_source_hash);
+      const k = rowKey(r);
+      if (nextAnn[k] !== undefined) {
+        delete nextAnn[k];
+        annChanged = true;
+      }
+    }
+    if (annChanged) {
+      annotations = nextAnn;
+      await saveCategorization({ categories, rules, annotations });
+    }
+    await refreshAfterSave({ learned: false });
+  }
+
   // QuickAddSheet's onSaved now passes a {learned} flag; this view doesn't show
   // a toast so we ignore it, but the signature has to match the prop type.
   async function refreshAfterSave(info: {
@@ -514,13 +545,26 @@
         class="card rise mt-3 p-4"
         style="border-color: var(--color-warning); background-color: color-mix(in oklab, var(--color-warning) 8%, transparent);"
       >
-        <h2 class="text-sm font-semibold">
-          Possible duplicates · {dupExtras} extra {dupExtras === 1 ? 'entry' : 'entries'}
-        </h2>
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <h2 class="text-sm font-semibold">
+            Possible duplicates · {dupExtras} extra {dupExtras === 1 ? 'entry' : 'entries'}
+          </h2>
+          {#if dupExtras > 1}
+            <button
+              type="button"
+              class="shrink-0 rounded-md border px-2.5 py-1 text-xs font-semibold"
+              style:border-color={dupBulkConfirm ? 'var(--color-danger)' : 'var(--color-border)'}
+              style:color="var(--color-danger)"
+              onclick={removeAllDuplicates}
+            >
+              {dupBulkConfirm ? 'Tap to confirm' : 'Remove all · keep one each'}
+            </button>
+          {/if}
+        </div>
         <p class="mt-0.5 mb-2 text-xs text-[var(--color-muted)]">
           These manual entries look identical to another (same day, amount and name) — usually the
-          same thing entered on two phones. Nothing is removed automatically; delete the copies you
-          don't want. Keep one of each.
+          same thing entered twice, or a copy that came back from an earlier sync. Nothing is
+          removed automatically; remove the extras (one of each is kept), then Sync once.
         </p>
         <div class="space-y-3">
           {#each duplicateGroups as g (g.signature)}
